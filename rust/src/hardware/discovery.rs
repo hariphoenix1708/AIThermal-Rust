@@ -1,0 +1,47 @@
+// Intentionally reserved or conditionally compiled across bins
+
+use super::probe::HardwareProbe;
+use super::profile::HardwareProfile;
+use super::report::write_human_report;
+use crate::cache::{load_profile, save_profile};
+use anyhow::{Context, Result};
+use std::fs;
+use tracing::info;
+
+pub fn discover_or_load(state_dir: &str) -> Result<HardwareProfile> {
+    fs::create_dir_all(state_dir).context("Failed to create state directory")?;
+
+    if let Ok(profile) = load_profile(state_dir) {
+        info!("Successfully loaded hardware profile from cache.");
+        write_human_report(&profile, state_dir)?;
+        return Ok(profile);
+    }
+
+    info!("Hardware profile not found or invalid in cache. Running full discovery...");
+    let mut profile = HardwareProbe::probe()?;
+
+    if crate::hardware::peridot::matches(&profile) {
+        crate::hardware::peridot::apply_peridot_optimizations(&mut profile);
+    }
+
+    save_profile(&profile, state_dir)?;
+    write_human_report(&profile, state_dir)?;
+
+    Ok(profile)
+}
+
+pub fn discover_force_rescan(state_dir: &str) -> Result<HardwareProfile> {
+    fs::create_dir_all(state_dir).context("Failed to create state directory")?;
+
+    info!("Forcing hardware discovery rescan...");
+    let mut profile = HardwareProbe::probe()?;
+
+    if crate::hardware::peridot::matches(&profile) {
+        crate::hardware::peridot::apply_peridot_optimizations(&mut profile);
+    }
+
+    save_profile(&profile, state_dir)?;
+    write_human_report(&profile, state_dir)?;
+
+    Ok(profile)
+}

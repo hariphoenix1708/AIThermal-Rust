@@ -1,0 +1,20 @@
+# ThermalAI - Magisk/KernelSU Module (Rust Edition)
+ui_print("*********************************************");
+ui_print("      ThermalAI - Rust Edition (Phase 2)     ");
+ui_print("*********************************************");
+
+ui_print("- Extracting files...");
+package_extract_dir("system", "/system");
+package_extract_dir("config", "$MODDIR/config");
+package_extract_dir("system", "$MODDIR/system");
+package_extract_dir("bin", "$MODDIR/bin");
+
+set_perm_recursive("$MODDIR", 0, 0, 0755, 0644);
+set_perm("$MODDIR/uninstall.sh", 0, 0, 0755);
+set_perm("$MODDIR/service.sh", 0, 0, 0755);
+set_perm("$MODDIR/customize.sh", 0, 0, 0755);
+set_perm("$MODDIR/sepolicy.rule", 0, 0, 0644);
+set_perm_recursive("$MODDIR/system/bin", 0, 0, 0755, 0755);
+
+ui_print("- Installation successful!");
+ui_print("Reboot your device to start the Rust daemon.");

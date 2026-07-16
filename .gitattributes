@@ -1,0 +1,21 @@
+* text=auto eol=lf
+
+# Enforce LF line endings for all shell scripts and Android module files
+*.sh text eol=lf
+module.prop text eol=lf
+*.rule text eol=lf
+META-INF/**/* text eol=lf
+config/**/* text eol=lf
+
+# Windows scripts are also kept LF so packaged text normalization is predictable
+*.ps1 text eol=lf
+*.cmd text eol=lf
+*.bat text eol=lf
+
+# Rust source files
+*.rs text eol=lf
+*.toml text eol=lf
+
+# Binaries must not be touched
+bin/* binary
+system/bin/* binary

@@ -1,0 +1,14 @@
+allow su system_file file { read open execute getattr map }
+allow init system_file file { read open execute getattr map }
+allow su property_socket sock_file { read write open getattr }
+allow init property_socket sock_file { read write open getattr }
+allow su init unix_stream_socket connectto
+allow su binder_device chr_file { read write open ioctl getattr }
+allow init binder_device chr_file { read write open ioctl getattr }
+allow su self tcp_socket { create read write bind connect listen accept getopt setopt shutdown }
+allow init self tcp_socket { create read write bind connect listen accept getopt setopt shutdown }
+allow su proc file { read open getattr }
+allow su sysfs file { read open write getattr }
+allow su sysfs dir { read open search getattr }
+allow init sysfs file { read open getattr }
+allow init sysfs dir { read open search getattr }

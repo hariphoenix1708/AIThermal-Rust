@@ -1,0 +1,6 @@
+[target.aarch64-linux-android]
+ar = "llvm-ar"
+# linker = "aarch64-linux-android-clang" # Managed dynamically by build scripts on Windows via CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER
+
+[build]
+target = "aarch64-linux-android"

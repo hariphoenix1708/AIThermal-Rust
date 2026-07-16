@@ -1,0 +1,993 @@
+use crate::calibration::CalibrationManager;
+use crate::charging::ChargingEngine;
+use crate::cpuset::CpusetManager;
+use crate::daemon::RuntimeTask;
+use crate::gaming::GameDetector;
+use crate::governors::GovernorManager;
+use crate::hardware::HardwareProfile;
+use crate::policy::{PolicyEngine, PolicyState};
+use crate::prediction::PredictionEngine;
+use crate::recovery::RecoveryManager;
+use crate::runtime_context::RuntimeContext;
+use crate::sensors::SensorManager;
+use crate::snapshot::SnapshotManager;
+use crate::thermal::ThermalEngine;
+use crate::tuning::RuntimeTuner;
+use crate::tuning::backend::CpusetBackend;
+use crate::tuning::backend::StorageBackend;
+use crate::watchdog::Watchdog;
+
+use anyhow::Result;
+use tracing::{info, warn};
+
+pub struct SystemOrchestrator {
+    sensors: SensorManager,
+    thermal: ThermalEngine,
+    prediction: PredictionEngine,
+    policy: PolicyEngine,
+    governors: GovernorManager,
+    cpuset: CpusetManager,
+    charging: ChargingEngine,
+    gaming: GameDetector,
+    watchdog: Watchdog,
+    recovery: RecoveryManager,
+    calibration: CalibrationManager,
+    snapshot: SnapshotManager,
+    hardware: HardwareProfile,
+    runtime_tuner: RuntimeTuner,
+    game_profiles: crate::profiles::GameProfileManager,
+}
+
+impl SystemOrchestrator {
+    fn get_context_score(
+        wifi_active: bool,
+        screen_brightness: i32,
+        ambient_temp: i32,
+        is_screen_off: bool,
+        is_gaming: bool,
+    ) -> f64 {
+        let mut score = 0.0;
+
+        // Incorporate screen state weight natively here
+        if is_screen_off {
+            score -= 30.0;
+        } else if is_gaming {
+            score += 15.0;
+        } else {
+            score += 5.0; // Base foreground weight when screen is on but not gaming
+        }
+
+        if wifi_active {
+            score -= 2.0;
+        } // Active radio generates heat
+        if screen_brightness > 80 {
+            score -= 3.0;
+        } // High brightness generates heat
+        if ambient_temp > 35 {
+            score -= 5.0;
+        } // High ambient temp reduces cooling efficiency
+        score
+    }
+
+    fn get_cooling_efficiency(ema_trend: i32, gpu_load: u32, is_cooling: bool) -> f64 {
+        let mut efficiency: f64 = 1.0;
+        if is_cooling {
+            efficiency += 0.5;
+        }
+        if ema_trend > 5 {
+            efficiency -= 0.5;
+        } // Heating rapidly
+        if gpu_load > 80 {
+            efficiency -= 0.3;
+        } // High GPU load reduces efficiency
+        efficiency.max(0.1)
+    }
+
+    fn compute_comfort_weight(
+        skin_temp: i32,
+        bat_temp: i32,
+        is_cooling_slowly: bool,
+        mem_pressure: f32,
+    ) -> f64 {
+        let mut base = 10.0;
+
+        //
+        if skin_temp >= 42 {
+            base += 15.0;
+        } else if skin_temp >= 40 {
+            base += 8.0;
+        }
+
+        if bat_temp >= 45 {
+            base += 15.0;
+        } else if bat_temp >= 42 {
+            base += 8.0;
+        }
+
+        if is_cooling_slowly {
+            base += 5.0;
+        }
+
+        if mem_pressure > 80.0 {
+            base += 3.0; // Memory pressure increases heat generation risk
+        }
+
+        base
+    }
+    pub fn new(ctx: &RuntimeContext, hardware: HardwareProfile) -> Self {
+        // Initialize subsystems
+        let mut sensors = SensorManager::new();
+        sensors.discover_hardware(&hardware);
+
+        let mut governors = GovernorManager::new();
+        let _ = governors.discover_hardware(&hardware);
+
+        let mut cpuset = CpusetManager::new();
+        cpuset.discover_hardware(&hardware);
+
+        let gaming = GameDetector::new(
+            ctx.config.games.packages.clone(),
+            ctx.config.profiles.game_latch_sec,
+            ctx.config.profiles.proc_scan_interval,
+        );
+
+        let thermal = ThermalEngine::new(ctx.config.profiles.temp_history_size);
+        let policy = PolicyEngine::new(
+            ctx.config.profiles.policy_debounce_sec,
+            ctx.config.profiles.poll_interval,
+        );
+        let prediction = PredictionEngine::new(ctx.config.profiles.prediction_window, 3); // 3 steps ahead
+
+        let charging = ChargingEngine::new();
+        let watchdog = Watchdog::new(ctx.config.profiles.poll_interval);
+        let recovery = RecoveryManager::new();
+        let calibration = CalibrationManager::new(&ctx.state_dir);
+        let snapshot = SnapshotManager::new(&ctx.state_dir, hardware.clone());
+        let runtime_tuner = RuntimeTuner::new(hardware.clone());
+
+        // Restore snapshot early in startup if it exists, and verify policy
+        if let Some(_snap) = snapshot.load_snapshot()
+            && snapshot.verify_policy("Performance")
+        {
+            snapshot.restore_snapshot();
+        }
+
+        Self {
+            sensors,
+            thermal,
+            prediction,
+            policy,
+            governors,
+            cpuset,
+            charging,
+            gaming,
+            watchdog,
+            recovery,
+            calibration,
+            snapshot,
+            hardware,
+            runtime_tuner,
+            game_profiles: crate::profiles::GameProfileManager::new(&ctx.state_dir),
+        }
+    }
+
+    fn compute_game_modifier(
+        &self,
+        pkg: Option<&str>,
+        ctx: &crate::runtime_context::RuntimeContext,
+    ) -> f64 {
+        if let Some(p) = pkg.and_then(|name| self.game_profiles.get_profile(name)) {
+            let mut modifier = if p.known_hot { -12.0 } else { 0.0 };
+
+            // Active foreground gaming priority influence
+            let is_screen_off = crate::hardware::display::is_screen_off();
+            let fg_priority = self.gaming.foreground_priority(p.known_hot, is_screen_off) as f64;
+            modifier += fg_priority / 10.0;
+
+            // Frame stutter penalty mitigation
+            if self
+                .gaming
+                .detect_frame_stutter(ctx.game_session_started_at)
+            {
+                modifier += 15.0; // Boost performance score to mitigate stutter
+            }
+
+            let active_secs = ctx
+                .game_session_started_at
+                .map(|t: std::time::Instant| t.elapsed().as_secs())
+                .unwrap_or(0);
+            if active_secs >= 1800 {
+                modifier -= ((active_secs / 1800).saturating_sub(1) as f64) * 5.0;
+                if let Some(policy) = &ctx.current_policy {
+                    if policy == "EmergencyCool" || policy == "Powersave" {
+                        modifier -= 5.0;
+                    } else if policy == "Performance" {
+                        modifier += 5.0;
+                    }
+                }
+            }
+            modifier
+        } else {
+            0.0
+        }
+    }
+
+    fn policy_state_name(policy: &PolicyState) -> &'static str {
+        match policy {
+            PolicyState::Performance => "Performance",
+            PolicyState::Balanced => "Balanced",
+            PolicyState::Conservative => "Conservative",
+            PolicyState::Powersave => "Powersave",
+            PolicyState::EmergencyCool => "EmergencyCool",
+            PolicyState::Suspend => "Suspend",
+        }
+    }
+
+    fn resolve_sensor_name(&self, path_opt: Option<&String>) -> Option<String> {
+        path_opt.and_then(|path| {
+            self.hardware
+                .thermal_profile
+                .all_zones
+                .iter()
+                .find(|(_, p)| *p == path)
+                .map(|(name, _)| name.clone())
+        })
+    }
+
+    fn read_thermal_source(&self, path_opt: Option<&String>) -> Option<i32> {
+        self.resolve_sensor_name(path_opt)
+            .and_then(|name| self.sensors.read_sensor(&name))
+    }
+
+    fn select_gpu_governor(&self, preferred: &[&str]) -> Option<String> {
+        for gov in preferred {
+            if self
+                .hardware
+                .gpu_profile
+                .available_governors
+                .iter()
+                .any(|g| g == gov)
+            {
+                return Some((*gov).to_string());
+            }
+        }
+        if !self.hardware.gpu_profile.current_governor.is_empty()
+            && self
+                .hardware
+                .gpu_profile
+                .available_governors
+                .iter()
+                .any(|g| g == &self.hardware.gpu_profile.current_governor)
+        {
+            return Some(self.hardware.gpu_profile.current_governor.clone());
+        }
+        self.hardware
+            .gpu_profile
+            .available_governors
+            .first()
+            .cloned()
+    }
+
+    fn select_cpu_governor(&self, preferred: &[&str]) -> Option<String> {
+        for gov in preferred {
+            if self.hardware.cpu_topology.clusters.iter().all(|cluster| {
+                cluster.governor_node.valid
+                    && cluster.governor_node.writable
+                    && cluster.available_governors.iter().any(|g| g == gov)
+            }) {
+                return Some((*gov).to_string());
+            }
+        }
+        None
+    }
+
+    fn plug_state(&self) -> (bool, bool) {
+        let known = &self.hardware.charging_profile.path;
+        if !known.is_empty() {
+            if let Ok(online) = crate::sysfs::read_i64(format!("{}/online", known)) {
+                return (online > 0, true);
+            }
+            if let Ok(present) = crate::sysfs::read_i64(format!("{}/present", known)) {
+                return (present > 0, true);
+            }
+        }
+
+        let mut saw_power_supply = false;
+        if let Ok(entries) = std::fs::read_dir("/sys/class/power_supply") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let type_name = crate::sysfs::read_string(path.join("type"))
+                    .unwrap_or_default()
+                    .to_lowercase();
+                if !(type_name.contains("usb")
+                    || type_name.contains("mains")
+                    || type_name.contains("wireless"))
+                {
+                    continue;
+                }
+                saw_power_supply = true;
+                if let Ok(online) = crate::sysfs::read_i64(path.join("online"))
+                    && online > 0
+                {
+                    return (true, true);
+                }
+                if let Ok(present) = crate::sysfs::read_i64(path.join("present"))
+                    && present > 0
+                {
+                    return (true, true);
+                }
+            }
+        }
+
+        if saw_power_supply {
+            return (false, true);
+        }
+
+        let status_path = format!("{}/status", self.hardware.battery_profile.path);
+        let status =
+            crate::sysfs::read_string(&status_path).unwrap_or_else(|_| "Discharging".to_string());
+        (
+            status.contains("Charging")
+                || status.contains("Full")
+                || status.contains("Not charging"),
+            false,
+        )
+    }
+
+    #[cfg(test)]
+    fn new_for_test(hardware: HardwareProfile) -> Self {
+        let (config, _) = crate::config::AppConfig::load_or_default("missing", "missing");
+        let ctx = RuntimeContext {
+            config: config.clone(),
+            state_dir: String::new(),
+            snapshot_taken: false,
+            recovery_mode: false,
+            initialized: false,
+            runtime_health: true,
+            battery_temp_c: 0,
+            trend_score: 0,
+            sleep_ms: config.profiles.poll_interval.saturating_mul(1000),
+            current_policy: None,
+            current_game: None,
+            cooldown_active: false,
+            cooldown_until: None,
+            cooldown_source_pkg: None,
+            game_session_started_at: None,
+            game_session_peak_temp: 0,
+            last_gaming_state: false,
+            plugged_in_at: None,
+            screen_off_since: None,
+        };
+        Self {
+            sensors: SensorManager::new(),
+            thermal: ThermalEngine::new(ctx.config.profiles.temp_history_size),
+            prediction: PredictionEngine::new(ctx.config.profiles.prediction_window, 3),
+            policy: PolicyEngine::new(
+                ctx.config.profiles.policy_debounce_sec,
+                ctx.config.profiles.poll_interval,
+            ),
+            governors: GovernorManager::new(),
+            cpuset: CpusetManager::new(),
+            charging: ChargingEngine::new(),
+            gaming: GameDetector::new(Vec::new(), 0, 1),
+            watchdog: Watchdog::new(ctx.config.profiles.poll_interval),
+            recovery: RecoveryManager::new(),
+            calibration: CalibrationManager::new(""),
+            snapshot: SnapshotManager::new("", hardware.clone()),
+            hardware,
+            runtime_tuner: RuntimeTuner::new(HardwareProfile::default()),
+            game_profiles: crate::profiles::GameProfileManager::new(""),
+        }
+    }
+
+    pub fn bootstrap(&mut self) -> Result<()> {
+        info!("Bootstrapping SystemOrchestrator...");
+        let mut paths = Vec::new();
+
+        for cluster in &self.hardware.cpu_topology.clusters {
+            paths.push(format!("{}/scaling_governor", cluster.policy_path));
+        }
+
+        if !self.hardware.charging_profile.path.is_empty() {
+            paths.push(self.hardware.charging_profile.path.clone());
+        }
+
+        if !self.hardware.gpu_profile.path.is_empty() {
+            paths.push(format!("{}/governor", self.hardware.gpu_profile.path));
+            if self.hardware.gpu_profile.is_kgsl {
+                paths.push(format!("{}/max_pwrlevel", self.hardware.gpu_profile.path));
+            }
+        }
+
+        self.snapshot.take_snapshot(paths)?;
+        Ok(())
+    }
+}
+
+impl RuntimeTask for SystemOrchestrator {
+    fn cleanup(&mut self) {
+        self.runtime_tuner.restore_all();
+    }
+
+    fn execute(&mut self, ctx: &mut RuntimeContext) -> Result<()> {
+        let bat_temp_c = {
+            let mut val = 350; // Assume tenths by default for power_supply
+            let candidates = [
+                format!("{}/temp", self.hardware.battery_profile.path),
+                "/sys/class/power_supply/battery/temp".to_string(),
+                "/sys/class/power_supply/bms/temp".to_string(),
+                "/sys/class/power_supply/main/temp".to_string(),
+            ];
+
+            let mut found = false;
+            for node in &candidates {
+                if let Ok(v) = crate::sysfs::read_i64(node)
+                    && v > 0
+                {
+                    val = v as i32;
+                    found = true;
+                    break;
+                }
+            }
+
+            if found {
+                val / 10 // Convert power_supply raw tenths to whole degrees
+            } else {
+                let bat_name =
+                    self.resolve_sensor_name(self.hardware.thermal_profile.battery_zone.as_ref());
+                bat_name
+                    .and_then(|name| self.sensors.read_sensor(&name))
+                    .unwrap_or(35)
+            }
+        };
+        ctx.battery_temp_c = bat_temp_c;
+
+        let is_running = ctx.runtime_health;
+
+        // 1. Watchdog
+        if let Ok(true) = self.watchdog.check(is_running) {
+            // Watchdog requested recovery due to stall
+            warn!("Watchdog triggered recovery.");
+        }
+
+        // 2. Gaming state
+        let was_gaming = ctx.last_gaming_state;
+        let is_gaming = self.gaming.tick().unwrap_or(false);
+        ctx.last_gaming_state = is_gaming;
+        let confirmed_pkg = self.gaming.confirmed_package().map(|s| s.to_string());
+        let now = std::time::Instant::now();
+
+        if is_gaming && !was_gaming {
+            ctx.game_session_started_at = Some(now);
+            tracing::info!(
+                target: "gaming",
+                "Game detected: {}",
+                confirmed_pkg.as_deref().unwrap_or("unknown")
+            );
+            // Peak temp will be set below after sensors
+        }
+
+        if is_gaming {
+            ctx.current_game = confirmed_pkg.clone();
+            if ctx.cooldown_source_pkg != confirmed_pkg {
+                ctx.cooldown_source_pkg = confirmed_pkg.clone();
+                ctx.cooldown_until = None;
+            }
+        } else {
+            ctx.current_game = None;
+        }
+
+        // 3. Sensors & Thermal
+        // Find the node name from the path stored in the thermal_profile.
+        // `read_sensor` expects the `type_name` (e.g. "cpu_therm"), not the path.
+        let cpu_temp = self
+            .read_thermal_source(self.hardware.thermal_profile.cpu_zone.as_ref())
+            .unwrap_or(40);
+
+        let gpu_temp = self
+            .read_thermal_source(self.hardware.thermal_profile.gpu_zone.as_ref())
+            .unwrap_or(40);
+
+        let bat_temp = ctx.battery_temp_c;
+        let skin_temp = self
+            .read_thermal_source(self.hardware.thermal_profile.skin_zone.as_ref())
+            .unwrap_or(bat_temp); // Fallback to bat
+
+        let gpu_load = crate::hardware::display::gpu_load_percent().unwrap_or(50);
+        let comp_temp =
+            ThermalEngine::composite_temp(cpu_temp, gpu_temp, bat_temp, skin_temp, gpu_load);
+
+        // Apply calibration
+        let adj_temp = comp_temp + self.calibration.active_offset;
+
+        self.thermal.update(adj_temp);
+
+        if is_gaming {
+            if !was_gaming {
+                ctx.game_session_peak_temp = adj_temp;
+            } else {
+                ctx.game_session_peak_temp = ctx.game_session_peak_temp.max(adj_temp);
+            }
+        }
+        let is_cooling = self.thermal.is_cooling();
+        self.calibration.apply_calibration(!is_cooling);
+
+        // 4. Prediction
+        let mut predicted_temp = self.thermal.get_smoothed_temp();
+        let mut trend_score = 0;
+        #[allow(clippy::collapsible_if)]
+        if let Some(pred) = self.prediction.predict(&self.thermal) {
+            trend_score = pred.trend_score;
+            if pred.confidence > 50 {
+                predicted_temp = pred.predicted_temp;
+            }
+        }
+
+        // 5. Policy
+        let is_screen_off = crate::hardware::display::is_screen_off();
+        if is_screen_off {
+            if ctx.screen_off_since.is_none() {
+                ctx.screen_off_since = Some(std::time::Instant::now());
+            }
+        } else {
+            ctx.screen_off_since = None;
+        }
+
+        let game_modifier = self.compute_game_modifier(confirmed_pkg.as_deref(), ctx);
+        let mem_pressure = self
+            .hardware
+            .memory_profile
+            .memory_pressure_avg10
+            .unwrap_or(0.0);
+        let comfort_weight =
+            Self::compute_comfort_weight(skin_temp, bat_temp, is_cooling, mem_pressure);
+
+        //
+        let wifi_active = crate::hardware::network::read_wifi_active();
+        let screen_brightness = crate::hardware::display::read_screen_brightness_percent(
+            self.hardware.display_profile.brightness_path.as_deref(),
+            self.hardware.display_profile.max_brightness_path.as_deref(),
+        );
+        let ambient_temp = self.sensors.read_ambient_temp_c();
+
+        let context_score = Self::get_context_score(
+            wifi_active,
+            screen_brightness,
+            ambient_temp,
+            is_screen_off,
+            is_gaming,
+        );
+        let cooling_eff = Self::get_cooling_efficiency(trend_score, gpu_load, is_cooling);
+
+        let final_context = context_score + cooling_eff;
+
+        let desired_policy = self.policy.evaluate(
+            adj_temp,
+            predicted_temp,
+            trend_score,
+            is_gaming,
+            is_screen_off,
+            final_context,
+            game_modifier,
+            comfort_weight,
+            &ctx.config.profiles,
+        );
+
+        // 6. Recovery overrides
+        // 6. Post-game cooldown and session updates
+        if was_gaming && !is_gaming {
+            tracing::info!(
+                target: "gaming",
+                "Game session ended: {} (peak {}C)",
+                ctx.cooldown_source_pkg.as_deref().unwrap_or("unknown"),
+                ctx.game_session_peak_temp
+            );
+            let pkg = ctx.cooldown_source_pkg.clone().unwrap_or_default();
+            let cd_sec = self
+                .game_profiles
+                .get_profile(&pkg)
+                .map(|p| p.cooldown_sec)
+                .unwrap_or(90);
+            ctx.cooldown_until = Some(now + std::time::Duration::from_secs(cd_sec));
+
+            let session_secs = ctx
+                .game_session_started_at
+                .map(|t: std::time::Instant| t.elapsed().as_secs())
+                .unwrap_or(0);
+            if let Err(e) = self.game_profiles.update_session(
+                &pkg,
+                ctx.game_session_peak_temp,
+                Self::policy_state_name(&desired_policy), // Using desired before overrides
+                session_secs,
+            ) {
+                tracing::warn!("Failed to save game profile for {}: {}", pkg, e);
+            }
+
+            ctx.game_session_peak_temp = 0;
+            ctx.game_session_started_at = None;
+            ctx.current_game = None;
+        }
+
+        let is_cooldown = ctx.cooldown_until.is_some_and(|t| t > now);
+
+        // Evaluate post-game cooling when cooldown expires
+        if !is_cooldown && ctx.cooldown_until.is_some() {
+            self.calibration
+                .evaluate_post_game_cooling(ctx.game_session_peak_temp, bat_temp);
+            ctx.cooldown_until = None;
+            ctx.cooldown_source_pkg = None;
+        }
+
+        ctx.cooldown_active = is_cooldown && !is_gaming;
+
+        // 7. Recovery overrides & Final Policy Computation
+        ctx.recovery_mode = self
+            .recovery
+            .check_recovery(&desired_policy, was_gaming, is_gaming);
+
+        let final_policy = if ctx.cooldown_active || ctx.recovery_mode {
+            PolicyState::Conservative
+        } else {
+            desired_policy
+        };
+
+        // 8. Actuation (Governors, Cpuset, Runtime Tuning)
+        let policy_str = Self::policy_state_name(&final_policy);
+
+        let policy_changed = match &ctx.current_policy {
+            Some(p) => p != policy_str,
+            None => true,
+        };
+
+        // Check if tweaks are disabled
+        let disable_tweaks = ctx.config.profiles.disable_tweaks;
+
+        if !disable_tweaks {
+            // If game was just detected and confirmed, try pinning critical render thread
+            if is_gaming && !was_gaming {
+                if let Some(pid) = self.gaming.confirmed_pid {
+                    self.runtime_tuner.pin_critical_render_thread(pid, "top-app");
+                }
+            }
+        } else if policy_changed {
+            tracing::info!(target: "tuning", "Tweaks disabled by config, skipping actuation for policy: {}", policy_str);
+        }
+
+        // Fallback logic for GPU governor if the requested one is not supported
+        let gpu_gov_perf = self.select_gpu_governor(&["performance", "msm-adreno-tz"]);
+        let gpu_gov_bal = self.select_gpu_governor(&["msm-adreno-tz", "simple_ondemand"]);
+        let gpu_gov_save =
+            self.select_gpu_governor(&["powersave", "msm-adreno-tz", "simple_ondemand"]);
+        let cpu_gov_perf = self.select_cpu_governor(&["walt", "performance", "schedutil"]);
+        let cpu_gov_bal = self.select_cpu_governor(&["schedutil", "walt"]);
+        let cpu_gov_cons = self.select_cpu_governor(&["conservative", "schedutil"]);
+        let cpu_gov_save = self.select_cpu_governor(&["powersave", "schedutil"]);
+
+        // Grace period to avoid burst-apply stutter at game launch, tune threshold based on real-device testing.
+        let game_grace_elapsed = ctx
+            .game_session_started_at
+            .map(|t| t.elapsed().as_secs() >= 2)
+            .unwrap_or(true);
+
+        if !disable_tweaks && policy_changed && (final_policy != PolicyState::Performance || game_grace_elapsed) {
+            match final_policy {
+                PolicyState::Performance => {
+                    if let Some(gov) = &cpu_gov_perf {
+                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                        }
+                    } else {
+                        tracing::warn!("No common supported CPU governor for Performance policy");
+                    }
+                    if let Some(gov) = gpu_gov_perf {
+                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                            tracing::warn!("Failed to apply GPU governor: {}", e);
+                        }
+                    }
+                    if let Err(e) = self.cpuset.apply_cpuset("performance") {
+                        tracing::warn!("Failed to apply cpuset: {}", e);
+                    }
+                }
+                PolicyState::Balanced => {
+                    if let Some(gov) = &cpu_gov_bal {
+                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                        }
+                    } else {
+                        tracing::warn!("No common supported CPU governor for Balanced policy");
+                    }
+                    if let Some(gov) = gpu_gov_bal {
+                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                            tracing::warn!("Failed to apply GPU governor: {}", e);
+                        }
+                    }
+                    if let Err(e) = self.cpuset.apply_cpuset("balanced") {
+                        tracing::warn!("Failed to apply cpuset: {}", e);
+                    }
+                }
+                PolicyState::Conservative => {
+                    if let Some(gov) = &cpu_gov_cons {
+                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                        }
+                    } else {
+                        tracing::warn!("No common supported CPU governor for Conservative policy");
+                    }
+                    if let Some(gov) = gpu_gov_bal {
+                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                            tracing::warn!("Failed to apply GPU governor: {}", e);
+                        }
+                    }
+                    if let Err(e) = self.cpuset.apply_cpuset("conservative") {
+                        tracing::warn!("Failed to apply cpuset: {}", e);
+                    }
+                }
+                PolicyState::Powersave | PolicyState::EmergencyCool | PolicyState::Suspend => {
+                    if let Some(gov) = &cpu_gov_save {
+                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                        }
+                    } else {
+                        tracing::warn!("No common supported CPU governor for Powersave policy");
+                    }
+                    if let Some(gov) = gpu_gov_save {
+                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                            tracing::warn!("Failed to apply GPU governor: {}", e);
+                        }
+                    }
+                    if let Err(e) = self.cpuset.apply_cpuset("powersave") {
+                        tracing::warn!("Failed to apply cpuset: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Runtime Tuner application on policy transitions
+        if !disable_tweaks && policy_changed {
+            if let Err(e) = self.runtime_tuner.apply_network_tweaks(policy_str) {
+                tracing::warn!("Failed to apply network tweaks: {}", e);
+            }
+            if let Err(e) = self.runtime_tuner.apply_touch_display_tweaks(policy_str) {
+                tracing::warn!("Failed to apply touch display tweaks: {}", e);
+            }
+            self.runtime_tuner.apply_vm_params(policy_str);
+            if let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
+                tracing::warn!("Failed to apply scheduler: {}", e);
+            }
+            self.runtime_tuner.apply_universal_gpu_control(policy_str);
+
+            // Stock thermal enable/disable based on gaming/perf
+            let is_perf = policy_str == "Performance" || policy_str == "Gaming";
+            if is_perf {
+                self.runtime_tuner.disable_stock_thermal();
+            } else {
+                self.runtime_tuner.restore_stock_thermal();
+            }
+
+            // Drop cache transition logic
+            if policy_str == "EmergencyCool" {
+                if let Err(e) = self.runtime_tuner.drop_cache(true) {
+                    tracing::warn!("Failed to drop cache: {}", e);
+                }
+            } else if policy_str == "Powersave" && mem_pressure > 40.0 {
+                if let Err(e) = self.runtime_tuner.drop_cache(false) {
+                    tracing::warn!("Failed to drop cache: {}", e);
+                }
+            }
+        }
+
+        // 9. Charging
+        let soc_path = format!("{}/capacity", self.hardware.battery_profile.path);
+        let soc = crate::sysfs::read_i64(&soc_path)
+            .unwrap_or(50)
+            .clamp(0, 100) as u8;
+
+        let (is_plugged, plug_state_reliable) = self.plug_state();
+
+        let c_temp = self
+            .read_thermal_source(self.hardware.thermal_profile.charger_zone.as_ref())
+            .unwrap_or(bat_temp);
+
+        let u_temp = self
+            .read_thermal_source(self.hardware.thermal_profile.usbc_zone.as_ref())
+            .unwrap_or(bat_temp);
+
+        let p_temp = self
+            .read_thermal_source(self.hardware.thermal_profile.pmic_zone.as_ref())
+            .unwrap_or(bat_temp);
+
+        let now = std::time::Instant::now();
+        if is_plugged {
+            if ctx.plugged_in_at.is_none() {
+                ctx.plugged_in_at = Some(now);
+                tracing::info!(target: "charging", "Charger connected");
+            }
+        } else {
+            if ctx.plugged_in_at.is_some() {
+                tracing::info!(target: "charging", "Charger disconnected");
+            }
+            ctx.plugged_in_at = None;
+        }
+
+        let seconds_since_plugged = ctx
+            .plugged_in_at
+            .map(|t| t.elapsed().as_secs())
+            .unwrap_or(0);
+
+        let charging_inputs = crate::charging::ChargingInputs {
+            battery_temp: bat_temp,
+            charger_temp: c_temp,
+            usb_temp: u_temp,
+            pmic_temp: p_temp,
+            soc,
+            is_plugged,
+            plug_state_reliable,
+            is_gaming,
+            screen_off: is_screen_off,
+            gpu_load,
+            urgent: false,
+            seconds_since_plugged,
+            charger_id: self.hardware.charging_profile.path.clone(),
+            current_now_ua: None,
+            voltage_now_uv: None,
+            charge_counter_uah: None,
+        };
+        self.charging.evaluate(&charging_inputs, &ctx.state_dir);
+
+        // 10. Adaptive Sleep
+        let clamped_trend = (trend_score * 50).clamp(-50, 50);
+        ctx.trend_score = clamped_trend;
+
+        let long_idle = is_screen_off
+            && !is_gaming
+            && ctx
+                .screen_off_since
+                .map(|t| t.elapsed().as_secs() > 120)
+                .unwrap_or(false)
+            && clamped_trend <= 0; // only back off further if not actively heating
+
+        ctx.sleep_ms = if clamped_trend > 15 {
+            50 // avoid true 0 sleep to prevent CPU spin
+        } else if clamped_trend > 8 {
+            1000
+        } else if long_idle {
+            30_000 // device has been screen-off, cool/cooling, and idle for 2+ minutes
+        } else if (-2..=2).contains(&clamped_trend) && !is_gaming {
+            ctx.config.profiles.poll_interval.saturating_mul(4000)
+        } else {
+            ctx.config.profiles.poll_interval.saturating_mul(1000)
+        };
+        ctx.current_policy = Some(Self::policy_state_name(&final_policy).to_string());
+
+        // 10. JSON Telemetry
+        let telemetry = serde_json::json!({
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "ai_temp": adj_temp,
+            "predicted_temp": predicted_temp,
+            "policy": Self::policy_state_name(&final_policy),
+            "gpu_load": gpu_load,
+            "gaming": is_gaming,
+            "game_pkg": ctx.current_game.clone().unwrap_or_default(),
+            "batt_temp": bat_temp,
+            "charge_state": format!("{:?}", self.charging.current_state),
+            "charge_limit_ma": self.charging.active_limit_ma,
+            "trend_score": ctx.trend_score,
+            "screen_state": !is_screen_off,
+            "mem_pressure": mem_pressure,
+            "slow_cooler": is_cooling,
+            "session_count": ctx.current_game
+                .as_deref()
+                .and_then(|pkg| self.game_profiles.get_profile(pkg))
+                .map(|p| p.session_count)
+                .unwrap_or(0),
+            "calibration_offset": self.calibration.active_offset,
+            "slow_cooler_persistent": self.calibration.slow_cooler_persistent,
+            "sleep_ms": ctx.sleep_ms,
+            "session_peak_temp": ctx.game_session_peak_temp,
+            "session_started_at": ctx.game_session_started_at.map(|t| chrono::Utc::now().timestamp() - t.elapsed().as_secs() as i64),
+        });
+
+        crate::telemetry::writer::write_telemetry(ctx, &telemetry);
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gpu_policy_uses_supported_governor_before_preferred_name() {
+        let mut hardware = HardwareProfile::default();
+        hardware.gpu_profile.current_governor = "msm-adreno-tz".to_string();
+        hardware.gpu_profile.available_governors = vec!["msm-adreno-tz".to_string()];
+
+        let orchestrator = SystemOrchestrator::new_for_test(hardware);
+        assert_eq!(
+            orchestrator.select_gpu_governor(&["performance", "msm-adreno-tz"]),
+            Some("msm-adreno-tz".to_string())
+        );
+    }
+
+    #[test]
+    fn gpu_policy_falls_back_to_current_valid_governor() {
+        let mut hardware = HardwareProfile::default();
+        hardware.gpu_profile.current_governor = "vendor-safe".to_string();
+        hardware.gpu_profile.available_governors = vec!["vendor-safe".to_string()];
+
+        let orchestrator = SystemOrchestrator::new_for_test(hardware);
+        assert_eq!(
+            orchestrator.select_gpu_governor(&["performance"]),
+            Some("vendor-safe".to_string())
+        );
+    }
+
+    #[test]
+    fn cpu_policy_prefers_walt_only_when_all_clusters_support_it() {
+        let mut hardware = HardwareProfile::default();
+        for id in 0..2 {
+            hardware
+                .cpu_topology
+                .clusters
+                .push(crate::hardware::profile::CpuCluster {
+                    name: format!("policy{}", id),
+                    governor_node: crate::hardware::capability::CapabilityNode {
+                        path: format!(
+                            "/sys/devices/system/cpu/cpufreq/policy{}/scaling_governor",
+                            id
+                        ),
+                        valid: true,
+                        writable: true,
+                        ..Default::default()
+                    },
+                    available_governors: vec![
+                        "walt".to_string(),
+                        "performance".to_string(),
+                        "schedutil".to_string(),
+                    ],
+                    ..Default::default()
+                });
+        }
+
+        let orchestrator = SystemOrchestrator::new_for_test(hardware);
+        assert_eq!(
+            orchestrator.select_cpu_governor(&["walt", "performance", "schedutil"]),
+            Some("walt".to_string())
+        );
+    }
+
+    #[test]
+    fn cpu_policy_falls_back_when_walt_is_partial() {
+        let mut hardware = HardwareProfile::default();
+        let governor_sets = [
+            vec!["walt".to_string(), "performance".to_string()],
+            vec!["performance".to_string(), "schedutil".to_string()],
+        ];
+        for (id, governors) in governor_sets.into_iter().enumerate() {
+            hardware
+                .cpu_topology
+                .clusters
+                .push(crate::hardware::profile::CpuCluster {
+                    name: format!("policy{}", id),
+                    governor_node: crate::hardware::capability::CapabilityNode {
+                        path: format!(
+                            "/sys/devices/system/cpu/cpufreq/policy{}/scaling_governor",
+                            id
+                        ),
+                        valid: true,
+                        writable: true,
+                        ..Default::default()
+                    },
+                    available_governors: governors,
+                    ..Default::default()
+                });
+        }
+
+        let orchestrator = SystemOrchestrator::new_for_test(hardware);
+        assert_eq!(
+            orchestrator.select_cpu_governor(&["walt", "performance", "schedutil"]),
+            Some("performance".to_string())
+        );
+    }
+}

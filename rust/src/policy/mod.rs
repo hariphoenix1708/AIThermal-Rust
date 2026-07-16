@@ -1,0 +1,156 @@
+use crate::config::ProfilesConfig;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PolicyState {
+    Performance,
+    Balanced,
+    Conservative,
+    Powersave,
+    EmergencyCool,
+    Suspend,
+}
+
+pub struct PolicyEngine {
+    pub current_policy: PolicyState,
+    debounce_ticks: u64,
+    ticks_since_change: u64,
+}
+
+impl PolicyEngine {
+    pub fn new(debounce_sec: u64, poll_interval_sec: u64) -> Self {
+        let debounce_ticks = if poll_interval_sec > 0 {
+            std::cmp::max(
+                1,
+                (debounce_sec as f64 / poll_interval_sec as f64).ceil() as u64,
+            )
+        } else {
+            1
+        };
+
+        Self {
+            current_policy: PolicyState::Balanced,
+            debounce_ticks,
+            ticks_since_change: 0,
+        }
+    }
+
+    /// Evaluates the temperature and requested hints to emit the desired policy.
+    /// Does NOT perform side effects (no sysfs writes).
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate(
+        &mut self,
+        composite_temp: i32,
+        predicted_temp: i32,
+        trend_score: i32,
+        is_gaming: bool,
+        is_screen_off: bool, // Passed in but handled via context_weight mostly, left here for explicit threshold logic
+        context_weight: f64,
+        game_modifier: f64,
+        comfort_weight: f64,
+        config: &ProfilesConfig,
+    ) -> PolicyState {
+        self.ticks_since_change += 1;
+
+        //
+        let s_temp = (composite_temp as f64 - config.temp_cool as f64).max(0.0) * 2.0;
+        let s_pred = (predicted_temp as f64 - config.temp_cool as f64).max(0.0) * 1.5;
+        let s_game = if is_gaming {
+            -(config.gaming_score_boost as f64)
+        } else {
+            0.0
+        };
+
+        // Trend score is scaled: > 0 means heating rapidly, < 0 means cooling
+        let s_trend = (trend_score as f64).clamp(-10.0, 10.0) * 2.5;
+
+        // Total evaluation score
+        let total_score =
+            s_temp + s_pred + s_game + s_trend + context_weight + game_modifier + comfort_weight;
+
+        // Threshold evaluation (recalibrated based on the new total_score ranges)
+        // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
+        // A typical hot score might be: temp diff (45-35)=10 * 2 = 20, pred (45-35)=15, game=10, trend=5, context=..., comfort=...
+        // Let's calibrate:
+        let desired = if composite_temp >= config.temp_critical
+            || predicted_temp >= config.temp_critical
+            || total_score > 90.0
+        {
+            PolicyState::EmergencyCool
+        } else if is_screen_off && !is_gaming && total_score < -5.0 && self.ticks_since_change > 10
+        {
+            PolicyState::Suspend
+        } else if total_score > 65.0 {
+            PolicyState::Powersave
+        } else if total_score > 40.0 {
+            PolicyState::Conservative
+        } else if total_score > 15.0 {
+            PolicyState::Balanced
+        } else {
+            PolicyState::Performance
+        };
+
+        self.apply_transition(desired)
+    }
+
+    fn apply_transition(&mut self, desired: PolicyState) -> PolicyState {
+        // Immediate escalate for Emergency or Suspend
+        if desired == PolicyState::EmergencyCool || desired == PolicyState::Suspend {
+            if self.current_policy != desired {
+                self.current_policy = desired.clone();
+                self.ticks_since_change = 0;
+            }
+            return desired;
+        }
+
+        // Apply debounce for normal transitions to prevent rapid flapping
+        if desired != self.current_policy && self.ticks_since_change >= self.debounce_ticks {
+            self.current_policy = desired.clone();
+            self.ticks_since_change = 0;
+        }
+
+        self.current_policy.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_policy_evaluation_and_debounce() {
+        let mut engine = PolicyEngine::new(10, 2); // 5 ticks debounce
+        let config = ProfilesConfig::default();
+
+        // Screen off doesn't override immediately unless score is low and ticks > 10
+        engine.ticks_since_change = 11;
+        // With temps at 30, they are likely cool, giving 0 for s_temp and s_pred.
+        // We pass -10.0 for context_weight to drop the score below -5.0.
+        assert_eq!(
+            engine.evaluate(30, 30, 0, false, true, -10.0, 0.0, 0.0, &config),
+            PolicyState::Suspend
+        );
+
+        // Emergency cool overrides immediately (high temp)
+        assert_eq!(
+            engine.evaluate(80, 80, 2, false, false, 0.0, 0.0, 0.0, &config),
+            PolicyState::EmergencyCool
+        );
+
+        // Drop to cool should debounce
+        assert_eq!(
+            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, &config),
+            PolicyState::EmergencyCool // still emergency because 0 ticks since change < 5
+        );
+
+        // Fast forward ticks
+        engine.ticks_since_change = 10;
+        assert_eq!(
+            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, &config),
+            PolicyState::Performance
+        );
+
+        // Rise to warm
+        engine.ticks_since_change = 10;
+        let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, &config);
+    }
+}
