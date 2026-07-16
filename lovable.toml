@@ -1,2 +1,4 @@
 [run]
+dev = "sh -c 'while true; do sleep 3600; done'"
 build:dev = "echo 'Rust module - no web build'"
+build = "echo 'Rust module - no web build'"
