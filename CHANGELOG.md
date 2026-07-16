@@ -1,5 +1,11 @@
 # Changelog
 
+## [v3.0.3-beta] - Maintenance release
+
+*   **Version**: Bumped `module.prop` to `v3.0.3-beta` (versionCode `304`) for redistribution.
+*   **No functional changes**: Daemon behavior, hardware discovery, policy engine, charging engine, and CLI surface are unchanged from `v3.0.2-beta`.
+
+
 ## [1.0.2] - Runtime packaging and gaming smoothness hardening
 
 *   **Packaging Contract**: Standardized packaged Rust executables under `system/bin`, added install-time `customize.sh` permission/context setup, included `sepolicy.rule`, and kept Windows ZIP creation on 7-Zip with Android ARM64 ELF validation.
