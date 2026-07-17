@@ -261,6 +261,19 @@ impl RuntimeTuner {
             "10",
         );
 
+        let cpu_limits_path = "/sys/class/thermal/thermal_message/cpu_limits";
+        if std::fs::OpenOptions::new().write(true).open(cpu_limits_path).is_ok() {
+            let cpu_count = self.hardware.cpu_topology.clusters
+                .iter()
+                .flat_map(|c| c.cpus.iter())
+                .count();
+            for cpu in 0..cpu_count {
+                let value = format!("cpu{} 2147483647", cpu); // i32::MAX as a no-limit sentinel
+                let _ = crate::tuning::backend::TuningBackend::try_write_string(cpu_limits_path, &value);
+            }
+            tracing::debug!(target: "tuning", "Applied unrestricted cpu_limits to {} cores via {}", cpu_count, cpu_limits_path);
+        }
+
         for dev in &self.hardware.thermal_profile.cooling_devices {
             let cur_state = format!("{}/cur_state", dev.sysfs_path);
             if self

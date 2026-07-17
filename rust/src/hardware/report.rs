@@ -17,8 +17,16 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
         profile.metadata.build_fingerprint
     ));
     report.push_str(&format!(
-        "Kernel Version: {}\n\n",
+        "Kernel Version: {}\n",
         profile.metadata.kernel_version
+    ));
+    report.push_str(&format!(
+        "SELinux: {}\n\n",
+        match profile.kernel_profile.selinux_enforcing {
+            Some(true) => "Enforcing",
+            Some(false) => "Permissive",
+            None => "Unknown (could not read /sys/fs/selinux/enforce)",
+        }
     ));
 
     report.push_str("--- CPU ---\n");

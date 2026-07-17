@@ -69,5 +69,15 @@ pub fn probe_kernel() -> KernelCapabilityProfile {
         }
     }
 
+    if let Ok(content) = std::fs::read_to_string("/sys/fs/selinux/enforce") {
+        profile.selinux_enforcing = match content.trim() {
+            "1" => Some(true),
+            "0" => Some(false),
+            _ => None,
+        };
+    } else {
+        profile.selinux_enforcing = None;
+    }
+
     profile
 }
