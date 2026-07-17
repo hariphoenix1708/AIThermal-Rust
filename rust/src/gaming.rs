@@ -105,6 +105,31 @@ impl GameDetector {
         self.confirmed_package.as_deref()
     }
 
+    fn get_foreground_app_from_cgroup() -> Option<(String, u32)> {
+        let candidate_paths = [
+            "/dev/cpuset/top-app/cgroup.procs",
+            "/sys/fs/cgroup/cpuset/top-app/cgroup.procs",
+        ];
+        for path in candidate_paths {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                // Check PIDs in reverse order — the most recently added PID is
+                // typically the actual foreground activity's process.
+                for pid_str in content.split_whitespace().rev() {
+                    let cmdline_path = format!("/proc/{}/cmdline", pid_str);
+                    if let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) {
+                        let pkg = cmdline.split('\0').next().unwrap_or("").trim();
+                        if !pkg.is_empty() && !pkg.starts_with('/') {
+                            if let Ok(pid) = pid_str.parse::<u32>() {
+                                return Some((pkg.to_string(), pid));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn tick(&mut self) -> Result<bool> {
         if self.daemon_started_at.elapsed().as_secs() < 30 {
             return Ok(false);
@@ -119,7 +144,7 @@ impl GameDetector {
             perform_scan = true;
         }
 
-        let (pkg, pid) = if perform_scan {
+        let (mut pkg, mut pid) = if perform_scan {
             let scanned = self.scan_oom_score_adj();
             self.last_proc_scan = Some(Instant::now());
             self.cached_package = scanned.clone().and_then(|(p, _)| p);
@@ -129,7 +154,19 @@ impl GameDetector {
             (self.cached_package.clone(), self.cached_pid)
         };
 
-        let detected = pkg.is_some();
+        let mut detected = pkg.is_some();
+
+        if detected {
+            if let Some((fg_pkg, _fg_pid)) = Self::get_foreground_app_from_cgroup() {
+                if let Some(ref p) = pkg {
+                    if *p != fg_pkg {
+                        detected = false;
+                        pkg = None;
+                        pid = None;
+                    }
+                }
+            }
+        }
 
         if detected {
             self.is_gaming = true;

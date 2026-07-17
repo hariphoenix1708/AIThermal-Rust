@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -30,10 +30,13 @@ pub struct Daemon {
     config_path: String,
     game_list_path: String,
     reload_flag: Arc<AtomicBool>,
+    screen_on: Arc<AtomicBool>,
+    last_screen_netlink_update: Arc<AtomicU64>,
 }
 
 impl Daemon {
     pub fn new(pid_file: &str, config: AppConfig, state_dir: &str, config_path: String, game_list_path: String) -> Self {
+        let initial_screen_off = crate::hardware::display::is_screen_off();
         let lock_file = format!("{}.lock", pid_file);
         let ctx = RuntimeContext {
             config: config.clone(),
@@ -57,6 +60,8 @@ impl Daemon {
             screen_off_since: None,
         };
 
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+
         Self {
             pid_file: pid_file.to_string(),
             lock_file,
@@ -66,6 +71,20 @@ impl Daemon {
             config_path,
             game_list_path,
             reload_flag: Arc::new(AtomicBool::new(false)),
+            screen_on: Arc::new(AtomicBool::new(!initial_screen_off)),
+            last_screen_netlink_update: Arc::new(AtomicU64::new(now)),
+        }
+    }
+
+    fn check_screen_off(&self) -> bool {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let last_update = self.last_screen_netlink_update.load(Ordering::SeqCst);
+        let netlink_off = !self.screen_on.load(Ordering::SeqCst);
+
+        if now >= last_update && (now - last_update) < 60 {
+            netlink_off
+        } else {
+            crate::hardware::display::is_screen_off()
         }
     }
 
@@ -120,6 +139,11 @@ impl Daemon {
                 self.reload_flag.clone(),
             );
 
+            crate::hardware::screen_netlink::spawn_screen_state_watcher(
+                self.screen_on.clone(),
+                self.last_screen_netlink_update.clone()
+            );
+
             Ok(())
         };
 
@@ -143,7 +167,7 @@ impl Daemon {
             }
 
             let sleep_ms = self.ctx.sleep_ms.max(1);
-            let was_screen_off = crate::hardware::display::is_screen_off();
+            let was_screen_off = self.check_screen_off();
             // Tune segment_ms: smaller reacts faster but polls screen state more often during idle;
             // larger reduces file reads but increases worst-case wake latency.
             let segment_ms: u64 = 500;
@@ -157,7 +181,7 @@ impl Daemon {
                 // Only bother re-checking screen state early if we're in a long
                 // (idle-tier) sleep to begin with - short sleeps don't need this.
                 if sleep_ms > 2000 {
-                    let now_screen_off = crate::hardware::display::is_screen_off();
+                    let now_screen_off = self.check_screen_off();
                     if was_screen_off && !now_screen_off {
                         tracing::debug!("Screen turned on during idle sleep, waking daemon early");
                         break;
