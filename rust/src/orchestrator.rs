@@ -679,6 +679,18 @@ impl RuntimeTask for SystemOrchestrator {
                     } else {
                         tracing::warn!("No common supported CPU governor for Performance policy");
                     }
+
+                    for cluster in &self.hardware.cpu_topology.clusters {
+                        if let Some(target) = GovernorManager::max_freq(&cluster.available_frequencies) {
+                            let max_freq_path = format!("{}/scaling_max_freq", cluster.policy_path);
+                            if crate::tuning::backend::TuningBackend::try_write_string(
+                                &max_freq_path, target.to_string()
+                            ).is_ok() {
+                                tracing::debug!(target: "governors", "Applied scaling_max_freq: {} to cluster {} via {}", target, cluster.name, max_freq_path);
+                            }
+                        }
+                    }
+
                     if let Some(gov) = gpu_gov_perf {
                         if let Err(e) = self.governors.apply_gpu_governor(&gov) {
                             tracing::warn!("Failed to apply GPU governor: {}", e);

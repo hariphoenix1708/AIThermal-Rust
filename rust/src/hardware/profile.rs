@@ -103,6 +103,7 @@ pub struct ServiceProfile {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KernelCapabilityProfile {
     pub features: Vec<String>,
+    pub selinux_enforcing: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
