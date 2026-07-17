@@ -1,0 +1,87 @@
+=== thermalai_rust Hardware Report ===
+
+Device Identity: 24069PC21I
+SoC Platform: SM8635
+MIGT (MI Game Turbo) module present: false
+GLK (game low kernel) hooks present: false
+Build Fingerprint: POCO/peridot_global/peridot:16/BP2A.250605.031.A3/OS3.0.6.0.WNPMIXM:user/release-keys
+Kernel Version: Linux version 6.1.170-g765c1aa25c2f (build-user@build-host) (Android (14054515, +pgo, +bolt, +lto, +mlgo, based on r563880c) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f06077099aa41290cdb4c5e6fa0f59349), LLD 21.0.0 (/mnt/disks/build-disk/src/googleplex-android/llvm-r563880-release/out/llvm-project/llvm 5e96669f06077099aa41290cdb4c5e6fa0f59349)) #1 SMP PREEMPT Thu Jul  9 21:03:09 CEST 2026
+SELinux: Enforcing
+
+--- CPU ---
+WALT Support: false
+EAS Support: true
+UClamp Support: true
+Cluster [policy0]: [0, 1, 2]
+  Policy Path: /sys/devices/system/cpu/cpufreq/policy0
+  Available Frequencies: [364800, 441600, 595200, 787200, 902400, 1017600, 1113600, 1228800, 1344000, 1478400, 1593600, 1708800, 1843200, 1900800, 2016000]
+Cluster [policy3]: [3, 4, 5, 6]
+  Policy Path: /sys/devices/system/cpu/cpufreq/policy3
+  Available Frequencies: [480000, 633600, 787200, 940800, 1056000, 1190400, 1286400, 1401600, 1497600, 1593600, 1708800, 1824000, 1920000, 2073600, 2188800, 2361600, 2572800, 2611200, 2707200]
+Cluster [policy7]: [7]
+  Policy Path: /sys/devices/system/cpu/cpufreq/policy7
+  Available Frequencies: [480000, 633600, 787200, 960000, 1094400, 1209600, 1324800, 1459200, 1651200, 1766400, 1900800, 2150400, 2304000, 2457600, 2668800, 2803200, 2918400]
+
+--- GPU ---
+Path: /sys/class/kgsl/kgsl-3d0
+Devfreq Path: /sys/class/kgsl/kgsl-3d0/devfreq
+KGSL: true
+Bus Split (kgsl): true
+Force Clk On (kgsl): true
+Governor: msm-adreno-tz (Avail: ["msm-adreno-tz"])
+Freq: 0 (Avail: [1100000000, 1000000000, 950000000, 900000000, 835000000, 736000000, 684000000, 633000000, 500000000, 353000000, 255000000])
+Busy/Total: None/None
+Max Freq: 0
+
+--- Thermal ---
+CPU Zone: Some("/sys/class/thermal/thermal_zone45/temp")
+GPU Zone: Some("/sys/class/thermal/thermal_zone33/temp")
+Battery Zone: Some("/sys/class/thermal/thermal_zone60/temp")
+Skin Zone: Some("/sys/class/thermal/thermal_zone48/temp")
+Total Discovered Zones: 59
+
+--- Charging & Battery ---
+Battery Path: /sys/class/power_supply/battery
+Charging Path: /sys/class/power_supply/usb
+Fast Charge Capable: true
+
+--- Cpuset ---
+Root Path: /dev/cpuset
+Top-App Path: Some("/dev/cpuset/top-app")
+Foreground Path: Some("/dev/cpuset/foreground")
+Background Path: Some("/dev/cpuset/background")
+System Background Path: Some("/dev/cpuset/system-background")
+Cpuset Nodes: [("cpuset_top_app", "/dev/cpuset/top-app/cpus", true, true), ("cpuset_foreground", "/dev/cpuset/foreground/cpus", true, true), ("cpuset_background", "/dev/cpuset/background/cpus", true, true), ("cpuset_sys_bg", "/dev/cpuset/system-background/cpus", true, true), ("cpuset_restricted", "/dev/cpuset/restricted/cpus", true, true)]
+
+--- Network ---
+Default qdisc: pfifo_fast
+TCP Congestion: cubic
+
+--- Memory & Storage ---
+PSI: true
+ZRAM: true
+LMKD: false
+UFS: false
+I/O Schedulers: {"sde": "[mq-deadline] kyber bfq none", "sdc": "[mq-deadline] kyber bfq none", "sdf": "[mq-deadline] kyber bfq none", "sdd": "[mq-deadline] kyber bfq none", "sdb": "[mq-deadline] kyber bfq none", "sda": "[mq-deadline] kyber bfq none"}
+
+--- Services & Kernel ---
+Thermal HAL: false
+Power HAL: false
+Vendor Thermal Engine: false
+Kernel Features: ["CONFIG_PREEMPT_BUILD=y", "CONFIG_PREEMPT=y", "CONFIG_PREEMPT_COUNT=y", "CONFIG_PREEMPTION=y", "CONFIG_PSI=y", "CONFIG_PREEMPT_RCU=y", "CONFIG_UCLAMP_TASK=y", "CONFIG_UCLAMP_BUCKETS_COUNT=20", "CONFIG_CGROUPS=y", "CONFIG_CGROUP_SCHED=y", "CONFIG_UCLAMP_TASK_GROUP=y", "CONFIG_CPUSETS=y", "CONFIG_ARM64=y", "CONFIG_ARM64_PAGE_SHIFT=12", "CONFIG_ARM64_CONT_PTE_SHIFT=4", "CONFIG_ARM64_CONT_PMD_SHIFT=4", "CONFIG_ARM64_WORKAROUND_CLEAN_CACHE=y", "CONFIG_ARM64_ERRATUM_826319=y", "CONFIG_ARM64_ERRATUM_827319=y", "CONFIG_ARM64_ERRATUM_824069=y", "CONFIG_ARM64_ERRATUM_819472=y", "CONFIG_ARM64_ERRATUM_832075=y", "CONFIG_ARM64_ERRATUM_834220=y", "CONFIG_ARM64_ERRATUM_1742098=y", "CONFIG_ARM64_ERRATUM_845719=y", "CONFIG_ARM64_ERRATUM_843419=y", "CONFIG_ARM64_LD_HAS_FIX_ERRATUM_843419=y", "CONFIG_ARM64_ERRATUM_1024718=y", "CONFIG_ARM64_ERRATUM_1418040=y", "CONFIG_ARM64_WORKAROUND_SPECULATIVE_AT=y", "CONFIG_ARM64_ERRATUM_1165522=y", "CONFIG_ARM64_ERRATUM_1319367=y", "CONFIG_ARM64_ERRATUM_1530923=y", "CONFIG_ARM64_WORKAROUND_REPEAT_TLBI=y", "CONFIG_ARM64_ERRATUM_1286807=y", "CONFIG_ARM64_ERRATUM_1463225=y", "CONFIG_ARM64_ERRATUM_1542419=y", "CONFIG_ARM64_ERRATUM_1508412=y", "CONFIG_ARM64_ERRATUM_2051678=y", "CONFIG_ARM64_ERRATUM_2077057=y", "CONFIG_ARM64_ERRATUM_2658417=y", "CONFIG_ARM64_WORKAROUND_TSB_FLUSH_FAILURE=y", "CONFIG_ARM64_ERRATUM_2054223=y", "CONFIG_ARM64_ERRATUM_2067961=y", "CONFIG_ARM64_ERRATUM_2457168=y", "CONFIG_ARM64_WORKAROUND_SPECULATIVE_UNPRIV_LOAD=y", "CONFIG_ARM64_ERRATUM_2966298=y", "CONFIG_ARM64_ERRATUM_3194386=y", "CONFIG_ARM64_4K_PAGES=y", "CONFIG_ARM64_VA_BITS_39=y", "CONFIG_ARM64_VA_BITS=39", "CONFIG_ARM64_PA_BITS_48=y", "CONFIG_ARM64_PA_BITS=48", "CONFIG_HZ_250=y", "CONFIG_HZ=250", "CONFIG_ARM64_SW_TTBR0_PAN=y", "CONFIG_ARM64_TAGGED_ADDR_ABI=y", "CONFIG_ARM64_HW_AFDBM=y", "CONFIG_ARM64_PAN=y", "CONFIG_ARM64_LSE_ATOMICS=y", "CONFIG_ARM64_USE_LSE_ATOMICS=y", "CONFIG_ARM64_PMEM=y", "CONFIG_ARM64_RAS_EXTN=y", "CONFIG_ARM64_CNP=y", "CONFIG_ARM64_PTR_AUTH=y", "CONFIG_ARM64_PTR_AUTH_KERNEL=y", "CONFIG_ARM64_AMU_EXTN=y", "CONFIG_ARM64_TLB_RANGE=y", "CONFIG_ARM64_BTI=y", "CONFIG_ARM64_E0PD=y", "CONFIG_ARM64_AS_HAS_MTE=y", "CONFIG_ARM64_MTE=y", "CONFIG_ARM64_EPAN=y", "CONFIG_ARM64_SVE=y", "CONFIG_ARM64_MODULE_PLTS=y", "CONFIG_ENERGY_MODEL=y", "CONFIG_CPU_IDLE=y", "CONFIG_CPU_IDLE_MULTIPLE_DRIVERS=y", "CONFIG_CPU_IDLE_GOV_MENU=y", "CONFIG_CPU_IDLE_GOV_TEO=y", "CONFIG_CPU_IDLE_GOV_QCOM_LPM=m", "CONFIG_CPU_FREQ=y", "CONFIG_CPU_FREQ_GOV_ATTR_SET=y", "CONFIG_CPU_FREQ_GOV_COMMON=y", "CONFIG_CPU_FREQ_STAT=y", "CONFIG_CPU_FREQ_TIMES=y", "CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y", "CONFIG_CPU_FREQ_GOV_PERFORMANCE=y", "CONFIG_CPU_FREQ_GOV_POWERSAVE=y", "CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y", "CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y", "CONFIG_PREEMPT_NOTIFIERS=y", "CONFIG_THERMAL=y", "CONFIG_THERMAL_NETLINK=y", "CONFIG_THERMAL_STATISTICS=y", "CONFIG_THERMAL_EMERGENCY_POWEROFF_DELAY_MS=100", "CONFIG_THERMAL_OF=y", "CONFIG_THERMAL_WRITABLE_TRIPS=y", "CONFIG_THERMAL_DEFAULT_GOV_STEP_WISE=y", "CONFIG_THERMAL_GOV_STEP_WISE=y", "CONFIG_THERMAL_GOV_USER_SPACE=y", "CONFIG_THERMAL_GOV_POWER_ALLOCATOR=y", "CONFIG_CPU_FREQ_THERMAL=y", "CONFIG_CPU_IDLE_THERMAL=y", "CONFIG_THERMAL_EMULATION=y", "CONFIG_ARM64_ERRATUM_858921=y", "CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y", "CONFIG_SCHED_WALT=m"]
+
+--- Compatibility Summary ---
+battery: PASS
+gpu: PASS
+storage: PASS
+kernel: PASS
+peridot_optimizations: PASS
+network: PASS
+cpu: PASS
+cpuset: PASS
+thermal: PASS
+memory: PASS
+services: MISSING
+scheduler: PASS
+charging: PASS
+OVERALL: PASS

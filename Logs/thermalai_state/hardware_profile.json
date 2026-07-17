@@ -1,0 +1,2181 @@
+{
+  "metadata": {
+    "product_device": "peridot",
+    "boot_hardware": "qcom",
+    "device_identity": "24069PC21I",
+    "board_platform": "pineapple",
+    "hardware": "qcom",
+    "schema_version": 4,
+    "timestamp": 1784268022,
+    "android_version": "16",
+    "build_fingerprint": "POCO/peridot_global/peridot:16/BP2A.250605.031.A3/OS3.0.6.0.WNPMIXM:user/release-keys",
+    "kernel_version": "Linux version 6.1.170-g765c1aa25c2f (build-user@build-host) (Android (14054515, +pgo, +bolt, +lto, +mlgo, based on r563880c) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f06077099aa41290cdb4c5e6fa0f59349), LLD 21.0.0 (/mnt/disks/build-disk/src/googleplex-android/llvm-r563880-release/out/llvm-project/llvm 5e96669f06077099aa41290cdb4c5e6fa0f59349)) #1 SMP PREEMPT Thu Jul  9 21:03:09 CEST 2026",
+    "vendor_fingerprint": "POCO/peridot_global/peridot:16/BP2A.250605.031.A3/OS3.0.6.0.WNPMIXM:user/release-keys"
+  },
+  "product_device": "peridot",
+  "boot_hardware": "qcom",
+  "device_identity": "24069PC21I",
+  "soc_info": "SM8635",
+  "board_platform": "pineapple",
+  "hardware": "qcom",
+  "migt_present": false,
+  "glk_present": false,
+  "cpu_topology": {
+    "is_walt": false,
+    "is_eas": true,
+    "has_uclamp": true,
+    "clusters": [
+      {
+        "name": "policy0",
+        "min_freq": 364800,
+        "max_freq": 2016000,
+        "cpus": [
+          0,
+          1,
+          2
+        ],
+        "policy_path": "/sys/devices/system/cpu/cpufreq/policy0",
+        "policy_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy0",
+          "name": "cpu_policy",
+          "readable": true,
+          "writable": false,
+          "valid": true,
+          "supported_values": []
+        },
+        "current_governor": "walt",
+        "governor_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor",
+          "name": "cpu_governor",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "walt",
+            "conservative",
+            "powersave",
+            "performance",
+            "schedutil"
+          ]
+        },
+        "available_governors": [
+          "walt",
+          "conservative",
+          "powersave",
+          "performance",
+          "schedutil"
+        ],
+        "current_frequency": 1843200,
+        "freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
+          "name": "cpu_cur_freq",
+          "readable": true,
+          "writable": false,
+          "valid": true,
+          "supported_values": [
+            "1843200"
+          ]
+        },
+        "min_freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq",
+          "name": "cpu_min_freq",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "364800",
+            "441600",
+            "595200",
+            "787200",
+            "902400",
+            "1017600",
+            "1113600",
+            "1228800",
+            "1344000",
+            "1478400",
+            "1593600",
+            "1708800",
+            "1843200",
+            "1900800",
+            "2016000"
+          ]
+        },
+        "max_freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq",
+          "name": "cpu_max_freq",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "364800",
+            "441600",
+            "595200",
+            "787200",
+            "902400",
+            "1017600",
+            "1113600",
+            "1228800",
+            "1344000",
+            "1478400",
+            "1593600",
+            "1708800",
+            "1843200",
+            "1900800",
+            "2016000"
+          ]
+        },
+        "available_frequencies": [
+          364800,
+          441600,
+          595200,
+          787200,
+          902400,
+          1017600,
+          1113600,
+          1228800,
+          1344000,
+          1478400,
+          1593600,
+          1708800,
+          1843200,
+          1900800,
+          2016000
+        ],
+        "cpuinfo_min_freq": 364800,
+        "cpuinfo_max_freq": 2016000,
+        "related_cpus": [
+          0,
+          1,
+          2
+        ]
+      },
+      {
+        "name": "policy3",
+        "min_freq": 480000,
+        "max_freq": 2803200,
+        "cpus": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "policy_path": "/sys/devices/system/cpu/cpufreq/policy3",
+        "policy_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy3",
+          "name": "cpu_policy",
+          "readable": true,
+          "writable": false,
+          "valid": true,
+          "supported_values": []
+        },
+        "current_governor": "walt",
+        "governor_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy3/scaling_governor",
+          "name": "cpu_governor",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "walt",
+            "conservative",
+            "powersave",
+            "performance",
+            "schedutil"
+          ]
+        },
+        "available_governors": [
+          "walt",
+          "conservative",
+          "powersave",
+          "performance",
+          "schedutil"
+        ],
+        "current_frequency": 1286400,
+        "freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq",
+          "name": "cpu_cur_freq",
+          "readable": true,
+          "writable": false,
+          "valid": true,
+          "supported_values": [
+            "1286400"
+          ]
+        },
+        "min_freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy3/scaling_min_freq",
+          "name": "cpu_min_freq",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "480000",
+            "633600",
+            "787200",
+            "940800",
+            "1056000",
+            "1190400",
+            "1286400",
+            "1401600",
+            "1497600",
+            "1593600",
+            "1708800",
+            "1824000",
+            "1920000",
+            "2073600",
+            "2188800",
+            "2361600",
+            "2572800",
+            "2611200",
+            "2707200"
+          ]
+        },
+        "max_freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq",
+          "name": "cpu_max_freq",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "480000",
+            "633600",
+            "787200",
+            "940800",
+            "1056000",
+            "1190400",
+            "1286400",
+            "1401600",
+            "1497600",
+            "1593600",
+            "1708800",
+            "1824000",
+            "1920000",
+            "2073600",
+            "2188800",
+            "2361600",
+            "2572800",
+            "2611200",
+            "2707200"
+          ]
+        },
+        "available_frequencies": [
+          480000,
+          633600,
+          787200,
+          940800,
+          1056000,
+          1190400,
+          1286400,
+          1401600,
+          1497600,
+          1593600,
+          1708800,
+          1824000,
+          1920000,
+          2073600,
+          2188800,
+          2361600,
+          2572800,
+          2611200,
+          2707200
+        ],
+        "cpuinfo_min_freq": 480000,
+        "cpuinfo_max_freq": 2803200,
+        "related_cpus": [
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      {
+        "name": "policy7",
+        "min_freq": 480000,
+        "max_freq": 3014400,
+        "cpus": [
+          7
+        ],
+        "policy_path": "/sys/devices/system/cpu/cpufreq/policy7",
+        "policy_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy7",
+          "name": "cpu_policy",
+          "readable": true,
+          "writable": false,
+          "valid": true,
+          "supported_values": []
+        },
+        "current_governor": "walt",
+        "governor_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy7/scaling_governor",
+          "name": "cpu_governor",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "walt",
+            "conservative",
+            "powersave",
+            "performance",
+            "schedutil"
+          ]
+        },
+        "available_governors": [
+          "walt",
+          "conservative",
+          "powersave",
+          "performance",
+          "schedutil"
+        ],
+        "current_frequency": 1651200,
+        "freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy7/scaling_cur_freq",
+          "name": "cpu_cur_freq",
+          "readable": true,
+          "writable": false,
+          "valid": true,
+          "supported_values": [
+            "1651200"
+          ]
+        },
+        "min_freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy7/scaling_min_freq",
+          "name": "cpu_min_freq",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "480000",
+            "633600",
+            "787200",
+            "960000",
+            "1094400",
+            "1209600",
+            "1324800",
+            "1459200",
+            "1651200",
+            "1766400",
+            "1900800",
+            "2150400",
+            "2304000",
+            "2457600",
+            "2668800",
+            "2803200",
+            "2918400"
+          ]
+        },
+        "max_freq_node": {
+          "path": "/sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq",
+          "name": "cpu_max_freq",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "480000",
+            "633600",
+            "787200",
+            "960000",
+            "1094400",
+            "1209600",
+            "1324800",
+            "1459200",
+            "1651200",
+            "1766400",
+            "1900800",
+            "2150400",
+            "2304000",
+            "2457600",
+            "2668800",
+            "2803200",
+            "2918400"
+          ]
+        },
+        "available_frequencies": [
+          480000,
+          633600,
+          787200,
+          960000,
+          1094400,
+          1209600,
+          1324800,
+          1459200,
+          1651200,
+          1766400,
+          1900800,
+          2150400,
+          2304000,
+          2457600,
+          2668800,
+          2803200,
+          2918400
+        ],
+        "cpuinfo_min_freq": 480000,
+        "cpuinfo_max_freq": 3014400,
+        "related_cpus": [
+          7
+        ]
+      }
+    ]
+  },
+  "gpu_profile": {
+    "path": "/sys/class/kgsl/kgsl-3d0",
+    "max_freq": 0,
+    "has_devfreq": true,
+    "is_kgsl": true,
+    "devfreq_path": "/sys/class/kgsl/kgsl-3d0/devfreq",
+    "devfreq_governor_node": {
+      "path": "/sys/class/kgsl/kgsl-3d0/devfreq/governor",
+      "name": "gpu_devfreq_governor",
+      "readable": true,
+      "writable": true,
+      "valid": true,
+      "supported_values": [
+        "msm-adreno-tz"
+      ]
+    },
+    "devfreq_freq_node": {
+      "path": "/sys/class/kgsl/kgsl-3d0/devfreq/userspace/set_freq",
+      "name": "gpu_devfreq_freq",
+      "readable": false,
+      "writable": false,
+      "valid": false,
+      "supported_values": [
+        "1100000000",
+        "1000000000",
+        "950000000",
+        "900000000",
+        "835000000",
+        "736000000",
+        "684000000",
+        "633000000",
+        "500000000",
+        "353000000",
+        "255000000"
+      ]
+    },
+    "current_governor": "msm-adreno-tz",
+    "governor_node": {
+      "path": "",
+      "name": "",
+      "readable": false,
+      "writable": false,
+      "valid": false,
+      "supported_values": []
+    },
+    "available_governors": [
+      "msm-adreno-tz"
+    ],
+    "current_frequency": 0,
+    "freq_node": {
+      "path": "",
+      "name": "",
+      "readable": false,
+      "writable": false,
+      "valid": false,
+      "supported_values": []
+    },
+    "available_frequencies": [
+      1100000000,
+      1000000000,
+      950000000,
+      900000000,
+      835000000,
+      736000000,
+      684000000,
+      633000000,
+      500000000,
+      353000000,
+      255000000
+    ],
+    "busy_time": null,
+    "total_time": null,
+    "power_level_path": null,
+    "current_power_level": null,
+    "min_power_level": 10,
+    "max_power_level": 0,
+    "has_bus_split": true,
+    "has_force_clk_on": true
+  },
+  "thermal_profile": {
+    "cpu_zone": "/sys/class/thermal/thermal_zone45/temp",
+    "gpu_zone": "/sys/class/thermal/thermal_zone33/temp",
+    "battery_zone": "/sys/class/thermal/thermal_zone60/temp",
+    "skin_zone": "/sys/class/thermal/thermal_zone48/temp",
+    "pmic_zone": "/sys/class/thermal/thermal_zone59/temp",
+    "usbc_zone": "/sys/class/thermal/thermal_zone61/temp",
+    "charger_zone": "/sys/class/thermal/thermal_zone54/temp",
+    "all_zones": {
+      "cpu-1-3-1": "/sys/class/thermal/thermal_zone19/temp",
+      "xo-therm": "/sys/class/thermal/thermal_zone44/temp",
+      "quiet_therm": "/sys/class/thermal/thermal_zone48/temp",
+      "pm8010n_tz": "/sys/class/thermal/thermal_zone49/temp",
+      "cpu-0-1-0": "/sys/class/thermal/thermal_zone25/temp",
+      "cpu-1-3-0": "/sys/class/thermal/thermal_zone18/temp",
+      "flash_therm": "/sys/class/thermal/thermal_zone52/temp",
+      "pm7550ba-ibat-lvl0": "/sys/class/thermal/thermal_zone4/temp",
+      "pm7550ba-ibat-lvl1": "/sys/class/thermal/thermal_zone5/temp",
+      "gpuss-1": "/sys/class/thermal/thermal_zone32/temp",
+      "battery": "/sys/class/thermal/thermal_zone60/temp",
+      "cpu-1-2-0": "/sys/class/thermal/thermal_zone16/temp",
+      "aoss-0": "/sys/class/thermal/thermal_zone9/temp",
+      "usb": "/sys/class/thermal/thermal_zone61/temp",
+      "pa_therm0": "/sys/class/thermal/thermal_zone51/temp",
+      "nsphvx-1": "/sys/class/thermal/thermal_zone28/temp",
+      "cpu-0-2-0": "/sys/class/thermal/thermal_zone26/temp",
+      "pmr735a_tz": "/sys/class/thermal/thermal_zone47/temp",
+      "charger_therm0": "/sys/class/thermal/thermal_zone54/temp",
+      "aoss-2": "/sys/class/thermal/thermal_zone39/temp",
+      "cpu-1-2-1": "/sys/class/thermal/thermal_zone17/temp",
+      "vbat": "/sys/class/thermal/thermal_zone3/temp",
+      "mdmss-2": "/sys/class/thermal/thermal_zone42/temp",
+      "nsphmx-0": "/sys/class/thermal/thermal_zone29/temp",
+      "pm8550vs_c_tz": "/sys/class/thermal/thermal_zone57/temp",
+      "sdr0": "/sys/class/thermal/thermal_zone70/temp",
+      "mdmss-3": "/sys/class/thermal/thermal_zone43/temp",
+      "cpu-0-0-0": "/sys/class/thermal/thermal_zone24/temp",
+      "pa_therm1": "/sys/class/thermal/thermal_zone50/temp",
+      "sdr0_pa": "/sys/class/thermal/thermal_zone69/temp",
+      "wifi_therm": "/sys/class/thermal/thermal_zone53/temp",
+      "camera-1": "/sys/class/thermal/thermal_zone38/temp",
+      "pm8550ve_tz": "/sys/class/thermal/thermal_zone58/temp",
+      "gpuss-3": "/sys/class/thermal/thermal_zone34/temp",
+      "conn_therm": "/sys/class/thermal/thermal_zone55/temp",
+      "pm7550ba_tz": "/sys/class/thermal/thermal_zone59/temp",
+      "cpu_therm": "/sys/class/thermal/thermal_zone45/temp",
+      "mmw_ific0": "/sys/class/thermal/thermal_zone71/temp",
+      "cpu-1-0-1": "/sys/class/thermal/thermal_zone13/temp",
+      "cpu-2-0-2": "/sys/class/thermal/thermal_zone22/temp",
+      "mdmss-0": "/sys/class/thermal/thermal_zone40/temp",
+      "pmxr2230_tz": "/sys/class/thermal/thermal_zone56/temp",
+      "video": "/sys/class/thermal/thermal_zone35/temp",
+      "gpuss-0": "/sys/class/thermal/thermal_zone31/temp",
+      "cpu-2-0-0": "/sys/class/thermal/thermal_zone20/temp",
+      "cpu-1-1-1": "/sys/class/thermal/thermal_zone15/temp",
+      "nsphvx-0": "/sys/class/thermal/thermal_zone27/temp",
+      "mdmss-1": "/sys/class/thermal/thermal_zone41/temp",
+      "cpu-1-0-0": "/sys/class/thermal/thermal_zone12/temp",
+      "cpuss-1": "/sys/class/thermal/thermal_zone11/temp",
+      "socd": "/sys/class/thermal/thermal_zone46/temp",
+      "cpu-1-1-0": "/sys/class/thermal/thermal_zone14/temp",
+      "aoss-1": "/sys/class/thermal/thermal_zone23/temp",
+      "nsphmx-1": "/sys/class/thermal/thermal_zone30/temp",
+      "cpuss-0": "/sys/class/thermal/thermal_zone10/temp",
+      "gpuss-2": "/sys/class/thermal/thermal_zone33/temp",
+      "camera-0": "/sys/class/thermal/thermal_zone37/temp",
+      "cpu-2-0-1": "/sys/class/thermal/thermal_zone21/temp",
+      "ddr": "/sys/class/thermal/thermal_zone36/temp"
+    },
+    "cooling_devices": [
+      {
+        "name": "cooling_device13",
+        "device_type": "thermal-pause-1C",
+        "sysfs_path": "/sys/class/thermal/cooling_device13",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device13/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device41",
+        "device_type": "battery",
+        "sysfs_path": "/sys/class/thermal/cooling_device41",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device41/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "14"
+          ]
+        },
+        "current_state": null,
+        "max_state": 16
+      },
+      {
+        "name": "cooling_device31",
+        "device_type": "cpu-cluster1",
+        "sysfs_path": "/sys/class/thermal/cooling_device31",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device31/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 19
+      },
+      {
+        "name": "cooling_device1",
+        "device_type": "cpu-hotplug1",
+        "sysfs_path": "/sys/class/thermal/cooling_device1",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device1/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device21",
+        "device_type": "thermal-pause-20",
+        "sysfs_path": "/sys/class/thermal/cooling_device21",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device21/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device11",
+        "device_type": "thermal-pause-2",
+        "sysfs_path": "/sys/class/thermal/cooling_device11",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device11/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device68",
+        "device_type": "qcom,icnss_cdev1",
+        "sysfs_path": "/sys/class/thermal/cooling_device68",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device68/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 5
+      },
+      {
+        "name": "cooling_device58",
+        "device_type": "mmw0_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device58",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device58/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device48",
+        "device_type": "modem_nr_scg_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device48",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device48/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device38",
+        "device_type": "panel0-backlight",
+        "sysfs_path": "/sys/class/thermal/cooling_device38",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device38/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "255"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device66",
+        "device_type": "modem_bw_backoff",
+        "sysfs_path": "/sys/class/thermal/cooling_device66",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device66/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device8",
+        "device_type": "pause-cpu0",
+        "sysfs_path": "/sys/class/thermal/cooling_device8",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device8/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device28",
+        "device_type": "cpufreq-cpu7",
+        "sysfs_path": "/sys/class/thermal/cooling_device28",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device28/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 17
+      },
+      {
+        "name": "cooling_device56",
+        "device_type": "pa_nr_sdr0_scg_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device56",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device56/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device18",
+        "device_type": "thermal-pause-10",
+        "sysfs_path": "/sys/class/thermal/cooling_device18",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device18/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device46",
+        "device_type": "modem_nr_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device46",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device46/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device36",
+        "device_type": "devfreq-3d00000.qcom,kgsl-3d0",
+        "sysfs_path": "/sys/class/thermal/cooling_device36",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device36/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 10
+      },
+      {
+        "name": "cooling_device64",
+        "device_type": "mmw3_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device64",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device64/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device6",
+        "device_type": "cpu-hotplug5",
+        "sysfs_path": "/sys/class/thermal/cooling_device6",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device6/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device26",
+        "device_type": "cpufreq-cpu0",
+        "sysfs_path": "/sys/class/thermal/cooling_device26",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device26/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 14
+      },
+      {
+        "name": "cooling_device54",
+        "device_type": "pa_nr_sdr0_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device54",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device54/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device16",
+        "device_type": "pause-cpu4",
+        "sysfs_path": "/sys/class/thermal/cooling_device16",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device16/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device44",
+        "device_type": "modem_lte_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device44",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device44/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device34",
+        "device_type": "ddr-cdev",
+        "sysfs_path": "/sys/class/thermal/cooling_device34",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device34/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 9
+      },
+      {
+        "name": "cooling_device62",
+        "device_type": "mmw2_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device62",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device62/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device4",
+        "device_type": "cpu-hotplug4",
+        "sysfs_path": "/sys/class/thermal/cooling_device4",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device4/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device24",
+        "device_type": "pause-cpu7",
+        "sysfs_path": "/sys/class/thermal/cooling_device24",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device24/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device52",
+        "device_type": "pa_lte_sdr0_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device52",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device52/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device14",
+        "device_type": "thermal-pause-4",
+        "sysfs_path": "/sys/class/thermal/cooling_device14",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device14/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device42",
+        "device_type": "modem_vdd",
+        "sysfs_path": "/sys/class/thermal/cooling_device42",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device42/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device32",
+        "device_type": "cpu-cluster2",
+        "sysfs_path": "/sys/class/thermal/cooling_device32",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device32/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "1"
+          ]
+        },
+        "current_state": null,
+        "max_state": 17
+      },
+      {
+        "name": "cooling_device60",
+        "device_type": "mmw1_sub1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device60",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device60/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device2",
+        "device_type": "cpu-hotplug2",
+        "sysfs_path": "/sys/class/thermal/cooling_device2",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device2/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device22",
+        "device_type": "pause-cpu6",
+        "sysfs_path": "/sys/class/thermal/cooling_device22",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device22/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device50",
+        "device_type": "sdr0_nr_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device50",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device50/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device12",
+        "device_type": "pause-cpu2",
+        "sysfs_path": "/sys/class/thermal/cooling_device12",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device12/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device40",
+        "device_type": "cdsp",
+        "sysfs_path": "/sys/class/thermal/cooling_device40",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device40/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "4"
+          ]
+        },
+        "current_state": null,
+        "max_state": 7
+      },
+      {
+        "name": "cooling_device69",
+        "device_type": "qcom,icnss_cdev2",
+        "sysfs_path": "/sys/class/thermal/cooling_device69",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device69/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device30",
+        "device_type": "cpu-cluster0",
+        "sysfs_path": "/sys/class/thermal/cooling_device30",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device30/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 14
+      },
+      {
+        "name": "cooling_device59",
+        "device_type": "mmw1_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device59",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device59/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device0",
+        "device_type": "cpu-hotplug0",
+        "sysfs_path": "/sys/class/thermal/cooling_device0",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device0/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device20",
+        "device_type": "thermal-pause-E0",
+        "sysfs_path": "/sys/class/thermal/cooling_device20",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device20/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device49",
+        "device_type": "sdr0_lte_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device49",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device49/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device10",
+        "device_type": "pause-cpu1",
+        "sysfs_path": "/sys/class/thermal/cooling_device10",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device10/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device39",
+        "device_type": "cdsp_hw",
+        "sysfs_path": "/sys/class/thermal/cooling_device39",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device39/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device67",
+        "device_type": "modem_bcl",
+        "sysfs_path": "/sys/class/thermal/cooling_device67",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device67/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device9",
+        "device_type": "thermal-pause-1",
+        "sysfs_path": "/sys/class/thermal/cooling_device9",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device9/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device29",
+        "device_type": "ufs1",
+        "sysfs_path": "/sys/class/thermal/cooling_device29",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device29/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 2
+      },
+      {
+        "name": "cooling_device57",
+        "device_type": "mmw0_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device57",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device57/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device19",
+        "device_type": "pause-cpu5",
+        "sysfs_path": "/sys/class/thermal/cooling_device19",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device19/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device47",
+        "device_type": "modem_nr_scg_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device47",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device47/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device37",
+        "device_type": "gpu",
+        "sysfs_path": "/sys/class/thermal/cooling_device37",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device37/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "3"
+          ]
+        },
+        "current_state": null,
+        "max_state": 10
+      },
+      {
+        "name": "cooling_device65",
+        "device_type": "wlan",
+        "sysfs_path": "/sys/class/thermal/cooling_device65",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device65/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 4
+      },
+      {
+        "name": "cooling_device7",
+        "device_type": "cpu-hotplug6",
+        "sysfs_path": "/sys/class/thermal/cooling_device7",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device7/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device27",
+        "device_type": "cpufreq-cpu3",
+        "sysfs_path": "/sys/class/thermal/cooling_device27",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device27/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 19
+      },
+      {
+        "name": "cooling_device55",
+        "device_type": "pa_nr_sdr0_scg_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device55",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device55/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device17",
+        "device_type": "thermal-pause-8",
+        "sysfs_path": "/sys/class/thermal/cooling_device17",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device17/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device45",
+        "device_type": "modem_nr_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device45",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device45/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device35",
+        "device_type": "thermal-cluster-1-2",
+        "sysfs_path": "/sys/class/thermal/cooling_device35",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device35/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 17
+      },
+      {
+        "name": "cooling_device63",
+        "device_type": "mmw3_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device63",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device63/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device5",
+        "device_type": "cpu-hotplug7",
+        "sysfs_path": "/sys/class/thermal/cooling_device5",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device5/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device25",
+        "device_type": "thermal-pause-80",
+        "sysfs_path": "/sys/class/thermal/cooling_device25",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device25/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device53",
+        "device_type": "pa_nr_sdr0_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device53",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device53/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device15",
+        "device_type": "pause-cpu3",
+        "sysfs_path": "/sys/class/thermal/cooling_device15",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device15/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device43",
+        "device_type": "modem_lte_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device43",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device43/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device33",
+        "device_type": "display-fps",
+        "sysfs_path": "/sys/class/thermal/cooling_device33",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device33/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 16
+      },
+      {
+        "name": "cooling_device61",
+        "device_type": "mmw2_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device61",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device61/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      },
+      {
+        "name": "cooling_device3",
+        "device_type": "cpu-hotplug3",
+        "sysfs_path": "/sys/class/thermal/cooling_device3",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device3/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device23",
+        "device_type": "thermal-pause-40",
+        "sysfs_path": "/sys/class/thermal/cooling_device23",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device23/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 1
+      },
+      {
+        "name": "cooling_device51",
+        "device_type": "pa_lte_sdr0_dsc",
+        "sysfs_path": "/sys/class/thermal/cooling_device51",
+        "state_node": {
+          "path": "/sys/class/thermal/cooling_device51/cur_state",
+          "name": "cooling_cur_state",
+          "readable": true,
+          "writable": true,
+          "valid": true,
+          "supported_values": [
+            "0"
+          ]
+        },
+        "current_state": null,
+        "max_state": 255
+      }
+    ]
+  },
+  "battery_profile": {
+    "path": "/sys/class/power_supply/battery",
+    "capability_nodes": [
+      {
+        "path": "/sys/class/power_supply/battery/capacity",
+        "name": "battery_capacity",
+        "readable": true,
+        "writable": false,
+        "valid": true,
+        "supported_values": [
+          "95"
+        ]
+      }
+    ],
+    "design_capacity_mah": null,
+    "charge_full_design_mah": null,
+    "charge_full_mah": null,
+    "charge_counter_uah": null,
+    "voltage_now_uv": null,
+    "current_now_ua": null,
+    "temperature_tenths_c": null,
+    "health": "",
+    "technology": "",
+    "cycle_count": null
+  },
+  "charging_profile": {
+    "path": "/sys/class/power_supply/usb",
+    "is_fast_charge": true,
+    "capability_nodes": [
+      {
+        "path": "/sys/class/power_supply/usb/current_max",
+        "name": "charge_limit",
+        "readable": true,
+        "writable": false,
+        "valid": true,
+        "supported_values": []
+      },
+      {
+        "path": "/sys/class/power_supply/usb/input_current_limit",
+        "name": "charge_limit",
+        "readable": true,
+        "writable": true,
+        "valid": true,
+        "supported_values": []
+      }
+    ],
+    "current_limit_nodes": [
+      "/sys/class/power_supply/usb/current_max",
+      "/sys/class/power_supply/usb/input_current_limit"
+    ],
+    "input_current_limit_nodes": [],
+    "charge_enable_nodes": [],
+    "fast_charge_nodes": []
+  },
+  "cpuset_profile": {
+    "root_path": "/dev/cpuset",
+    "cpuset_nodes": [
+      {
+        "path": "/dev/cpuset/top-app/cpus",
+        "name": "cpuset_top_app",
+        "readable": true,
+        "writable": true,
+        "valid": true,
+        "supported_values": [
+          "0-7"
+        ]
+      },
+      {
+        "path": "/dev/cpuset/foreground/cpus",
+        "name": "cpuset_foreground",
+        "readable": true,
+        "writable": true,
+        "valid": true,
+        "supported_values": [
+          "0-7"
+        ]
+      },
+      {
+        "path": "/dev/cpuset/background/cpus",
+        "name": "cpuset_background",
+        "readable": true,
+        "writable": true,
+        "valid": true,
+        "supported_values": [
+          "0-2"
+        ]
+      },
+      {
+        "path": "/dev/cpuset/system-background/cpus",
+        "name": "cpuset_sys_bg",
+        "readable": true,
+        "writable": true,
+        "valid": true,
+        "supported_values": [
+          "0-2"
+        ]
+      },
+      {
+        "path": "/dev/cpuset/restricted/cpus",
+        "name": "cpuset_restricted",
+        "readable": true,
+        "writable": true,
+        "valid": true,
+        "supported_values": [
+          "0-2"
+        ]
+      }
+    ],
+    "top_app_path": "/dev/cpuset/top-app",
+    "background_path": "/dev/cpuset/background",
+    "foreground_path": "/dev/cpuset/foreground",
+    "system_background_path": "/dev/cpuset/system-background"
+  },
+  "network_profile": {
+    "default_qdisc": "pfifo_fast",
+    "tcp_congestion_control": "cubic",
+    "available_congestion_controls": [
+      "reno",
+      "cubic"
+    ],
+    "ecn_enabled": true,
+    "fast_open": "1",
+    "mtu_probing": 1,
+    "tcp_keepalive_time": 7200,
+    "tcp_syn_retries": 4,
+    "tcp_synack_retries": 3,
+    "tcp_window_scaling": 1,
+    "tcp_timestamps": 1
+  },
+  "memory_profile": {
+    "has_psi": true,
+    "has_zram": true,
+    "has_lmkd": false,
+    "mem_total_kb": 11541952,
+    "mem_free_kb": 4767780,
+    "mem_available_kb": 7678764,
+    "swap_total_kb": 6291452,
+    "swap_free_kb": 6291452,
+    "memory_pressure_avg10": 0.0,
+    "memory_pressure_avg60": 0.0,
+    "memory_pressure_avg300": 0.0,
+    "vm_parameters": {
+      "overcommit_ratio": "50",
+      "laptop_mode": "0",
+      "dirty_expire_centisecs": "3000",
+      "swappiness": "100",
+      "dirty_bytes": "209715200",
+      "dirty_ratio": "0",
+      "dirty_background_bytes": "52428800",
+      "lowmem_reserve_ratio": "256\t32\t0\t0",
+      "admin_reserve_kbytes": "8192",
+      "overcommit_kbytes": "0",
+      "oom_kill_allocating_task": "0",
+      "mmap_rnd_bits": "24",
+      "page-cluster": "3",
+      "stat_interval": "1",
+      "unprivileged_userfaultfd": "0",
+      "min_free_kbytes": "11584",
+      "vfs_cache_pressure": "100",
+      "legacy_va_layout": "0",
+      "dirtytime_expire_seconds": "43200",
+      "watermark_scale_factor": "50",
+      "mmap_min_addr": "32768",
+      "compact_unevictable_allowed": "1",
+      "oom_dump_tasks": "1",
+      "dirty_writeback_centisecs": "500",
+      "dirty_background_ratio": "0",
+      "user_reserve_kbytes": "131072",
+      "watermark_boost_factor": "0",
+      "panic_on_oom": "0",
+      "overcommit_memory": "1",
+      "compaction_proactiveness": "0",
+      "max_map_count": "65530",
+      "stat_refresh": "",
+      "mmap_rnd_compat_bits": "11",
+      "percpu_pagelist_high_fraction": "0",
+      "page_lock_unfairness": "5",
+      "extfrag_threshold": "500"
+    },
+    "zram_devices": [
+      "zram0"
+    ]
+  },
+  "storage_profile": {
+    "has_ufs": false,
+    "block_devices": [
+      "sdf",
+      "sdd",
+      "sdb",
+      "sde",
+      "sdc",
+      "sda"
+    ],
+    "io_schedulers": {
+      "sde": "[mq-deadline] kyber bfq none",
+      "sdc": "[mq-deadline] kyber bfq none",
+      "sdf": "[mq-deadline] kyber bfq none",
+      "sdd": "[mq-deadline] kyber bfq none",
+      "sdb": "[mq-deadline] kyber bfq none",
+      "sda": "[mq-deadline] kyber bfq none"
+    },
+    "current_schedulers": {
+      "sde": "mq-deadline",
+      "sdb": "mq-deadline",
+      "sda": "mq-deadline",
+      "sdc": "mq-deadline",
+      "sdf": "mq-deadline",
+      "sdd": "mq-deadline"
+    },
+    "available_schedulers": {
+      "sdd": [
+        "mq-deadline",
+        "kyber",
+        "bfq",
+        "none"
+      ],
+      "sda": [
+        "mq-deadline",
+        "kyber",
+        "bfq",
+        "none"
+      ],
+      "sdf": [
+        "mq-deadline",
+        "kyber",
+        "bfq",
+        "none"
+      ],
+      "sdc": [
+        "mq-deadline",
+        "kyber",
+        "bfq",
+        "none"
+      ],
+      "sde": [
+        "mq-deadline",
+        "kyber",
+        "bfq",
+        "none"
+      ],
+      "sdb": [
+        "mq-deadline",
+        "kyber",
+        "bfq",
+        "none"
+      ]
+    },
+    "read_ahead_kb": {
+      "sda": 512,
+      "sdc": 512,
+      "sdb": 512,
+      "sdf": 512,
+      "sdd": 512,
+      "sde": 512
+    },
+    "nr_requests": {
+      "sdc": 126,
+      "sda": 126,
+      "sde": 126,
+      "sdd": 126,
+      "sdf": 126,
+      "sdb": 126
+    },
+    "rotational": {
+      "sdb": false,
+      "sdf": false,
+      "sdd": false,
+      "sdc": false,
+      "sda": false,
+      "sde": false
+    }
+  },
+  "scheduler_profile": {
+    "has_schedtune": false,
+    "has_uclamp": true,
+    "has_schedutil": true,
+    "has_walt": false,
+    "has_eas": true
+  },
+  "services_profile": {
+    "thermal_hal": false,
+    "power_hal": false,
+    "health_hal": false,
+    "perf_service": false,
+    "vendor_thermal_engine": false,
+    "vendor_performance_daemon": false
+  },
+  "display_profile": {
+    "touch_nodes": [],
+    "touch_controller_name": "goodix_ts",
+    "brightness_path": "/sys/class/backlight/panel0-backlight/brightness",
+    "max_brightness_path": "/sys/class/backlight/panel0-backlight/max_brightness"
+  },
+  "kernel_profile": {
+    "features": [
+      "CONFIG_PREEMPT_BUILD=y",
+      "CONFIG_PREEMPT=y",
+      "CONFIG_PREEMPT_COUNT=y",
+      "CONFIG_PREEMPTION=y",
+      "CONFIG_PSI=y",
+      "CONFIG_PREEMPT_RCU=y",
+      "CONFIG_UCLAMP_TASK=y",
+      "CONFIG_UCLAMP_BUCKETS_COUNT=20",
+      "CONFIG_CGROUPS=y",
+      "CONFIG_CGROUP_SCHED=y",
+      "CONFIG_UCLAMP_TASK_GROUP=y",
+      "CONFIG_CPUSETS=y",
+      "CONFIG_ARM64=y",
+      "CONFIG_ARM64_PAGE_SHIFT=12",
+      "CONFIG_ARM64_CONT_PTE_SHIFT=4",
+      "CONFIG_ARM64_CONT_PMD_SHIFT=4",
+      "CONFIG_ARM64_WORKAROUND_CLEAN_CACHE=y",
+      "CONFIG_ARM64_ERRATUM_826319=y",
+      "CONFIG_ARM64_ERRATUM_827319=y",
+      "CONFIG_ARM64_ERRATUM_824069=y",
+      "CONFIG_ARM64_ERRATUM_819472=y",
+      "CONFIG_ARM64_ERRATUM_832075=y",
+      "CONFIG_ARM64_ERRATUM_834220=y",
+      "CONFIG_ARM64_ERRATUM_1742098=y",
+      "CONFIG_ARM64_ERRATUM_845719=y",
+      "CONFIG_ARM64_ERRATUM_843419=y",
+      "CONFIG_ARM64_LD_HAS_FIX_ERRATUM_843419=y",
+      "CONFIG_ARM64_ERRATUM_1024718=y",
+      "CONFIG_ARM64_ERRATUM_1418040=y",
+      "CONFIG_ARM64_WORKAROUND_SPECULATIVE_AT=y",
+      "CONFIG_ARM64_ERRATUM_1165522=y",
+      "CONFIG_ARM64_ERRATUM_1319367=y",
+      "CONFIG_ARM64_ERRATUM_1530923=y",
+      "CONFIG_ARM64_WORKAROUND_REPEAT_TLBI=y",
+      "CONFIG_ARM64_ERRATUM_1286807=y",
+      "CONFIG_ARM64_ERRATUM_1463225=y",
+      "CONFIG_ARM64_ERRATUM_1542419=y",
+      "CONFIG_ARM64_ERRATUM_1508412=y",
+      "CONFIG_ARM64_ERRATUM_2051678=y",
+      "CONFIG_ARM64_ERRATUM_2077057=y",
+      "CONFIG_ARM64_ERRATUM_2658417=y",
+      "CONFIG_ARM64_WORKAROUND_TSB_FLUSH_FAILURE=y",
+      "CONFIG_ARM64_ERRATUM_2054223=y",
+      "CONFIG_ARM64_ERRATUM_2067961=y",
+      "CONFIG_ARM64_ERRATUM_2457168=y",
+      "CONFIG_ARM64_WORKAROUND_SPECULATIVE_UNPRIV_LOAD=y",
+      "CONFIG_ARM64_ERRATUM_2966298=y",
+      "CONFIG_ARM64_ERRATUM_3194386=y",
+      "CONFIG_ARM64_4K_PAGES=y",
+      "CONFIG_ARM64_VA_BITS_39=y",
+      "CONFIG_ARM64_VA_BITS=39",
+      "CONFIG_ARM64_PA_BITS_48=y",
+      "CONFIG_ARM64_PA_BITS=48",
+      "CONFIG_HZ_250=y",
+      "CONFIG_HZ=250",
+      "CONFIG_ARM64_SW_TTBR0_PAN=y",
+      "CONFIG_ARM64_TAGGED_ADDR_ABI=y",
+      "CONFIG_ARM64_HW_AFDBM=y",
+      "CONFIG_ARM64_PAN=y",
+      "CONFIG_ARM64_LSE_ATOMICS=y",
+      "CONFIG_ARM64_USE_LSE_ATOMICS=y",
+      "CONFIG_ARM64_PMEM=y",
+      "CONFIG_ARM64_RAS_EXTN=y",
+      "CONFIG_ARM64_CNP=y",
+      "CONFIG_ARM64_PTR_AUTH=y",
+      "CONFIG_ARM64_PTR_AUTH_KERNEL=y",
+      "CONFIG_ARM64_AMU_EXTN=y",
+      "CONFIG_ARM64_TLB_RANGE=y",
+      "CONFIG_ARM64_BTI=y",
+      "CONFIG_ARM64_E0PD=y",
+      "CONFIG_ARM64_AS_HAS_MTE=y",
+      "CONFIG_ARM64_MTE=y",
+      "CONFIG_ARM64_EPAN=y",
+      "CONFIG_ARM64_SVE=y",
+      "CONFIG_ARM64_MODULE_PLTS=y",
+      "CONFIG_ENERGY_MODEL=y",
+      "CONFIG_CPU_IDLE=y",
+      "CONFIG_CPU_IDLE_MULTIPLE_DRIVERS=y",
+      "CONFIG_CPU_IDLE_GOV_MENU=y",
+      "CONFIG_CPU_IDLE_GOV_TEO=y",
+      "CONFIG_CPU_IDLE_GOV_QCOM_LPM=m",
+      "CONFIG_CPU_FREQ=y",
+      "CONFIG_CPU_FREQ_GOV_ATTR_SET=y",
+      "CONFIG_CPU_FREQ_GOV_COMMON=y",
+      "CONFIG_CPU_FREQ_STAT=y",
+      "CONFIG_CPU_FREQ_TIMES=y",
+      "CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y",
+      "CONFIG_CPU_FREQ_GOV_PERFORMANCE=y",
+      "CONFIG_CPU_FREQ_GOV_POWERSAVE=y",
+      "CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y",
+      "CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y",
+      "CONFIG_PREEMPT_NOTIFIERS=y",
+      "CONFIG_THERMAL=y",
+      "CONFIG_THERMAL_NETLINK=y",
+      "CONFIG_THERMAL_STATISTICS=y",
+      "CONFIG_THERMAL_EMERGENCY_POWEROFF_DELAY_MS=100",
+      "CONFIG_THERMAL_OF=y",
+      "CONFIG_THERMAL_WRITABLE_TRIPS=y",
+      "CONFIG_THERMAL_DEFAULT_GOV_STEP_WISE=y",
+      "CONFIG_THERMAL_GOV_STEP_WISE=y",
+      "CONFIG_THERMAL_GOV_USER_SPACE=y",
+      "CONFIG_THERMAL_GOV_POWER_ALLOCATOR=y",
+      "CONFIG_CPU_FREQ_THERMAL=y",
+      "CONFIG_CPU_IDLE_THERMAL=y",
+      "CONFIG_THERMAL_EMULATION=y",
+      "CONFIG_ARM64_ERRATUM_858921=y",
+      "CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y",
+      "CONFIG_SCHED_WALT=m"
+    ],
+    "selinux_enforcing": true
+  },
+  "dcvs_profiles": [],
+  "compatibility_report": {
+    "battery": "PASS",
+    "gpu": "PASS",
+    "storage": "PASS",
+    "kernel": "PASS",
+    "peridot_optimizations": "PASS",
+    "network": "PASS",
+    "cpu": "PASS",
+    "cpuset": "PASS",
+    "thermal": "PASS",
+    "memory": "PASS",
+    "services": "MISSING",
+    "scheduler": "PASS",
+    "charging": "PASS"
+  }
+}

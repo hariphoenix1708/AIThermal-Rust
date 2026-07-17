@@ -1,0 +1,1069 @@
+2026-07-17T06:00:22.949895Z  INFO ════════════════════════════════════════
+2026-07-17T06:00:22.949914Z  INFO  ThermalAI daemon starting up...
+2026-07-17T06:00:22.949917Z  INFO  Version                   : 0.1.0
+2026-07-17T06:00:22.949921Z  INFO  PID                       : 5034
+2026-07-17T06:00:22.949925Z  INFO  Executable Path           : /data/adb/modules/thermalai_rust/system/bin/thermalai-daemon
+2026-07-17T06:00:22.949929Z  INFO  Resolved Module Directory : /data/adb/modules/thermalai_rust
+2026-07-17T06:00:22.949933Z  INFO  Resolved Config Directory : /data/adb/modules/thermalai_rust/config
+2026-07-17T06:00:22.949937Z  INFO  Resolved Log Directory    : /data/local/tmp
+2026-07-17T06:00:22.949941Z  INFO  Resolved State Directory  : /data/local/tmp/thermalai_state
+2026-07-17T06:00:22.949944Z  INFO  Resolved PID File Path    : /data/local/tmp/thermalai.pid
+2026-07-17T06:00:22.949947Z  INFO  Android Version           : 16
+2026-07-17T06:00:22.949954Z  INFO  Kernel Version            : Linux version 6.1.170-g765c1aa25c2f (build-user@build-host) (Android (14054515, +pgo, +bolt, +lto, +mlgo, based on r563880c) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f06077099aa41290cdb4c5e6fa0f59349), LLD 21.0.0 (/mnt/disks/build-disk/src/googleplex-android/llvm-r563880-release/out/llvm-project/llvm 5e96669f06077099aa41290cdb4c5e6fa0f59349)) #1 SMP PREEMPT Thu Jul  9 21:03:09 CEST 2026
+
+2026-07-17T06:00:22.949960Z  INFO  Startup Timestamp         : 1784268022
+2026-07-17T06:00:22.949970Z  INFO  Config loaded: ProfilesConfig { temp_cool: 42, temp_warm: 48, temp_hot: 58, temp_powersave: 68, temp_critical: 75, poll_interval: 2, temp_history_size: 10, prediction_window: 5, policy_debounce_sec: 10, log_level: "INFO", gpu_gaming_threshold: 20, log_rotate_mb: 5, log_retain_count: 1, proc_scan_interval: 3, game_latch_sec: 45, gaming_score_boost: 35, disable_tweaks: false }
+2026-07-17T06:00:22.949978Z  INFO ════════════════════════════════════════
+2026-07-17T06:00:22.950149Z  INFO Starting hardware discovery...
+2026-07-17T06:00:22.950318Z  INFO Hardware profile not found or invalid in cache. Running full discovery...
+2026-07-17T06:00:23.158051Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone64
+2026-07-17T06:00:23.158534Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone2
+2026-07-17T06:00:23.164758Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone72
+2026-07-17T06:00:23.166208Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone62
+2026-07-17T06:00:23.166402Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone0
+2026-07-17T06:00:23.174112Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone7
+2026-07-17T06:00:23.177432Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone67
+2026-07-17T06:00:23.181601Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone65
+2026-07-17T06:00:23.186482Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone73
+2026-07-17T06:00:23.187586Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone63
+2026-07-17T06:00:23.188049Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone1
+2026-07-17T06:00:23.198408Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone8
+2026-07-17T06:00:23.200584Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone68
+2026-07-17T06:00:23.201067Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone6
+2026-07-17T06:00:23.206085Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone66
+2026-07-17T06:00:23.210326Z DEBUG Skipping invalid thermal zone /sys/class/thermal/thermal_zone74
+2026-07-17T06:00:23.212743Z DEBUG Skipping non-touch input device: cliffs-mtp-snd-card Headset Jack
+2026-07-17T06:00:23.213043Z DEBUG Skipping non-touch input device: pmic_pwrkey_resin_bark
+2026-07-17T06:00:23.213222Z DEBUG Skipping non-touch input device: cliffs-mtp-snd-card Button Jack
+2026-07-17T06:00:23.213447Z DEBUG Skipping non-touch input device: pmic_pwrkey
+2026-07-17T06:00:23.213673Z DEBUG Skipping non-touch input device: awinic_haptic
+2026-07-17T06:00:23.214040Z DEBUG Skipping non-touch input device: pmic_resin
+2026-07-17T06:00:23.214243Z DEBUG Skipping non-touch input device: pmic_pwrkey_bark
+2026-07-17T06:00:23.214444Z DEBUG Skipping non-touch input device: uinput-xiaomi
+2026-07-17T06:00:23.214801Z DEBUG Skipping non-touch input device: gpio-keys
+2026-07-17T06:00:23.390009Z  INFO  Cache Status              : GENERATED
+2026-07-17T06:00:23.390040Z  INFO  Detected Device/SOC       : 24069PC21I
+2026-07-17T06:00:23.390132Z DEBUG Loaded 59 sensors from hardware profile.
+2026-07-17T06:00:23.391257Z  INFO Bootstrapping SystemOrchestrator...
+2026-07-17T06:00:23.392509Z  INFO Taken system snapshot with 18 entries
+2026-07-17T06:00:23.392534Z  INFO Daemon initialized successfully.
+2026-07-17T06:00:23.393402Z TRACE registering event source with poller: token=Token(0), interests=READABLE
+2026-07-17T06:00:23.393635Z TRACE adding inotify watch: /data/adb/modules/thermalai_rust/config/profiles.conf
+2026-07-17T06:00:23.393810Z TRACE adding inotify watch: /data/adb/modules/thermalai_rust/config/game_list.conf
+2026-07-17T06:00:23.399820Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:00:23.400044Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:00:23.400257Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:00:23.400367Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:00:23.400446Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:00:23.401541Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:00:23.401985Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:00:23.402051Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:00:23.402119Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:00:23.402332Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:00:23.403308Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:00:37.519659Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:00:37.520351Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:00:37.520939Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:00:37.521173Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:00:37.521427Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:00:37.521629Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:00:37.522071Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:00:37.522444Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:00:37.522825Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:00:37.523007Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:00:37.523138Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:00:37.523257Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:00:37.524323Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:00:37.527734Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:00:37.528009Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:00:37.529524Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:00:49.890547Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:00:49.890824Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:00:49.890906Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:00:49.890942Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:00:49.890978Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:00:49.890989Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:00:49.890999Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:00:49.891009Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:00:49.891019Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:00:49.891086Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:00:49.891356Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:00:50.210486Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:00:50.212086Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:00:50.212329Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:00:50.212385Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:00:50.212432Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:00:50.212443Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:00:50.212460Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:00:50.212470Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:00:50.212480Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:00:50.212550Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:00:50.212805Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:06.504912Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:01:06.505028Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:01:06.505149Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:01:06.505205Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:01:06.505256Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:01:06.505275Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:01:06.505290Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:01:06.505311Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:01:06.505325Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:01:06.505414Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:01:06.505717Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:14.779767Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:01:14.779875Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:01:14.779980Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:01:14.780043Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:01:14.780243Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:01:14.781665Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:01:14.782977Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:01:14.783087Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:01:14.783112Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:01:14.783258Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:01:14.783661Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:29.163512Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:01:29.163882Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:01:29.164060Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:01:29.164608Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:01:29.165124Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:01:29.165537Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:01:29.165873Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:01:29.166662Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:01:29.192343Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:01:29.205164Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:01:29.205585Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:01:29.205678Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:01:29.206173Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:01:29.207710Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:01:29.207989Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:29.208548Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:01:31.658567Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:01:31.659077Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:01:31.659741Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:01:31.662190Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:01:31.662448Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:01:31.662551Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:01:31.662644Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:01:31.662731Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:01:31.662823Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:01:31.663190Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:01:31.666310Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:37.924898Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:01:37.925058Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:01:37.925185Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:01:37.925248Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:01:37.925287Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:01:37.925300Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:01:37.925312Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:01:37.925324Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:01:37.925336Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:01:37.925471Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:01:37.926326Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:46.193266Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:01:46.193613Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:01:46.193784Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:01:46.193955Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:01:46.194259Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:01:46.195944Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:01:46.198456Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:01:46.198693Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:01:46.198739Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:01:46.198968Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:01:46.199429Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:58.493995Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:01:58.494063Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:01:58.494113Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:01:58.494149Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:01:58.494178Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:01:58.494204Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:01:58.494281Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:01:58.494444Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:01:58.495714Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:01:58.497589Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:01:58.497681Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:01:58.497707Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:01:58.497853Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:01:58.498842Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:01:58.498890Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:01:58.499089Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:02:04.711587Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:02:04.711786Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:02:04.711938Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:02:04.711982Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:02:04.712020Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:02:04.712038Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:02:04.712055Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:02:04.712070Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:02:04.712085Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:02:04.712234Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:02:04.712570Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:02:17.095743Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:02:17.096251Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:02:17.096641Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:02:17.096903Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:02:17.097544Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:02:17.101634Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:02:17.126621Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:02:17.126855Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:02:17.126897Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:02:17.127214Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:02:17.127928Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:02:29.540895Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:02:29.541053Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:02:29.541164Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:02:29.541248Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:02:29.541325Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:02:29.541397Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:02:29.541512Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:02:29.542008Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:02:29.545003Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:02:29.550524Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:02:29.550774Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:02:29.550840Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:02:29.551101Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:02:29.552283Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:02:29.552384Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:02:29.552871Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:02:33.807193Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:02:33.807463Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:02:33.807589Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:02:33.807646Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:02:33.807704Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:02:33.807734Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:02:33.807763Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:02:33.807791Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:02:33.807818Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:02:33.807927Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:02:33.808203Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:02:54.030154Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:02:54.030395Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:02:54.030578Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:02:54.030640Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:02:54.030687Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:02:54.030720Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:02:54.030740Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:02:54.030772Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:02:54.030792Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:02:54.031000Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:02:54.031514Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:02:58.322829Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:02:58.323021Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:02:58.323159Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:02:58.323240Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:02:58.323348Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:02:58.323375Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:02:58.323425Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:02:58.323447Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:02:58.323484Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:02:58.323583Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:02:58.323970Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:03:06.591033Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:03:06.591158Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:03:06.591233Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:03:06.591261Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:03:06.591286Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:03:06.591326Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:03:06.591337Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:03:06.591354Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:03:06.591365Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:03:06.591433Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:03:06.591674Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:03:16.838707Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:03:16.840161Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:03:16.841034Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:03:16.841296Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:03:16.842213Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:03:16.845822Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:03:16.852279Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:03:16.852567Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:03:16.852657Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:03:16.853333Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:03:16.854924Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:03:25.159566Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:03:25.159704Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:03:25.159768Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:03:25.159859Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:03:25.160528Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:03:25.163449Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:03:25.169202Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:03:25.169496Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:03:25.169585Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:03:25.169983Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:03:25.170955Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:03:49.422426Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:03:49.422906Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:03:49.423352Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:03:49.423646Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:03:49.423844Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:03:49.424049Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:03:49.424823Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:03:49.425326Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:03:49.425502Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:03:49.425692Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:03:49.425850Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:03:49.426008Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:03:49.426990Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:03:49.432453Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:03:49.432672Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:03:49.433482Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:04:11.791979Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:04:11.792216Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:04:11.792410Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:04:11.792485Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:04:11.792548Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:04:11.792590Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:04:11.792632Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:04:11.792658Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:04:11.792695Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:04:11.792895Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:04:11.793391Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:05:32.343983Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:05:32.344353Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:05:32.344607Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:05:32.344692Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:05:32.344756Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:05:32.344879Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:05:32.344998Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:05:32.345080Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:05:32.345150Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:05:32.345195Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:05:32.345306Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:05:32.345352Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:05:32.345772Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:05:32.346960Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:05:32.347065Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:05:32.347671Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:05:38.558686Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:05:38.559141Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:05:38.559515Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:05:38.559695Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:05:38.559824Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:05:38.559881Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:05:38.559931Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:05:38.559983Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:05:38.560032Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:05:38.560391Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:05:38.561623Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:05:54.852731Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:05:54.853769Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:05:54.854895Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:05:54.856235Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:05:54.860505Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:05:54.865178Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:05:54.872652Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:05:54.873143Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:05:54.873307Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:05:54.873762Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:05:54.875268Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:06:01.136107Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:06:01.136255Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:06:01.136345Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:06:01.136429Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:06:01.136481Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:06:01.136529Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:06:01.136623Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:06:01.137264Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:06:01.140454Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:06:01.145642Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:06:01.146005Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:06:01.146104Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:06:01.146418Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:06:01.147934Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:06:01.148032Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:06:01.148541Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:06:05.400470Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:06:05.401680Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:06:05.401956Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:06:05.402174Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:06:05.402266Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:06:05.402333Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:06:05.402428Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:06:05.402473Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:06:05.402532Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:06:05.407612Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:06:05.409016Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:06:13.712359Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:06:13.712665Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:06:13.712993Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:06:13.713127Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:06:13.714072Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:06:13.719530Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:06:13.727598Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:06:13.728307Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:06:13.728455Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:06:13.728812Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:06:13.730461Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:06:27.938955Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:06:27.939117Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:06:27.939202Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:06:27.939346Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:06:27.939505Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:06:27.939577Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:06:27.939691Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:06:27.941430Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:06:27.945858Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:06:27.954059Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:06:27.954592Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:06:27.954786Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:06:27.955117Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:06:27.957687Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:06:27.957820Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:06:27.958372Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:06:38.257925Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:06:38.258230Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:06:38.258466Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:06:38.258590Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:06:38.258671Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:06:38.258733Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:06:38.258791Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:06:38.258849Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:06:38.258892Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:06:38.259167Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:06:38.260390Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:06:46.606261Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:06:46.606647Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:06:46.606994Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:06:46.607208Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:06:46.607401Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:06:46.607462Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:06:46.607528Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:06:46.607567Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:06:46.607630Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:06:46.607930Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:06:46.609182Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:07:02.892300Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:07:02.892828Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:07:02.893233Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:07:02.894185Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:07:02.894290Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:07:02.894466Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:07:02.894540Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:07:02.894609Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:07:02.894722Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:07:02.895070Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:07:02.896705Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:07:11.192962Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:07:11.193908Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:07:11.194274Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:07:11.194420Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:07:11.196204Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:07:11.199738Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:07:11.208293Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:07:11.209149Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:07:11.209272Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:07:11.209475Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:07:11.210100Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:07:19.395147Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:07:19.395377Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:07:19.395488Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:07:19.395571Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:07:19.395624Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:07:19.395669Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:07:19.395787Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:07:19.396421Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:07:19.399481Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:07:19.404408Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:07:19.404795Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:07:19.406106Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:07:19.406902Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:07:19.408320Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:07:19.408413Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:07:19.408929Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:07:21.677495Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:07:21.677890Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:07:21.678213Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:07:21.678360Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:07:21.678447Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:07:21.678510Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:07:21.678569Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:07:21.678628Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:07:21.678685Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:07:21.679096Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:07:21.680973Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:07:45.962886Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:07:45.963399Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:07:45.963976Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:07:45.964524Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:07:45.966275Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:07:45.970221Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:07:45.977980Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:07:45.978411Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:07:45.978476Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:07:45.978803Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:07:45.981330Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:07:58.246715Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:07:58.246925Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:07:58.247054Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:07:58.247501Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:07:58.247576Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:07:58.247641Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:07:58.247757Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:07:58.248641Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:07:58.252720Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:07:58.257829Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:07:58.258476Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:07:58.258850Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:07:58.259776Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:07:58.260896Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:07:58.260994Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:07:58.261511Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:08:02.507965Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:08:02.508584Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:08:02.509028Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:08:02.509358Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:08:02.509447Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:08:02.509515Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:08:02.509560Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:08:02.509620Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:08:02.509664Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:08:02.510037Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:08:02.511846Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:08:26.893177Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:08:26.893412Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:08:26.893635Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:08:26.893702Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:08:26.894188Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:08:26.896082Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:08:26.899562Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:08:26.899791Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:08:26.899835Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:08:26.900039Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:08:26.900684Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:08:29.174744Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:08:29.174994Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:08:29.175118Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:08:29.175583Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:08:29.176376Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:08:29.181598Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:08:29.187780Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:08:29.188112Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:08:29.188207Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:08:29.188497Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:08:29.189431Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:08:37.353122Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:08:37.353713Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:08:37.354025Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:08:37.354200Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:08:37.355561Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:08:37.360332Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:08:37.373481Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:08:37.375327Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:08:37.375459Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:08:37.375795Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:08:37.376853Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:08:43.588003Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:08:43.588165Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:08:43.588232Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:08:43.588309Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:08:43.588758Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:08:43.590741Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:08:43.594633Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:08:43.594863Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:08:43.594903Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:08:43.595057Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:08:43.595555Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:08:47.833570Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:08:47.834151Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:08:47.834732Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:08:47.835160Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:08:47.835516Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:08:47.835687Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:08:47.835756Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:08:47.835799Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:08:47.835857Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:08:47.836343Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:08:47.837838Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:09:04.177842Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:09:04.178091Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:09:04.178267Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:09:04.178326Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:09:04.178379Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:09:04.178416Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:09:04.178433Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:09:04.178466Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:09:04.178481Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:09:04.178584Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:09:04.178937Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:09:24.382441Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:09:24.382750Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:09:24.383129Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:09:24.383207Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:09:24.383244Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:09:24.383264Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:09:24.383281Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:09:24.383326Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:09:24.383345Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:09:24.383452Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:09:24.383842Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:09:24.568823Z  INFO Calibration adjustment triggered. New offset: -1
+2026-07-17T06:09:38.748849Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:09:38.749176Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:09:38.749548Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:09:38.749699Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:09:38.749778Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:09:38.749827Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:09:38.749874Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:09:38.749918Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:09:38.749964Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:09:38.750396Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:09:38.751530Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:09:43.005689Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:09:43.006266Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:09:43.006610Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:09:43.006892Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:09:43.006999Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:09:43.007073Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:09:43.007142Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:09:43.007187Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:09:43.007234Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:09:43.007783Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:09:43.009443Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:10:07.377381Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:10:07.377612Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:10:07.377741Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:10:07.377794Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:10:07.377840Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:10:07.377858Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:10:07.377874Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:10:07.377890Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:10:07.377925Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:10:07.378026Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:10:07.378405Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:10:15.545667Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:10:15.545961Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:10:15.546211Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:10:15.546341Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:10:15.547109Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:10:15.552431Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:10:15.563883Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:10:15.567800Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:10:15.568452Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:10:15.568832Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:10:15.569894Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:10:29.787972Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:10:29.788124Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:10:29.788227Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:10:29.788312Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:10:29.788387Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:10:29.788513Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:10:29.788832Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:10:29.789983Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:10:29.796260Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:10:29.804523Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:10:29.805096Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:10:29.805287Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:10:29.805901Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:10:29.807132Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:10:29.807764Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:10:29.808296Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:10:32.114774Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:10:32.115599Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:10:32.116248Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:10:32.116417Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:10:32.116505Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:10:32.116586Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:10:32.116655Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:10:32.116715Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:10:32.116778Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:10:32.117053Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:10:32.118012Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:10:40.424433Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:10:40.424832Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:10:40.425116Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:10:40.425284Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:10:40.425984Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:10:40.432551Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:10:40.444204Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:10:40.445076Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:10:40.445255Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:10:40.445594Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:10:40.448253Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:10:46.665019Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:10:46.665316Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:10:46.665441Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:10:46.665537Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:10:46.665625Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:10:46.665701Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:10:46.665838Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:10:46.667052Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:10:46.671359Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:10:46.679033Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:10:46.680136Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:10:46.680312Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:10:46.680666Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:10:46.682033Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:10:46.682134Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:10:46.682714Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:10:50.939926Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:10:50.940242Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:10:50.940625Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:10:50.940775Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:10:50.940872Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:10:50.940940Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:10:50.941076Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:10:50.941154Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:10:50.941213Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:10:50.941544Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:10:50.942597Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:11:07.277855Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:11:07.278061Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:11:07.278261Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:11:07.278329Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:11:07.278845Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:11:07.280503Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:11:07.283722Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:11:07.283907Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:11:07.283951Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:11:07.284161Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:11:07.284812Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:11:17.536190Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:11:17.536365Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:11:17.536456Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:11:17.536544Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:11:17.536618Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:11:17.536686Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:11:17.536804Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:11:17.537576Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:11:17.545214Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:11:17.553981Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:11:17.554422Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:11:17.554526Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:11:17.555082Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:11:17.557093Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:11:17.557196Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:11:17.557692Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:11:23.786936Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:11:23.787452Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:11:23.787800Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:11:23.787947Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:11:23.788048Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:11:23.788122Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:11:23.788238Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:11:23.788287Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:11:23.788335Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:11:23.788645Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:11:23.789767Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:11:40.078523Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:11:40.078746Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:11:40.078922Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:11:40.079011Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:11:40.079401Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:11:40.080863Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:11:40.083851Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:11:40.084059Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:11:40.084121Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:11:40.084341Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:11:40.085051Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:11:48.391991Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:11:48.392258Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:11:48.392348Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:11:48.392448Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:11:48.393418Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:11:48.396891Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:11:48.402454Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:11:48.403192Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:11:48.403444Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:11:48.403824Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:11:48.404821Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:11:56.571603Z DEBUG Applied CPU governor: powersave to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:11:56.572146Z DEBUG Applied CPU governor: powersave to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:11:56.572539Z DEBUG Applied CPU governor: powersave to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:11:56.572774Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:11:56.575010Z DEBUG Applied cpuset top-app: 0-3 via /dev/cpuset/top-app/cpus
+2026-07-17T06:11:56.576883Z DEBUG Applied cpuset foreground: 0-2 via /dev/cpuset/foreground/cpus
+2026-07-17T06:11:56.590254Z DEBUG Applied cpuset background: 0 via /dev/cpuset/background/cpus
+2026-07-17T06:11:56.594516Z DEBUG Applied cpuset sys-bg: 0-1 via /dev/cpuset/system-background/cpus
+2026-07-17T06:11:56.594645Z DEBUG Applied cpuset restricted: 0-3 via /dev/cpuset/restricted/cpus
+2026-07-17T06:11:56.594915Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:11:56.596246Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:12:06.885964Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:12:06.886133Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:12:06.886223Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:12:06.886324Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:12:06.886394Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:12:06.886441Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:12:06.886551Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:12:06.887210Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:12:06.891010Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:12:06.897466Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:12:06.897832Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:12:06.897951Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:12:06.898285Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:12:06.899691Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:12:06.899799Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:12:06.900366Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:12:11.161561Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:12:11.162285Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:12:11.162633Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:12:11.162793Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:12:11.162880Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:12:11.162946Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:12:11.163004Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:12:11.163061Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:12:11.163116Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:12:11.163818Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:12:11.165020Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:12:27.599723Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:12:27.600283Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:12:27.600739Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:12:27.601080Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:12:27.601302Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:12:27.601427Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:12:27.601767Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:12:27.601910Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:12:27.601975Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:12:27.602282Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:12:27.603671Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:12:51.936204Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:12:51.936319Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:12:51.936397Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:12:51.936430Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:12:51.936470Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:12:51.936487Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:12:51.936500Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:12:51.936512Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:12:51.936529Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:12:51.936605Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:12:51.936873Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:12:56.240409Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:12:56.241929Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:12:56.242440Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:12:56.242692Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:12:56.242932Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:12:56.243059Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:12:56.243170Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:12:56.243271Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:12:56.243479Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:12:56.243784Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:12:56.244837Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:13:06.356390Z  INFO Charger connected
+2026-07-17T06:13:06.356510Z  INFO Charging session started at 91% SOC
+2026-07-17T06:13:06.356513Z  INFO State changed: Disconnected -> Normal
+2026-07-17T06:13:16.398022Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:16.402294Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:24.502477Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:13:24.502712Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:13:24.502901Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:13:24.502950Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:13:24.502989Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:13:24.503009Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:13:24.503067Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:13:24.503157Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:13:24.503195Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:13:24.503217Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:13:24.503235Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:13:24.503254Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:13:24.503403Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:13:24.504123Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:13:24.504189Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:13:24.504484Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:13:24.517062Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:24.517167Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:28.595555Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:28.595613Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:32.655451Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:32.655722Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:40.700682Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:13:40.700903Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:13:40.701077Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:13:40.701158Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:13:40.701262Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:13:40.701311Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:13:40.701358Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:13:40.701383Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:13:40.701423Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:13:40.701588Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:13:40.702117Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:13:40.721371Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:40.721467Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:48.774284Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:48.774349Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:56.832775Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:56.832851Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:59.096522Z DEBUG Applied CPU governor: conservative to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:13:59.097092Z DEBUG Applied CPU governor: conservative to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:13:59.097551Z DEBUG Applied CPU governor: conservative to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:13:59.097749Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:13:59.097958Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:13:59.098034Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:13:59.098103Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:13:59.098164Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:13:59.098227Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:13:59.098613Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:13:59.100123Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:13:59.335430Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:59.335538Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:07.448078Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:07.448215Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:09.462459Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:14:09.464312Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:14:09.465263Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:14:09.465626Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:14:09.465944Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:14:09.466239Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:14:09.466704Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:14:09.467242Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:14:09.468179Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:14:09.468450Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:14:09.468697Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:14:09.468960Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:14:09.469960Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:14:09.474522Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:14:09.474910Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:14:09.477310Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:14:11.580608Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:11.580714Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:15.636963Z DEBUG Failed to apply charge limit 3600mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:15.637036Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:23.713073Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:23.713233Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:27.776945Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:14:27.777300Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:14:27.777555Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:14:27.777649Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:14:27.777735Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:14:27.777757Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:14:27.777778Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:14:27.777796Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:14:27.777812Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:14:27.777935Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:14:27.778379Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:14:27.789033Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:27.789079Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:38.098820Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:38.098907Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:40.104601Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:14:40.105299Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:14:40.105446Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:14:40.105481Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:14:40.105504Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:14:40.105522Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:14:40.105566Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:14:40.105640Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:14:40.105666Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:14:40.105688Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:14:40.105711Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:14:40.105734Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:14:40.105852Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:14:40.106349Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:14:40.106379Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:14:40.106565Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:14:42.149629Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:42.149730Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:46.197226Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:46.197293Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:56.265327Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:14:56.265655Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:14:56.265868Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:14:56.265977Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:14:56.266110Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:14:56.266172Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:14:56.266232Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:14:56.266289Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:14:56.266346Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:14:56.266604Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:14:56.267608Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:14:56.285359Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:56.285470Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:04.335750Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:04.335957Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:12.395576Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:12.395718Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:20.439020Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:20.439085Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:24.493744Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:15:24.493929Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:15:24.494113Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:15:24.494162Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:15:24.494207Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:15:24.494229Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:15:24.494277Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:15:24.494373Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:15:24.494416Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:15:24.494440Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:15:24.494482Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:15:24.494506Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:15:24.494655Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:15:24.495247Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:15:24.495316Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:15:24.495511Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:15:24.511711Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:24.511772Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:28.574507Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:28.574605Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:36.621218Z DEBUG Failed to apply charge limit 3000mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:36.621304Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:44.667902Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:44.668038Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:52.710837Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:15:52.711107Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:15:52.711342Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:15:52.711496Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:15:52.711643Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:15:52.711708Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:15:52.711771Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:15:52.711831Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:15:52.711894Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:15:52.712185Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:15:52.713144Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:15:52.735821Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:52.735889Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:00.794479Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:00.794804Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:08.848228Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:08.848297Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:16.901803Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:16.901896Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:24.959020Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:24.959157Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:33.007343Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:33.007482Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:41.058745Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:41.058846Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:49.088233Z DEBUG Failed to apply charge limit 2200mA: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:49.088309Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:57.127547Z  INFO Charger disconnected
+2026-07-17T06:16:57.127936Z  INFO Session ended. Started at 91%, Ended at 96%, Duration: 230s, Peak Temp: 40C
+2026-07-17T06:17:21.275582Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:17:21.275809Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:17:21.275983Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:17:21.276034Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:17:21.276075Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:17:21.276102Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:17:21.276162Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:17:21.276251Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:17:21.276291Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:17:21.276317Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:17:21.276351Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:17:21.276374Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:17:21.276522Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:17:21.277074Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:17:21.277133Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:17:21.277344Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits
+2026-07-17T06:17:37.478639Z DEBUG Applied CPU governor: schedutil to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:17:37.478822Z DEBUG Applied CPU governor: schedutil to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:17:37.478954Z DEBUG Applied CPU governor: schedutil to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:17:37.479020Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:17:37.479098Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:17:37.479144Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:17:37.479194Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:17:37.479240Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:17:37.479313Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:17:37.479628Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:17:37.480010Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:17:45.762355Z DEBUG Applied CPU governor: walt to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+2026-07-17T06:17:45.762485Z DEBUG Applied CPU governor: walt to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_governor
+2026-07-17T06:17:45.762585Z DEBUG Applied CPU governor: walt to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+2026-07-17T06:17:45.762613Z DEBUG Applied scaling_max_freq: 2016000 to cluster policy0 via /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+2026-07-17T06:17:45.762634Z DEBUG Applied scaling_max_freq: 2707200 to cluster policy3 via /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq
+2026-07-17T06:17:45.762656Z DEBUG Applied scaling_max_freq: 2918400 to cluster policy7 via /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+2026-07-17T06:17:45.762690Z DEBUG Applied GPU devfreq governor: msm-adreno-tz via /sys/class/kgsl/kgsl-3d0/devfreq/governor
+2026-07-17T06:17:45.762741Z DEBUG Applied cpuset top-app: 0-7 via /dev/cpuset/top-app/cpus
+2026-07-17T06:17:45.762765Z DEBUG Applied cpuset foreground: 0-6 via /dev/cpuset/foreground/cpus
+2026-07-17T06:17:45.762782Z DEBUG Applied cpuset background: 0-1 via /dev/cpuset/background/cpus
+2026-07-17T06:17:45.762803Z DEBUG Applied cpuset sys-bg: 0-2 via /dev/cpuset/system-background/cpus
+2026-07-17T06:17:45.762821Z DEBUG Applied cpuset restricted: 0-6 via /dev/cpuset/restricted/cpus
+2026-07-17T06:17:45.762912Z DEBUG Skipping touch tuning: verified touch controller has no writable tuning nodes
+2026-07-17T06:17:45.763338Z DEBUG Applied GPU bus_split: 0 via /sys/class/kgsl/kgsl-3d0/bus_split
+2026-07-17T06:17:45.763393Z DEBUG Skipping GPU power-level control: no writable KGSL power-level node
+2026-07-17T06:17:45.763580Z DEBUG Applied unrestricted cpu_limits to 8 cores via /sys/class/thermal/thermal_message/cpu_limits

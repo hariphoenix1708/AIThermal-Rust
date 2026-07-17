@@ -1,0 +1,4 @@
+2026-07-17 11:30:22 boot_completed observed
+2026-07-17 11:30:22 requesting mi_thermald stop
+2026-07-17 11:30:22 starting daemon path=/data/adb/modules/thermalai_rust/system/bin/thermalai-daemon module=/data/adb/modules/thermalai_rust log_dir=/data/local/tmp state_dir=/data/local/tmp/thermalai_state
+2026-07-17 11:30:25 daemon validated pid=5034

@@ -1,0 +1,61 @@
+2026-07-17T06:00:22.949844Z  INFO ════════════════════════════════════════
+2026-07-17T06:00:22.949911Z  INFO  ThermalAI daemon starting up...
+2026-07-17T06:00:22.949916Z  INFO  Version                   : 0.1.0
+2026-07-17T06:00:22.949919Z  INFO  PID                       : 5034
+2026-07-17T06:00:22.949923Z  INFO  Executable Path           : /data/adb/modules/thermalai_rust/system/bin/thermalai-daemon
+2026-07-17T06:00:22.949927Z  INFO  Resolved Module Directory : /data/adb/modules/thermalai_rust
+2026-07-17T06:00:22.949931Z  INFO  Resolved Config Directory : /data/adb/modules/thermalai_rust/config
+2026-07-17T06:00:22.949935Z  INFO  Resolved Log Directory    : /data/local/tmp
+2026-07-17T06:00:22.949939Z  INFO  Resolved State Directory  : /data/local/tmp/thermalai_state
+2026-07-17T06:00:22.949943Z  INFO  Resolved PID File Path    : /data/local/tmp/thermalai.pid
+2026-07-17T06:00:22.949946Z  INFO  Android Version           : 16
+2026-07-17T06:00:22.949949Z  INFO  Kernel Version            : Linux version 6.1.170-g765c1aa25c2f (build-user@build-host) (Android (14054515, +pgo, +bolt, +lto, +mlgo, based on r563880c) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f06077099aa41290cdb4c5e6fa0f59349), LLD 21.0.0 (/mnt/disks/build-disk/src/googleplex-android/llvm-r563880-release/out/llvm-project/llvm 5e96669f06077099aa41290cdb4c5e6fa0f59349)) #1 SMP PREEMPT Thu Jul  9 21:03:09 CEST 2026
+
+2026-07-17T06:00:22.949958Z  INFO  Startup Timestamp         : 1784268022
+2026-07-17T06:00:22.949962Z  INFO  Config loaded: ProfilesConfig { temp_cool: 42, temp_warm: 48, temp_hot: 58, temp_powersave: 68, temp_critical: 75, poll_interval: 2, temp_history_size: 10, prediction_window: 5, policy_debounce_sec: 10, log_level: "INFO", gpu_gaming_threshold: 20, log_rotate_mb: 5, log_retain_count: 1, proc_scan_interval: 3, game_latch_sec: 45, gaming_score_boost: 35, disable_tweaks: false }
+2026-07-17T06:00:22.949976Z  INFO ════════════════════════════════════════
+2026-07-17T06:00:22.950127Z  INFO Starting hardware discovery...
+2026-07-17T06:00:22.950298Z  INFO Hardware profile not found or invalid in cache. Running full discovery...
+2026-07-17T06:00:23.389961Z  INFO  Cache Status              : GENERATED
+2026-07-17T06:00:23.390036Z  INFO  Detected Device/SOC       : 24069PC21I
+2026-07-17T06:00:23.391232Z  INFO Bootstrapping SystemOrchestrator...
+2026-07-17T06:00:23.392484Z  INFO Taken system snapshot with 18 entries
+2026-07-17T06:00:23.392530Z  INFO Daemon initialized successfully.
+2026-07-17T06:09:24.568706Z  INFO Calibration adjustment triggered. New offset: -1
+2026-07-17T06:13:06.356354Z  INFO Charger connected
+2026-07-17T06:13:06.356498Z  INFO Charging session started at 91% SOC
+2026-07-17T06:13:06.356511Z  INFO State changed: Disconnected -> Normal
+2026-07-17T06:13:16.402263Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:24.517100Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:28.595595Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:32.655676Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:40.721424Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:48.774327Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:56.832824Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:13:59.335506Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:07.448171Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:11.580673Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:15.637006Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3600mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:23.713189Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:27.789066Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:38.098877Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:42.149680Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:46.197269Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:14:56.285408Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:04.335848Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:12.395669Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:20.439063Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:24.511749Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:28.574574Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:36.621272Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 3000mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:44.667996Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:15:52.735862Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:00.794610Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:08.848272Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:16.901865Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:24.959113Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:33.007434Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:41.058814Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:49.088283Z  WARN Node /sys/class/power_supply/usb/input_current_limit rejected value 2200mA, will retry with next computed value: I/O error at node /sys/class/power_supply/usb/input_current_limit: Invalid argument (os error 22)
+2026-07-17T06:16:57.127435Z  INFO Charger disconnected
+2026-07-17T06:16:57.127898Z  INFO Session ended. Started at 91%, Ended at 96%, Duration: 230s, Peak Temp: 40C
