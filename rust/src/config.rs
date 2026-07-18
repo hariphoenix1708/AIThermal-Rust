@@ -43,6 +43,8 @@ pub struct ProfilesConfig {
     pub gaming_score_boost: i32,
     #[serde(default = "default_disable_tweaks")]
     pub disable_tweaks: bool,
+    #[serde(default = "default_adaptive_governor_enabled")]
+    pub adaptive_governor_enabled: bool,
 }
 
 // Default providers for Serde fallback
@@ -96,6 +98,10 @@ fn default_game_latch_sec() -> u64 {
 fn default_gaming_score_boost() -> i32 {
     35
 }
+fn default_adaptive_governor_enabled() -> bool {
+    false
+}
+
 fn default_disable_tweaks() -> bool {
     false
 }
@@ -119,6 +125,7 @@ impl Default for ProfilesConfig {
             proc_scan_interval: default_proc_scan_interval(),
             game_latch_sec: default_game_latch_sec(),
             gaming_score_boost: default_gaming_score_boost(),
+            adaptive_governor_enabled: default_adaptive_governor_enabled(),
             disable_tweaks: default_disable_tweaks(),
         }
     }
