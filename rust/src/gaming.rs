@@ -105,29 +105,33 @@ impl GameDetector {
         self.confirmed_package.as_deref()
     }
 
-    fn get_foreground_app_from_cgroup() -> Option<(String, u32)> {
+    fn is_package_in_foreground_cgroup(target_pkg: &str) -> Option<bool> {
         let candidate_paths = [
             "/dev/cpuset/top-app/cgroup.procs",
             "/sys/fs/cgroup/cpuset/top-app/cgroup.procs",
         ];
         for path in candidate_paths {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                // Check PIDs in reverse order — the most recently added PID is
-                // typically the actual foreground activity's process.
-                for pid_str in content.split_whitespace().rev() {
-                    let cmdline_path = format!("/proc/{}/cmdline", pid_str);
-                    if let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) {
-                        let pkg = cmdline.split('\0').next().unwrap_or("").trim();
-                        if !pkg.is_empty() && !pkg.starts_with('/') {
-                            if let Ok(pid) = pid_str.parse::<u32>() {
-                                return Some((pkg.to_string(), pid));
-                            }
-                        }
+            let Ok(content) = std::fs::read_to_string(path) else { continue };
+            let mut checked_any = false;
+            for pid_str in content.split_whitespace() {
+                let cmdline_path = format!("/proc/{}/cmdline", pid_str);
+                if let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) {
+                    checked_any = true;
+                    let pkg = cmdline.split('\0').next().unwrap_or("").trim();
+                    // Match the base package exactly, OR the base package followed
+                    // by a ":" process-name suffix (Android's standard multi-process
+                    // naming convention) - either means this PID belongs to the
+                    // SAME app as target_pkg, just a different process within it.
+                    if pkg == target_pkg || pkg.starts_with(&format!("{}:", target_pkg)) {
+                        return Some(true);
                     }
                 }
             }
+            if checked_any {
+                return Some(false); // cgroup was readable, had processes, none matched
+            }
         }
-        None
+        None // cgroup path unreadable/unavailable on this device - can't corroborate either way
     }
 
     pub fn tick(&mut self) -> Result<bool> {
@@ -157,12 +161,27 @@ impl GameDetector {
         let mut detected = pkg.is_some();
 
         if detected {
-            if let Some((fg_pkg, _fg_pid)) = Self::get_foreground_app_from_cgroup() {
-                if let Some(ref p) = pkg {
-                    if *p != fg_pkg {
+            if let Some(ref p) = pkg {
+                match Self::is_package_in_foreground_cgroup(p) {
+                    Some(false) => {
+                        tracing::debug!(
+                            target: "gaming",
+                            "Package {} matched process scan but not found in top-app cgroup, treating as unconfirmed",
+                            p
+                        );
                         detected = false;
                         pkg = None;
                         pid = None;
+                    }
+                    Some(true) => {
+                        tracing::debug!(target: "gaming", "Confirmed {} in top-app cgroup", p);
+                    }
+                    None => {
+                        // Cgroup unavailable/unreadable on this device - fall back to
+                        // trusting the primary exact-match scan alone, exactly as it
+                        // worked before this round's cgroup-corroboration feature was
+                        // added. Never let an unreadable cgroup path cancel an
+                        // otherwise-confirmed detection.
                     }
                 }
             }
