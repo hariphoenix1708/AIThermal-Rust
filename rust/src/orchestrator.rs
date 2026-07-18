@@ -22,6 +22,7 @@ use tracing::{info, warn};
 
 pub struct SystemOrchestrator {
     adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState,
+    last_load_sample: std::collections::HashMap<usize, crate::monitor::load_sampler::LoadSample>,
     sensors: SensorManager,
     thermal: ThermalEngine,
     prediction: PredictionEngine,
@@ -171,6 +172,7 @@ impl SystemOrchestrator {
             runtime_tuner,
             game_profiles: crate::profiles::GameProfileManager::new(&ctx.state_dir),
             adaptive_governor,
+            last_load_sample: std::collections::HashMap::new(),
         }
     }
 
@@ -381,6 +383,7 @@ impl SystemOrchestrator {
             runtime_tuner: RuntimeTuner::new(HardwareProfile::default()),
             game_profiles: crate::profiles::GameProfileManager::new(""),
             adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState::new(1),
+            last_load_sample: std::collections::HashMap::new(),
         }
     }
 
@@ -656,15 +659,22 @@ impl RuntimeTask for SystemOrchestrator {
 
 
 
-                // We use load_sampler to compute utilization
-
-                let utilization = 0.5;
-
-                let _current_stats = crate::monitor::load_sampler::read_cpu_stat();
-
-                // Try to get aggregate cpu load, fallback to default
-
-                // Note: ideally we track last sample to delta, but for now we fallback to 50% or some default logic.
+                let current_stats = crate::monitor::load_sampler::read_cpu_stat();
+                let utilization = if !self.last_load_sample.is_empty() {
+                    // Average utilization across all CPU indices present in both samples.
+                    let mut total_util = 0.0f32;
+                    let mut count = 0;
+                    for (idx, curr) in &current_stats {
+                        if let Some(prev) = self.last_load_sample.get(idx) {
+                            total_util += crate::monitor::load_sampler::compute_utilization(prev, curr);
+                            count += 1;
+                        }
+                    }
+                    if count > 0 { total_util / count as f32 } else { 0.5 } // safe default only if no prior sample overlapped
+                } else {
+                    0.5 // first-ever sample this daemon run - no previous data to delta against yet
+                };
+                self.last_load_sample = current_stats;
 
                 let tier = self.adaptive_governor.decide_tier(frame_stats.as_ref(), utilization);
 
@@ -677,15 +687,16 @@ impl RuntimeTask for SystemOrchestrator {
                         crate::scheduler::adaptive_governor::FrequencyTier::Max => crate::governors::GovernorManager::max_freq(&cluster.available_frequencies),
 
                         crate::scheduler::adaptive_governor::FrequencyTier::High => {
-
                             let min = crate::governors::GovernorManager::min_freq(&cluster.available_frequencies).unwrap_or(0);
-
                             let max = crate::governors::GovernorManager::max_freq(&cluster.available_frequencies).unwrap_or(0);
-
-                            let mid = (min + max) / 2;
-
-                            Some(mid) // Note: Needs snapping in a robust impl, simplified here
-
+                            let midpoint = (min + max) / 2;
+                            // Snap to the closest value actually present in this cluster's real
+                            // frequency table, rather than trusting an arithmetic midpoint to be a
+                            // valid step.
+                            cluster.available_frequencies
+                                .iter()
+                                .copied()
+                                .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
                         },
 
                         crate::scheduler::adaptive_governor::FrequencyTier::Balanced => crate::governors::GovernorManager::mid_freq(&cluster.available_frequencies),
