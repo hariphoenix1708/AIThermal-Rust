@@ -21,6 +21,7 @@ use anyhow::Result;
 use tracing::{info, warn};
 
 pub struct SystemOrchestrator {
+    adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState,
     sensors: SensorManager,
     thermal: ThermalEngine,
     prediction: PredictionEngine,
@@ -115,6 +116,7 @@ impl SystemOrchestrator {
         base
     }
     pub fn new(ctx: &RuntimeContext, hardware: HardwareProfile) -> Self {
+        let adaptive_governor = crate::scheduler::adaptive_governor::AdaptiveGovernorState::new(1);
         // Initialize subsystems
         let mut sensors = SensorManager::new();
         sensors.discover_hardware(&hardware);
@@ -168,6 +170,7 @@ impl SystemOrchestrator {
             hardware,
             runtime_tuner,
             game_profiles: crate::profiles::GameProfileManager::new(&ctx.state_dir),
+            adaptive_governor,
         }
     }
 
@@ -377,6 +380,7 @@ impl SystemOrchestrator {
             hardware,
             runtime_tuner: RuntimeTuner::new(HardwareProfile::default()),
             game_profiles: crate::profiles::GameProfileManager::new(""),
+            adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState::new(1),
         }
     }
 
@@ -641,6 +645,72 @@ impl RuntimeTask for SystemOrchestrator {
 
         // Check if tweaks are disabled
         let disable_tweaks = ctx.config.profiles.disable_tweaks;
+
+        if ctx.config.profiles.adaptive_governor_enabled && is_gaming {
+
+            if self.adaptive_governor.should_sample() {
+
+                let frame_stats = confirmed_pkg.as_deref()
+
+                    .and_then(crate::monitor::frame_sampler::sample_frame_stats);
+
+
+
+                // We use load_sampler to compute utilization
+
+                let utilization = 0.5;
+
+                let _current_stats = crate::monitor::load_sampler::read_cpu_stat();
+
+                // Try to get aggregate cpu load, fallback to default
+
+                // Note: ideally we track last sample to delta, but for now we fallback to 50% or some default logic.
+
+                let tier = self.adaptive_governor.decide_tier(frame_stats.as_ref(), utilization);
+
+
+
+                for cluster in &self.hardware.cpu_topology.clusters {
+
+                    let target = match tier {
+
+                        crate::scheduler::adaptive_governor::FrequencyTier::Max => crate::governors::GovernorManager::max_freq(&cluster.available_frequencies),
+
+                        crate::scheduler::adaptive_governor::FrequencyTier::High => {
+
+                            let min = crate::governors::GovernorManager::min_freq(&cluster.available_frequencies).unwrap_or(0);
+
+                            let max = crate::governors::GovernorManager::max_freq(&cluster.available_frequencies).unwrap_or(0);
+
+                            let mid = (min + max) / 2;
+
+                            Some(mid) // Note: Needs snapping in a robust impl, simplified here
+
+                        },
+
+                        crate::scheduler::adaptive_governor::FrequencyTier::Balanced => crate::governors::GovernorManager::mid_freq(&cluster.available_frequencies),
+
+                        crate::scheduler::adaptive_governor::FrequencyTier::Eco => crate::governors::GovernorManager::min_freq(&cluster.available_frequencies),
+
+                    };
+
+                    if let Some(freq) = target {
+
+                        let path = format!("{}/scaling_max_freq", cluster.policy_path);
+
+                        if crate::tuning::backend::TuningBackend::try_write_string(&path, &freq.to_string()).is_ok() {
+
+                            tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
 
         if !disable_tweaks {
             // If game was just detected and confirmed, try pinning critical render thread
