@@ -28,6 +28,7 @@ rm -f "$PID_LOCK_FILE"
 rm -f "$LOG_DIR/thermalai.log"
 rm -f "$LOG_DIR/thermalai_verbose.log"
 rm -f "$LOG_DIR/thermalai_startup.log"
+rm -f "$LOG_DIR/thermalai_battery.log"
 rm -rf "$STATE_DIR"
 
 echo "Module uninstalled. Daemon stopped and all files under $LOG_DIR and $STATE_DIR cleaned up." >> /dev/kmsg

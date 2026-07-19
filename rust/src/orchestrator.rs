@@ -39,6 +39,9 @@ pub struct SystemOrchestrator {
     hardware: HardwareProfile,
     runtime_tuner: RuntimeTuner,
     game_profiles: crate::profiles::GameProfileManager,
+    battery_stats: crate::telemetry::battery_stats::BatteryStatsTracker,
+    last_battery_log_time: Option<std::time::Instant>,
+    last_battery_summary_time: Option<std::time::Instant>,
 }
 
 impl SystemOrchestrator {
@@ -175,6 +178,9 @@ impl SystemOrchestrator {
             adaptive_governor,
             last_load_sample: std::collections::HashMap::new(),
             background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler::new(),
+            battery_stats: crate::telemetry::battery_stats::BatteryStatsTracker::new(),
+            last_battery_log_time: None,
+            last_battery_summary_time: None,
         }
     }
 
@@ -387,6 +393,9 @@ impl SystemOrchestrator {
             adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState::new(1),
             last_load_sample: std::collections::HashMap::new(),
             background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler::new(),
+            battery_stats: crate::telemetry::battery_stats::BatteryStatsTracker::new(),
+            last_battery_log_time: None,
+            last_battery_summary_time: None,
         }
     }
 
@@ -894,6 +903,14 @@ impl RuntimeTask for SystemOrchestrator {
             .map(|t| t.elapsed().as_secs())
             .unwrap_or(0);
 
+        let current_now_ua = {
+            let path = format!("{}/current_now", self.hardware.battery_profile.path);
+            crate::sysfs::read_i64(&path).ok().or_else(|| {
+                let p2 = "/sys/class/power_supply/battery/current_now";
+                crate::sysfs::read_i64(p2).ok()
+            })
+        };
+
         let charging_inputs = crate::charging::ChargingInputs {
             battery_temp: bat_temp,
             charger_temp: c_temp,
@@ -908,7 +925,7 @@ impl RuntimeTask for SystemOrchestrator {
             urgent: false,
             seconds_since_plugged,
             charger_id: self.hardware.charging_profile.path.clone(),
-            current_now_ua: None,
+            current_now_ua,
             voltage_now_uv: None,
             charge_counter_uah: None,
         };
@@ -937,9 +954,48 @@ impl RuntimeTask for SystemOrchestrator {
         } else {
             ctx.config.profiles.poll_interval.saturating_mul(1000)
         };
+
+        let tick_interval_secs = ctx.sleep_ms / 1000;
+
         ctx.current_policy = Some(Self::policy_state_name(&final_policy).to_string());
 
-        // 10. JSON Telemetry
+        if ctx.config.profiles.battery_stats_enabled {
+            let drain_rate = self.battery_stats.record_sample(
+                bat_temp,
+                soc,
+                current_now_ua,
+                !is_screen_off,
+                is_gaming,
+                is_plugged,
+                long_idle,
+                tick_interval_secs,
+            );
+
+            let should_log = self.last_battery_log_time
+                .map(|t| t.elapsed().as_secs() >= 30)
+                .unwrap_or(true);
+
+            if should_log {
+                tracing::info!(
+                    target: "battery",
+                    "batt_temp={}C soc={}% current_ua={} drain={}%/hr screen_on={} gaming={} charging={}",
+                    bat_temp, soc,
+                    current_now_ua.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string()),
+                    drain_rate.map(|d| format!("{:.2}", d.percent_per_hour)).unwrap_or_else(|| "?".to_string()),
+                    !is_screen_off, is_gaming, is_plugged
+                );
+                self.last_battery_log_time = Some(std::time::Instant::now());
+            }
+
+            // also periodically log summary line, maybe every 10 min
+            let should_summary = self.last_battery_summary_time.map(|t| t.elapsed().as_secs() >= 600).unwrap_or(true);
+            if should_summary {
+                tracing::info!(target: "battery", "summary: {}", self.battery_stats.summary_line());
+                self.last_battery_summary_time = Some(std::time::Instant::now());
+            }
+        }
+
+        // 11. JSON Telemetry
         let telemetry = serde_json::json!({
             "timestamp": chrono::Utc::now().to_rfc3339(),
             "ai_temp": adj_temp,

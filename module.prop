@@ -1,7 +1,7 @@
 id=thermalai_rust
 name=ThermalAI - Intelligent Thermal Manager (Rust Edition)
-version=v3.0.3-beta
-versionCode=304
-author=ThermalAI Project
+version=v3.1.0-beta
+versionCode=310
+author=phoenix1708
 description=AI-driven adaptive thermal throttling for Android with capability-driven hardware discovery, validated system/bin daemon startup, adaptive charging, game-aware scheduling, and /data/local/tmp telemetry.
 updateJson=
