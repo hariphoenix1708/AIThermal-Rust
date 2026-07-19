@@ -24,6 +24,7 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
     let mut socket = Socket::new(NETLINK_KOBJECT_UEVENT)?;
     let addr = SocketAddr::new(std::process::id(), 1); // Multicast group 1 for uevents
     socket.bind(&addr)?;
+    tracing::info!("Screen netlink watcher: socket bound successfully, listening for uevents");
 
     let mut buf = vec![0; 8192];
 

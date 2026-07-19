@@ -21,6 +21,9 @@ use anyhow::Result;
 use tracing::{info, warn};
 
 pub struct SystemOrchestrator {
+    adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState,
+    last_load_sample: std::collections::HashMap<usize, crate::monitor::load_sampler::LoadSample>,
+    background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler,
     sensors: SensorManager,
     thermal: ThermalEngine,
     prediction: PredictionEngine,
@@ -115,6 +118,7 @@ impl SystemOrchestrator {
         base
     }
     pub fn new(ctx: &RuntimeContext, hardware: HardwareProfile) -> Self {
+        let adaptive_governor = crate::scheduler::adaptive_governor::AdaptiveGovernorState::new(1);
         // Initialize subsystems
         let mut sensors = SensorManager::new();
         sensors.discover_hardware(&hardware);
@@ -168,6 +172,9 @@ impl SystemOrchestrator {
             hardware,
             runtime_tuner,
             game_profiles: crate::profiles::GameProfileManager::new(&ctx.state_dir),
+            adaptive_governor,
+            last_load_sample: std::collections::HashMap::new(),
+            background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler::new(),
         }
     }
 
@@ -377,6 +384,9 @@ impl SystemOrchestrator {
             hardware,
             runtime_tuner: RuntimeTuner::new(HardwareProfile::default()),
             game_profiles: crate::profiles::GameProfileManager::new(""),
+            adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState::new(1),
+            last_load_sample: std::collections::HashMap::new(),
+            background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler::new(),
         }
     }
 
@@ -642,6 +652,7 @@ impl RuntimeTask for SystemOrchestrator {
         // Check if tweaks are disabled
         let disable_tweaks = ctx.config.profiles.disable_tweaks;
 
+
         if !disable_tweaks {
             // If game was just detected and confirmed, try pinning critical render thread
             if is_gaming && !was_gaming {
@@ -749,6 +760,63 @@ impl RuntimeTask for SystemOrchestrator {
                     }
                     if let Err(e) = self.cpuset.apply_cpuset("powersave") {
                         tracing::warn!("Failed to apply cpuset: {}", e);
+                    }
+                }
+            }
+        }
+
+        if ctx.config.profiles.adaptive_governor_enabled
+            && is_gaming
+            && !ctx.recovery_mode
+            && final_policy == PolicyState::Performance
+        {
+            if self.adaptive_governor.should_sample() {
+                self.background_frame_sampler.set_target_package(confirmed_pkg.clone());
+                let frame_stats = self.background_frame_sampler.latest_stats();
+
+                let current_stats = crate::monitor::load_sampler::read_cpu_stat();
+                let utilization = if !self.last_load_sample.is_empty() {
+                    // Average utilization across all CPU indices present in both samples.
+                    let mut total_util = 0.0f32;
+                    let mut count = 0;
+                    for (idx, curr) in &current_stats {
+                        if let Some(prev) = self.last_load_sample.get(idx) {
+                            total_util += crate::monitor::load_sampler::compute_utilization(prev, curr);
+                            count += 1;
+                        }
+                    }
+                    if count > 0 { total_util / count as f32 } else { 0.5 } // safe default only if no prior sample overlapped
+                } else {
+                    0.5 // first-ever sample this daemon run - no previous data to delta against yet
+                };
+                self.last_load_sample = current_stats;
+
+                let tier = self.adaptive_governor.decide_tier(frame_stats.as_ref(), utilization);
+
+                for cluster in &self.hardware.cpu_topology.clusters {
+                    let target = match tier {
+                        crate::scheduler::adaptive_governor::FrequencyTier::Max => crate::governors::GovernorManager::max_freq(&cluster.available_frequencies),
+                        crate::scheduler::adaptive_governor::FrequencyTier::High => {
+                            let min = crate::governors::GovernorManager::min_freq(&cluster.available_frequencies).unwrap_or(0);
+                            let max = crate::governors::GovernorManager::max_freq(&cluster.available_frequencies).unwrap_or(0);
+                            let midpoint = (min + max) / 2;
+                            // Snap to the closest value actually present in this cluster's real
+                            // frequency table, rather than trusting an arithmetic midpoint to be a
+                            // valid step.
+                            cluster.available_frequencies
+                                .iter()
+                                .copied()
+                                .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
+                        },
+                        crate::scheduler::adaptive_governor::FrequencyTier::Balanced => crate::governors::GovernorManager::mid_freq(&cluster.available_frequencies),
+                        crate::scheduler::adaptive_governor::FrequencyTier::Eco => crate::governors::GovernorManager::min_freq(&cluster.available_frequencies),
+                    };
+
+                    if let Some(freq) = target {
+                        let path = format!("{}/scaling_max_freq", cluster.policy_path);
+                        if crate::tuning::backend::TuningBackend::try_write_string(&path, &freq.to_string()).is_ok() {
+                            tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+                        }
                     }
                 }
             }

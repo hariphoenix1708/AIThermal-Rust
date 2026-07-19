@@ -32,6 +32,7 @@ pub struct Daemon {
     reload_flag: Arc<AtomicBool>,
     screen_on: Arc<AtomicBool>,
     last_screen_netlink_update: Arc<AtomicU64>,
+    was_netlink_fresh_last_check: bool,
 }
 
 impl Daemon {
@@ -73,16 +74,26 @@ impl Daemon {
             reload_flag: Arc::new(AtomicBool::new(false)),
             screen_on: Arc::new(AtomicBool::new(!initial_screen_off)),
             last_screen_netlink_update: Arc::new(AtomicU64::new(now)),
+            was_netlink_fresh_last_check: true,
         }
     }
 
-    fn check_screen_off(&self) -> bool {
+    fn check_screen_off(&mut self) -> bool {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
         let last_update = self.last_screen_netlink_update.load(Ordering::SeqCst);
-        let netlink_off = !self.screen_on.load(Ordering::SeqCst);
+        let netlink_fresh = now >= last_update && (now - last_update) < 60;
 
-        if now >= last_update && (now - last_update) < 60 {
-            netlink_off
+        if netlink_fresh != self.was_netlink_fresh_last_check {
+            if netlink_fresh {
+                tracing::info!("Screen state: netlink watcher is providing fresh updates");
+            } else {
+                tracing::warn!("Screen state: netlink watcher has not reported in 60+s, falling back to polling");
+            }
+            self.was_netlink_fresh_last_check = netlink_fresh;
+        }
+
+        if netlink_fresh {
+            !self.screen_on.load(Ordering::SeqCst)
         } else {
             crate::hardware::display::is_screen_off()
         }
