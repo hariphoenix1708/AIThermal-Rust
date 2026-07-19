@@ -2,6 +2,14 @@
 
 A highly optimized, adaptive thermal and performance orchestrator for Android devices, natively written in Rust for safety, minimal overhead, and rigorous stability. It scales device responsiveness intelligently across dynamic system states (Idle, Gaming, Charging, Emergency).
 
+## ⚠️ Disclaimer
+
+This is an independent project, provided as-is with no warranty. **Use at your
+own risk.** This module was built and tested specifically on a **POCO F6
+(peridot)** running HyperOS 3 - it may or may not work correctly on other
+devices. See [DISCLAIMER.md](./DISCLAIMER.md) for the full disclaimer, warranty,
+and device-compatibility statement before installing.
+
 ## Project Overview & Architecture
 
 AIThermal-Rust replaces legacy shell-based orchestration with a memory-safe, deterministic, and highly concurrent Rust daemon.
@@ -96,6 +104,7 @@ Logs are generated locally under `THERMALAI_LOG_DIR` (default: `/data/local/tmp/
 - `thermalai.log`: Standard info-level lifecycle and policy transitions.
 - `thermalai_startup.log`: Launcher contract, resolved paths, stale PID cleanup, and daemon validation.
 - `thermalai_verbose.log`: Granular trace-level tick telemetry.
+- `thermalai_battery.log`: Detailed battery/power statistics (temperature, drain rate, screen-on/off/deep-sleep).
 
 Runtime logs are truncated in place every 2 hours to keep `/data/local/tmp` bounded without moving log paths away from the Android-side diagnostics workflow.
 

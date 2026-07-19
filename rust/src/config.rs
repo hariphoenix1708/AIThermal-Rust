@@ -45,6 +45,12 @@ pub struct ProfilesConfig {
     pub disable_tweaks: bool,
     #[serde(default = "default_adaptive_governor_enabled")]
     pub adaptive_governor_enabled: bool,
+    #[serde(default = "default_true")]
+    pub battery_stats_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 // Default providers for Serde fallback
@@ -127,6 +133,7 @@ impl Default for ProfilesConfig {
             gaming_score_boost: default_gaming_score_boost(),
             adaptive_governor_enabled: default_adaptive_governor_enabled(),
             disable_tweaks: default_disable_tweaks(),
+            battery_stats_enabled: default_true(),
         }
     }
 }
