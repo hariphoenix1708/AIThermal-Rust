@@ -14,6 +14,8 @@ pub struct PolicyEngine {
     pub current_policy: PolicyState,
     debounce_ticks: u64,
     ticks_since_change: u64,
+    startup_time: std::time::Instant,
+    startup_grace_secs: u64,
 }
 
 impl PolicyEngine {
@@ -31,6 +33,8 @@ impl PolicyEngine {
             current_policy: PolicyState::Balanced,
             debounce_ticks,
             ticks_since_change: 0,
+            startup_time: std::time::Instant::now(),
+            startup_grace_secs: 30, // Default 30s grace period for inputs to stabilize
         }
     }
 
@@ -102,6 +106,12 @@ impl PolicyEngine {
             return desired;
         }
 
+        // Startup grace period: hold at Balanced to prevent early instability
+        if self.startup_time.elapsed().as_secs() < self.startup_grace_secs {
+            self.current_policy = PolicyState::Balanced;
+            return self.current_policy.clone();
+        }
+
         // Apply debounce for normal transitions to prevent rapid flapping
         if desired != self.current_policy && self.ticks_since_change >= self.debounce_ticks {
             const HYSTERESIS_MARGIN: f64 = 8.0;
@@ -133,6 +143,8 @@ mod tests {
     #[test]
     fn test_policy_evaluation_and_debounce() {
         let mut engine = PolicyEngine::new(10, 2); // 5 ticks debounce
+        // bypass startup grace period for normal tests
+        engine.startup_grace_secs = 0;
         let config = ProfilesConfig::default();
 
         // Screen off doesn't override immediately unless score is low and ticks > 10
