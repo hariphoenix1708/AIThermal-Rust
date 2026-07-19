@@ -89,10 +89,10 @@ impl PolicyEngine {
             PolicyState::Performance
         };
 
-        self.apply_transition(desired)
+        self.apply_transition(desired, total_score)
     }
 
-    fn apply_transition(&mut self, desired: PolicyState) -> PolicyState {
+    fn apply_transition(&mut self, desired: PolicyState, total_score: f64) -> PolicyState {
         // Immediate escalate for Emergency or Suspend
         if desired == PolicyState::EmergencyCool || desired == PolicyState::Suspend {
             if self.current_policy != desired {
@@ -104,8 +104,22 @@ impl PolicyEngine {
 
         // Apply debounce for normal transitions to prevent rapid flapping
         if desired != self.current_policy && self.ticks_since_change >= self.debounce_ticks {
-            self.current_policy = desired.clone();
-            self.ticks_since_change = 0;
+            const HYSTERESIS_MARGIN: f64 = 8.0;
+
+            let desired_rank = policy_rank(&desired);
+            let current_rank = policy_rank(&self.current_policy);
+
+            let allowed = if desired_rank >= current_rank {
+                true // always allow becoming MORE conservative immediately (safety)
+            } else {
+                // Becoming LESS conservative - require clearing the margin.
+                total_score < threshold_for_rank(current_rank) - HYSTERESIS_MARGIN
+            };
+
+            if allowed {
+                self.current_policy = desired.clone();
+                self.ticks_since_change = 0;
+            }
         }
 
         self.current_policy.clone()
@@ -152,5 +166,26 @@ mod tests {
         // Rise to warm
         engine.ticks_since_change = 10;
         let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, &config);
+    }
+}
+
+fn policy_rank(policy: &PolicyState) -> u8 {
+    match policy {
+        PolicyState::Performance => 0,
+        PolicyState::Balanced => 1,
+        PolicyState::Conservative => 2,
+        PolicyState::Powersave => 3,
+        PolicyState::Suspend => 4,
+        PolicyState::EmergencyCool => 5,
+    }
+}
+
+fn threshold_for_rank(rank: u8) -> f64 {
+    match rank {
+        0 => f64::MIN,
+        1 => 15.0,
+        2 => 40.0,
+        3 => 65.0,
+        _ => f64::MAX,
     }
 }

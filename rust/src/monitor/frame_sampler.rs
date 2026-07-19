@@ -1,5 +1,7 @@
 use std::process::Command;
-use std::time::Instant;
+use std::time::{Instant};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone, Default)]
 pub struct FrameStats {
@@ -93,4 +95,60 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
         worst_frame_ns,
         sampled_at: Some(Instant::now()),
     })
+}
+
+pub struct BackgroundFrameSampler {
+    latest: Arc<Mutex<Option<FrameStats>>>,
+    package: Arc<Mutex<Option<String>>>,
+    running: Arc<AtomicBool>,
+}
+
+impl BackgroundFrameSampler {
+    pub fn new() -> Self {
+        let latest = Arc::new(Mutex::new(None));
+        let package = Arc::new(Mutex::new(None::<String>));
+        let running = Arc::new(AtomicBool::new(true));
+
+        let latest_thread = latest.clone();
+        let package_thread = package.clone();
+        let running_thread = running.clone();
+
+        std::thread::spawn(move || {
+            while running_thread.load(Ordering::SeqCst) {
+                let pkg_opt = package_thread.lock().ok().and_then(|p| p.clone());
+                if let Some(pkg) = pkg_opt {
+                    // This blocking call now happens on ITS OWN thread only -
+                    // it can take however long it takes without affecting the
+                    // main daemon thread at all.
+                    let result = sample_frame_stats(&pkg);
+                    if let Ok(mut slot) = latest_thread.lock() {
+                        *slot = result;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+            }
+        });
+
+        Self { latest, package, running }
+    }
+
+    /// Called from the main tick loop (cheap, non-blocking - just updates
+    /// which package the background thread should be sampling).
+    pub fn set_target_package(&self, pkg: Option<String>) {
+        if let Ok(mut slot) = self.package.lock() {
+            *slot = pkg;
+        }
+    }
+
+    /// Called from the main tick loop (cheap, non-blocking - just reads
+    /// whatever the background thread most recently produced, if anything).
+    pub fn latest_stats(&self) -> Option<FrameStats> {
+        self.latest.lock().ok().and_then(|s| s.clone())
+    }
+}
+
+impl Drop for BackgroundFrameSampler {
+    fn drop(&mut self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
 }

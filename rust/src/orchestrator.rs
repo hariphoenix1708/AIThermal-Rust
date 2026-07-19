@@ -23,6 +23,7 @@ use tracing::{info, warn};
 pub struct SystemOrchestrator {
     adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState,
     last_load_sample: std::collections::HashMap<usize, crate::monitor::load_sampler::LoadSample>,
+    background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler,
     sensors: SensorManager,
     thermal: ThermalEngine,
     prediction: PredictionEngine,
@@ -173,6 +174,7 @@ impl SystemOrchestrator {
             game_profiles: crate::profiles::GameProfileManager::new(&ctx.state_dir),
             adaptive_governor,
             last_load_sample: std::collections::HashMap::new(),
+            background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler::new(),
         }
     }
 
@@ -384,6 +386,7 @@ impl SystemOrchestrator {
             game_profiles: crate::profiles::GameProfileManager::new(""),
             adaptive_governor: crate::scheduler::adaptive_governor::AdaptiveGovernorState::new(1),
             last_load_sample: std::collections::HashMap::new(),
+            background_frame_sampler: crate::monitor::frame_sampler::BackgroundFrameSampler::new(),
         }
     }
 
@@ -768,8 +771,8 @@ impl RuntimeTask for SystemOrchestrator {
             && final_policy == PolicyState::Performance
         {
             if self.adaptive_governor.should_sample() {
-                let frame_stats = confirmed_pkg.as_deref()
-                    .and_then(crate::monitor::frame_sampler::sample_frame_stats);
+                self.background_frame_sampler.set_target_package(confirmed_pkg.clone());
+                let frame_stats = self.background_frame_sampler.latest_stats();
 
                 let current_stats = crate::monitor::load_sampler::read_cpu_stat();
                 let utilization = if !self.last_load_sample.is_empty() {
