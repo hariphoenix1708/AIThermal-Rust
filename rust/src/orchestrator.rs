@@ -1021,6 +1021,8 @@ impl RuntimeTask for SystemOrchestrator {
             "sleep_ms": ctx.sleep_ms,
             "session_peak_temp": ctx.game_session_peak_temp,
             "session_started_at": ctx.game_session_started_at.map(|t| chrono::Utc::now().timestamp() - t.elapsed().as_secs() as i64),
+            "legacy_write_failures": crate::tuning::backend::TuningBackend::legacy_write_failure_count(),
+            "frame_stats_parse_ok": crate::monitor::frame_sampler::last_parse_ok(),
         });
 
         crate::telemetry::writer::write_telemetry(ctx, &telemetry);

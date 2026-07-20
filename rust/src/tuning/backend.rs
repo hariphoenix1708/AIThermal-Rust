@@ -3,6 +3,9 @@ use crate::sysfs;
 use std::path::Path;
 use thiserror::Error;
 use tracing::warn;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static LEGACY_WRITE_FAILURES: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Error, Debug)]
 pub enum BackendError {
@@ -21,8 +24,13 @@ impl TuningBackend {
     pub fn write_string<P: AsRef<Path>, S: AsRef<str>>(path: P, value: S) {
         let p = path.as_ref();
         if let Err(e) = sysfs::write_string(p, value.as_ref()) {
+            LEGACY_WRITE_FAILURES.fetch_add(1, Ordering::Relaxed);
             warn!("TuningBackend: legacy write failed {}: {}", p.display(), e);
         }
+    }
+
+    pub fn legacy_write_failure_count() -> u64 {
+        LEGACY_WRITE_FAILURES.load(Ordering::Relaxed)
     }
 
     pub fn try_write_string<P: AsRef<Path>, S: AsRef<str>>(

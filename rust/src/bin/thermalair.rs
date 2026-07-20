@@ -207,15 +207,21 @@ fn show_temps() {
     let state_file = std::env::var("THERMALAI_STATE_DIR")
         .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string())
         + "/thermalai_state.json";
-    if let Ok(content) = std::fs::read_to_string(&state_file) {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            println!(
-                "Temps: {:?}",
-                json.get("ai_temp").unwrap_or(&serde_json::Value::Null)
-            );
+    match std::fs::read_to_string(&state_file) {
+        Err(_) => println!("Daemon not running (no state file found)"),
+        Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+            Err(_) => println!("State file present but unreadable"),
+            Ok(json) => {
+                if json.get("ai_temp").is_none() && json.get("status").and_then(|s| s.as_str()) == Some("starting") {
+                    println!("Daemon running, waiting for first tick to complete");
+                } else {
+                    println!(
+                        "Temps: {:?}",
+                        json.get("ai_temp").unwrap_or(&serde_json::Value::Null)
+                    );
+                }
+            }
         }
-    } else {
-        println!("State not available");
     }
 }
 
@@ -223,15 +229,21 @@ fn show_policy() {
     let state_file = std::env::var("THERMALAI_STATE_DIR")
         .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string())
         + "/thermalai_state.json";
-    if let Ok(content) = std::fs::read_to_string(&state_file) {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            println!(
-                "Policy: {:?}",
-                json.get("policy").unwrap_or(&serde_json::Value::Null)
-            );
+    match std::fs::read_to_string(&state_file) {
+        Err(_) => println!("Daemon not running (no state file found)"),
+        Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+            Err(_) => println!("State file present but unreadable"),
+            Ok(json) => {
+                if json.get("policy").is_none() && json.get("status").and_then(|s| s.as_str()) == Some("starting") {
+                    println!("Daemon running, waiting for first tick to complete");
+                } else {
+                    println!(
+                        "Policy: {:?}",
+                        json.get("policy").unwrap_or(&serde_json::Value::Null)
+                    );
+                }
+            }
         }
-    } else {
-        println!("State not available");
     }
 }
 
@@ -239,15 +251,21 @@ fn show_gaming() {
     let state_file = std::env::var("THERMALAI_STATE_DIR")
         .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string())
         + "/thermalai_state.json";
-    if let Ok(content) = std::fs::read_to_string(&state_file) {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            println!(
-                "Gaming: {:?}",
-                json.get("gaming").unwrap_or(&serde_json::Value::Null)
-            );
+    match std::fs::read_to_string(&state_file) {
+        Err(_) => println!("Daemon not running (no state file found)"),
+        Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+            Err(_) => println!("State file present but unreadable"),
+            Ok(json) => {
+                if json.get("gaming").is_none() && json.get("status").and_then(|s| s.as_str()) == Some("starting") {
+                    println!("Daemon running, waiting for first tick to complete");
+                } else {
+                    println!(
+                        "Gaming: {:?}",
+                        json.get("gaming").unwrap_or(&serde_json::Value::Null)
+                    );
+                }
+            }
         }
-    } else {
-        println!("State not available");
     }
 }
 
