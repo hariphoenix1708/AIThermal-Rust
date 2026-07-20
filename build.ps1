@@ -72,6 +72,9 @@ if (Test-Path $srcPath) {
         New-Item -ItemType Directory -Force -Path (Join-Path $StagingDir "system\bin") | Out-Null
 
         Copy-Item -Path "META-INF", "config", "module.prop", "service.sh", "customize.sh", "sepolicy.rule", "uninstall.sh" -Destination $StagingDir -Recurse -Force
+        if (Test-Path "webroot") {
+            Copy-Item -Path "webroot" -Destination $StagingDir -Recurse -Force
+        }
         Copy-Item -Path "rust\target\aarch64-linux-android\release\thermalai-daemon" -Destination (Join-Path $StagingDir "system\bin\thermalai-daemon") -Force
         Copy-Item -Path "rust\target\aarch64-linux-android\release\thermalai-detect" -Destination (Join-Path $StagingDir "system\bin\thermalai-detect") -Force
         Copy-Item -Path "rust\target\aarch64-linux-android\release\thermalair" -Destination (Join-Path $StagingDir "system\bin\thermalair") -Force
@@ -82,7 +85,7 @@ if (Test-Path $srcPath) {
 
         Write-Host "Enforcing LF line endings for Android shell scripts..."
         $TextFiles = Get-ChildItem -Path $StagingDir -Recurse -File | Where-Object {
-            $_.Extension -in @(".sh", ".prop", ".conf", ".md", ".rule") -or $_.Name -in @("update-binary", "updater-script")
+            $_.Extension -in @(".sh", ".prop", ".conf", ".md", ".rule", ".html", ".css", ".js") -or $_.Name -in @("update-binary", "updater-script")
         }
         foreach ($file in $TextFiles) {
             $text = [System.IO.File]::ReadAllText($file.FullName)

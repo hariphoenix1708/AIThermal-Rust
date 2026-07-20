@@ -46,20 +46,23 @@ if [ -f "$SRC_PATH" ]; then
     mkdir -p "$STAGING_DIR"
     mkdir -p "$STAGING_DIR/system/bin"
     cp -R META-INF config module.prop service.sh customize.sh sepolicy.rule uninstall.sh "$STAGING_DIR/"
+    if [ -d webroot ]; then
+        cp -R webroot "$STAGING_DIR/"
+    fi
     cp "rust/target/aarch64-linux-android/release/thermalai-daemon" "$STAGING_DIR/system/bin/thermalai-daemon"
     cp "rust/target/aarch64-linux-android/release/thermalai-detect" "$STAGING_DIR/system/bin/thermalai-detect"
     cp "rust/target/aarch64-linux-android/release/thermalair" "$STAGING_DIR/system/bin/thermalair"
     verify_android_arm64_elf "$STAGING_DIR/system/bin/thermalai-daemon"
     verify_android_arm64_elf "$STAGING_DIR/system/bin/thermalai-detect"
     verify_android_arm64_elf "$STAGING_DIR/system/bin/thermalair"
-    find "$STAGING_DIR" -type f \( -name '*.sh' -o -name '*.prop' -o -name '*.conf' -o -name '*.md' -o -name '*.rule' -o -name update-binary -o -name updater-script \) -exec sed -i 's/\r$//' {} +
+    find "$STAGING_DIR" -type f \( -name '*.sh' -o -name '*.prop' -o -name '*.conf' -o -name '*.md' -o -name '*.rule' -o -name '*.html' -o -name '*.css' -o -name '*.js' -o -name update-binary -o -name updater-script \) -exec sed -i 's/\r$//' {} +
 
     echo "Zipping module..."
     rm -f AIThermal-Rust.zip
     if command -v 7z >/dev/null 2>&1; then
         (cd "$STAGING_DIR" && 7z a -tzip "$SCRIPT_DIR/AIThermal-Rust.zip" ./*)
     else
-        (cd "$STAGING_DIR" && zip -r "$SCRIPT_DIR/AIThermal-Rust.zip" META-INF system config module.prop service.sh customize.sh sepolicy.rule uninstall.sh)
+        (cd "$STAGING_DIR" && zip -r "$SCRIPT_DIR/AIThermal-Rust.zip" .)
     fi
     rm -rf "$STAGING_DIR"
     echo "Build complete."
