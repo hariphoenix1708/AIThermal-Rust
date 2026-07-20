@@ -144,53 +144,6 @@ impl GameProfileManager {
             })
     }
 
-    pub fn get_game_profile_modifier(&self, package: &str, session_seconds: u64) -> f64 {
-        if let Some(profile) = self.profiles.get(package) {
-            let p_fac = match profile.last_policy.as_str() {
-                "Performance" | "performance" => 1.5,
-                "Balanced" | "balanced" => 1.0,
-                _ => 0.8,
-            };
-
-            let mut modifier = 0.0;
-
-            if profile.known_hot {
-                modifier -= 25.0 * p_fac;
-            } else {
-                modifier += 5.0 * p_fac;
-            }
-
-            if profile.slow_cooler_flag {
-                modifier -= 10.0;
-            }
-
-            if session_seconds > 3600 {
-                modifier -= 20.0;
-            } else if session_seconds > 1800 {
-                modifier -= 10.0;
-            }
-
-            // Residual heat check based on last game end
-            if let Some(last_end) = profile.last_game_end_at {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-
-                let time_since_last_game = now.saturating_sub(last_end);
-
-                // If started gaming again within 30 mins, add penalty
-                if time_since_last_game < 1800 && profile.known_hot {
-                    modifier -= 5.0;
-                }
-            }
-
-            modifier
-        } else {
-            0.0
-        }
-    }
-
     pub fn get_profile(&self, package: &str) -> Option<&GameProfile> {
         self.profiles.get(package)
     }

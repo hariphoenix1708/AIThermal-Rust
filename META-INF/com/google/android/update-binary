@@ -4,7 +4,7 @@
 SKIPUNZIP=1
 
 ui_print "-----------------------------------------"
-ui_print "   ThermalAI v3.0.1-beta - Rust Edition"
+ui_print "   ThermalAI v3.1.0-beta - Rust Edition"
 ui_print "   Device Edition: Universal Android"
 ui_print "   Linux 4.14+ / AOSP / HyperOS"
 ui_print "-----------------------------------------"
@@ -26,6 +26,7 @@ STATE_DIR="${THERMALAI_STATE_DIR:-/data/local/tmp/thermalai_state}"
 rm -f "$LOG_DIR/thermalai.log"
 rm -f "$LOG_DIR/thermalai_verbose.log"
 rm -f "$LOG_DIR/thermalai_startup.log"
+rm -f "$LOG_DIR/thermalai_battery.log"
 rm -f "$LOG_DIR/thermalai.pid"
 rm -f "$LOG_DIR/thermalai.pid.lock"
 rm -rf "$STATE_DIR"

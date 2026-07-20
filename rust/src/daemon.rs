@@ -181,7 +181,7 @@ impl Daemon {
             let was_screen_off = self.check_screen_off();
             // Tune segment_ms: smaller reacts faster but polls screen state more often during idle;
             // larger reduces file reads but increases worst-case wake latency.
-            let segment_ms: u64 = 500;
+            let segment_ms: u64 = 250;
             let mut elapsed_ms: u64 = 0;
 
             while elapsed_ms < sleep_ms {

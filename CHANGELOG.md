@@ -1,5 +1,16 @@
 # Changelog
 
+## [v3.1.0-beta] - Major Features and Stability Update
+
+*   **Adaptive Governor**: Added an opt-in, frame-timing-and-load-aware CPU frequency governor (`adaptive_governor_enabled`) during active gaming, using real per-frame data via `dumpsys` where available, with a CPU-load-based fallback.
+*   **Policy Stability**: Introduced policy engine hysteresis to prevent rapid governor flapping near threshold boundaries, and a 30-second startup grace period to stabilize initial daemon evaluation.
+*   **Netlink Screen Detection**: Implemented low-latency `uevent` screen-state detection as a complement to polling, including a broadened-match mode for compatibility across diverse kernel uevent behaviors.
+*   **Game Detection Hardening**: Implemented `top-app` cgroup-based confirmation for game detection, reducing false positives from background processes sharing package names. Corrected previous substring matching to exact full-string matching.
+*   **Battery Telemetry**: Added new dedicated battery/power statistics logging (`thermalai_battery.log`) to track temperature, charge current, drain rate, and screen-on/off/deep-sleep time.
+*   **Thermal Engine Management**: Expanded stock-thermal-engine disablement to clear per-core thermal limits (`thermal_message/cpu_limits`).
+*   **GPU & Daemon Coordination**: Added KGSL GPU `bus_split`/`force_clk_on` tuning during active gameplay. Updated `service.sh` to explicitly coordinate and stop conflicting Xiaomi/HyperOS performance daemons.
+*   **Reliability Improvements**: Improved charging current-limit application reliability, enhanced uninstall/reinstall cleanup processes, and fixed log rotation edge cases.
+
 ## [v3.0.3-beta] - Maintenance release
 
 *   **Version**: Bumped `module.prop` to `v3.0.3-beta` (versionCode `304`) for redistribution.
@@ -24,7 +35,7 @@
 *   **Charging Framework**: Corrected real `SOC` consumption logic and bounded hardware thermal reduction limits securely to `500mA`, guarding against `urgent` config drift by expiring invalid UNIX timestamps gracefully.
 *   **Hardware Discovery Expansion**: Upgraded the generic probe sequences. Safely maps TCP metrics, memory PSI 10/60/300s diagnostic stalls, block storage I/O parameters, explicit CPUSet mappings, and extracts valid features dynamically out of `/proc/config.gz`.
 *   **Peridot Match Validations**: Hardened POCO F6 matching to require rigorous corroboration spanning `ro.product.device`, `ro.boot.hardware`, and `ro.board.platform` before applying SD8sGen3 capabilities.
-*   **Gaming Intelligence**: Rewrote `scan_oom_score_adj` leveraging `startsWith` and `contains` substring resolution to handle Linux kernel truncation inside `/proc/[pid]/status`. *(Note: This approach was later found to cause false-positive detection and was replaced with exact-match-only comparison in [1.0.2] or later).*
+*   **Gaming Intelligence**: Rewrote `scan_oom_score_adj` leveraging `startsWith` and `contains` substring resolution to handle Linux kernel truncation inside `/proc/[pid]/status`. *(Note: This approach was later found to cause false-positive detection and was replaced with exact-match-only comparison in [v3.1.0-beta]).*
 *   **CLI Expansion**: Amplified the standalone `thermalair` console to parse policy triggers via history and support unified daemon `start/restart/stop` cycles cleanly across varied custom ROM layouts.
 *   **Runtime Tuning**: Ported I/O scheduler limits, TCP configuration states (BBR, keepalive), and VM swappiness metrics directly into the orchestrator policy transition loops cleanly reversing automatically.
 *   **Calibration & Learning**: Enforced a single `calibration.json` source tracking consecutive slow-cool decays cleanly constrained within a safe -6°C to +6°C drift limit dynamically across daemon restarts.
