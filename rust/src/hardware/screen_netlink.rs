@@ -37,6 +37,8 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
         // Parse null-separated variables in the uevent payload
         let payload = &buf[..len];
 
+        let payload_str = String::from_utf8_lossy(payload);
+
         let mut is_power_subsystem = false;
         let mut is_backlight_subsystem = false;
         let mut action = "";
@@ -59,7 +61,7 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
             }
         }
 
-        if is_power_subsystem {
+        if is_power_subsystem && (power_action == "early_suspend" || power_action == "late_resume") {
             if power_action == "early_suspend" {
                 screen_on.store(false, Ordering::SeqCst);
                 info!("Screen state changed via netlink: OFF");
@@ -74,9 +76,31 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
                 "Screen state changed via netlink (backlight change): {}",
                 if is_off { "OFF" } else { "ON" }
             );
+        } else {
+            let subsystem_hint = payload_str.contains("SUBSYSTEM=power")
+                || payload_str.contains("SUBSYSTEM=backlight")
+                || payload_str.contains("SUBSYSTEM=drm")
+                || payload_str.contains("SUBSYSTEM=graphics")
+                || payload_str.contains("panel");
+
+            if subsystem_hint {
+                let is_off = super::display::is_screen_off();
+                let currently_tracked_on = screen_on.load(Ordering::SeqCst);
+                if is_off == currently_tracked_on {
+                    screen_on.store(!is_off, Ordering::SeqCst);
+                    info!(
+                        "Screen state changed via netlink (broadened match): {}",
+                        if is_off { "OFF" } else { "ON" }
+                    );
+                }
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                last_update.store(now, Ordering::SeqCst);
+            }
         }
 
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-        last_update.store(now, Ordering::SeqCst);
+        if is_power_subsystem || is_backlight_subsystem {
+             let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+             last_update.store(now, Ordering::SeqCst);
+        }
     }
 }

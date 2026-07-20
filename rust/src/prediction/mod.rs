@@ -37,10 +37,9 @@ impl PredictionEngine {
         let mut sum_xy = 0.0;
         let mut sum_xx = 0.0;
 
-        let samples: Vec<i32> = history.into_iter().rev().take(n).collect();
-
-        // reverse back to chronological for correct slope
-        let samples: Vec<i32> = samples.into_iter().rev().collect();
+        // Take the last `n` samples (which are naturally chronological at the end of the history)
+        let skip_amount = history.len().saturating_sub(n);
+        let samples: Vec<i32> = history.into_iter().skip(skip_amount).collect();
 
         for (x, &y) in samples.iter().enumerate() {
             let x_f = x as f32;

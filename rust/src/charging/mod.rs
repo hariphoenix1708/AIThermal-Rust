@@ -164,6 +164,11 @@ impl ChargingEngine {
         }
     }
 
+    // NOTE: The specific mA target values below (4500, 2500, 5000, etc.) were empirically
+    // tuned against the POCO F6 (peridot) and its specific charger IC behavior. They should be
+    // treated as a starting point rather than universal constants if this code is ever adapted
+    // for a different device.
+    // See the TODO at the bottom of this file (line ~515) regarding manual probing if EINVAL persists.
     fn soc_target_ma(soc: u8, mode: &ChargeMode) -> i64 {
         match mode {
             ChargeMode::UnderLoad => {

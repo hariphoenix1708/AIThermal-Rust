@@ -2,9 +2,27 @@
 
 A highly optimized, adaptive thermal and performance orchestrator for Android devices, natively written in Rust for safety, minimal overhead, and rigorous stability. It scales device responsiveness intelligently across dynamic system states (Idle, Gaming, Charging, Emergency).
 
+## ⚠️ Disclaimer
+
+This is an independent project, provided as-is with no warranty. **Use at your
+own risk.** This module was built and tested specifically on a **POCO F6
+(peridot)** running HyperOS 3 - it may or may not work correctly on other
+devices. See [DISCLAIMER.md](./DISCLAIMER.md) for the full disclaimer, warranty,
+and device-compatibility statement before installing.
+
+*Please see [CHANGELOG.md](./CHANGELOG.md) for release notes and [LICENSE](./LICENSE) for the project license.*
+
 ## Project Overview & Architecture
 
 AIThermal-Rust replaces legacy shell-based orchestration with a memory-safe, deterministic, and highly concurrent Rust daemon.
+
+### Key Features
+*   **Adaptive Governor**: An opt-in, frame-timing-and-load-aware CPU frequency governor (`adaptive_governor_enabled`) that dynamically adjusts frequencies during active gaming based on real per-frame data (via `dumpsys`) with a CPU-load-based fallback.
+*   **Netlink Screen Detection**: Implements low-latency `uevent` screen-state detection to quickly trigger idle policies when the screen turns off. Includes a broadened-match mode for compatibility across diverse kernel uevent behaviors alongside a reliable polling fallback.
+*   **Advanced Game Detection**: Hardened game detection relying on exact full-string matching of process names, supplemented by a secondary `top-app` cgroup-based confirmation to prevent false positives from background processes that share package names.
+*   **Battery Telemetry**: Tracks detailed battery and power statistics—including temperature, charge current, drain rate (%/hr), and screen-on/off/deep-sleep times—logged to an isolated `thermalai_battery.log` file.
+*   **Dynamic Policy Stability**: Incorporates policy engine hysteresis to prevent rapid governor flapping near threshold boundaries, and a startup grace period to stabilize initial daemon evaluation.
+*   **Intelligent Tuning**: Reversibly applies network, VM, touch, and IO scheduler tweaks dynamically; extracts game PIDs to pin rendering threads into the `top-app` cpuset for extreme rendering latency optimization.
 
 ### Runtime Architecture
 The system operates on a tick-based orchestrator model:
@@ -52,24 +70,45 @@ By default, the active runtime writes JSON files safely via atomic renames insid
 
 Cross-compiling requires the Android NDK to be natively installed and available.
 
-### Windows 11 (Primary)
-1. Ensure the NDK is located at `C:\Android\android-ndk-r27d` (or define `ANDROID_NDK_HOME`).
-2. Map the target architecture:
+### Prerequisites
+
+- **Git**: [git-scm.com](https://git-scm.com/)
+- **Rust**: Install via `rustup-init` from [rustup.rs](https://rustup.rs/). Then run:
+  ```bash
+  rustup update
+  rustup default stable
+  ```
+- **Android NDK**: Download the latest stable NDK (e.g., `r27d`) from [Android Developers](https://developer.android.com/ndk/downloads).
+
+### Windows 11
+1. **Visual Studio 2022 Build Tools**: Required by Rust on Windows. Install the **"Desktop development with C++"** workload via the [Visual Studio Installer](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+2. Extract the NDK `.zip` to `C:\Android\android-ndk-r27d`.
+3. Add the Android aarch64 target to your Rust toolchain:
    ```powershell
    rustup target add aarch64-linux-android
    ```
-3. Use the included Powershell script to compile and package the module ZIP:
+4. Set your environment variables to point to the extracted NDK. Open PowerShell as Administrator and run:
+   ```powershell
+   [System.Environment]::SetEnvironmentVariable('ANDROID_NDK_HOME', 'C:\Android\android-ndk-r27d', 'User')
+   [System.Environment]::SetEnvironmentVariable('ANDROID_NDK_ROOT', 'C:\Android\android-ndk-r27d', 'User')
+   ```
+5. Use the included Powershell script to compile and package the module ZIP (it automatically uses 7-Zip if available in PATH or `C:\Program Files\7-Zip`):
    ```powershell
    .\build.ps1
    ```
 
 ### Linux / macOS
-1. Ensure the `ANDROID_NDK_HOME` environment variable is defined.
-2. Add the target:
+1. Extract the NDK `.zip` to a path like `~/android-ndk`.
+2. Ensure the `ANDROID_NDK_HOME` environment variable is defined (e.g., in your `~/.bashrc` or `~/.zshrc`):
+   ```bash
+   export ANDROID_NDK_HOME=~/android-ndk
+   export ANDROID_NDK_ROOT=~/android-ndk
+   ```
+3. Add the Android aarch64 target to your Rust toolchain:
    ```bash
    rustup target add aarch64-linux-android
    ```
-3. Run the shell equivalent compiler and packager:
+4. Run the shell equivalent compiler and packager. You will need the `zip` utility installed (e.g., `sudo apt install zip` on Debian/Ubuntu):
    ```bash
    ./build.sh
    ```
@@ -96,6 +135,7 @@ Logs are generated locally under `THERMALAI_LOG_DIR` (default: `/data/local/tmp/
 - `thermalai.log`: Standard info-level lifecycle and policy transitions.
 - `thermalai_startup.log`: Launcher contract, resolved paths, stale PID cleanup, and daemon validation.
 - `thermalai_verbose.log`: Granular trace-level tick telemetry.
+- `thermalai_battery.log`: Detailed battery/power statistics (temperature, drain rate, screen-on/off/deep-sleep).
 
 Runtime logs are truncated in place every 2 hours to keep `/data/local/tmp` bounded without moving log paths away from the Android-side diagnostics workflow.
 

@@ -11,6 +11,11 @@ use tracing::{error, info, warn};
 
 use crate::runtime_context::RuntimeContext;
 
+/// A pluggable unit of per-tick work the daemon drives. Currently only
+/// `SystemOrchestrator` is registered - this abstraction is intentionally
+/// kept generic so a second, independent task (e.g. a future telemetry
+/// server) could be added later without restructuring the daemon's main
+/// loop.
 pub trait RuntimeTask: Send + Sync {
     fn execute(&mut self, ctx: &mut RuntimeContext) -> Result<()>;
     fn cleanup(&mut self) {}
@@ -163,6 +168,17 @@ impl Daemon {
             return Err(e);
         }
 
+        // Write an initial minimal state file before the first tick
+        let startup_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let initial_state = serde_json::json!({
+            "startup_epoch": startup_epoch,
+            "status": "starting",
+        });
+        crate::telemetry::writer::write_telemetry(&self.ctx, &initial_state);
+
         self.running.store(true, Ordering::SeqCst);
 
         while self.running.load(Ordering::SeqCst) {
@@ -181,7 +197,7 @@ impl Daemon {
             let was_screen_off = self.check_screen_off();
             // Tune segment_ms: smaller reacts faster but polls screen state more often during idle;
             // larger reduces file reads but increases worst-case wake latency.
-            let segment_ms: u64 = 500;
+            let segment_ms: u64 = 250;
             let mut elapsed_ms: u64 = 0;
 
             while elapsed_ms < sleep_ms {
@@ -293,7 +309,7 @@ impl Daemon {
             // Spawn a monitor thread
             thread::spawn(move || {
                 while !TERMINATE.load(Ordering::SeqCst) {
-                    thread::sleep(Duration::from_millis(500));
+                    thread::sleep(Duration::from_millis(100));
                 }
                 warn!("Received SIGTERM. Initiating graceful shutdown...");
                 running_term.store(false, Ordering::SeqCst);

@@ -8,6 +8,24 @@ use std::path::Path;
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        tracing::error!("PANIC: {}", panic_info);
+        // Best-effort attempt to restore hardware to its snapshotted
+        // state before the process goes down - this cannot guarantee
+        // success (the panic may have occurred inside the restore path
+        // itself, or state may be inconsistent), but gives a real chance
+        // of avoiding a stuck sysfs state that would otherwise persist
+        // until the next clean daemon restart.
+        let state_dir = std::env::var("THERMALAI_STATE_DIR")
+            .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string());
+        if let Ok(hw) = thermalai_daemon::cache::load_profile(&state_dir) {
+            let snapshot = thermalai_daemon::snapshot::SnapshotManager::new(&state_dir, hw);
+            snapshot.restore_snapshot();
+        }
+        default_hook(panic_info);
+    }));
+
     let module_dir = env::var("THERMALAI_MODULE_DIR").unwrap_or_else(|_| {
         std::env::current_exe()
             .unwrap_or_else(|_| PathBuf::from("."))

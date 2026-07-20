@@ -3,6 +3,12 @@ use std::time::{Instant};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+static LAST_PARSE_OK: AtomicBool = AtomicBool::new(true);
+
+pub fn last_parse_ok() -> bool {
+    LAST_PARSE_OK.load(Ordering::Relaxed)
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct FrameStats {
     pub sample_count: usize,
@@ -34,11 +40,14 @@ pub fn sample_frame_stats(package: &str) -> Option<FrameStats> {
         .ok()?;
 
     if !output.status.success() {
+        LAST_PARSE_OK.store(false, Ordering::Relaxed);
         return None;
     }
 
     let text = String::from_utf8_lossy(&output.stdout);
-    parse_framestats(&text, DEFAULT_FRAME_BUDGET_NS)
+    let result = parse_framestats(&text, DEFAULT_FRAME_BUDGET_NS);
+    LAST_PARSE_OK.store(result.is_some(), Ordering::Relaxed);
+    result
 }
 
 fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
