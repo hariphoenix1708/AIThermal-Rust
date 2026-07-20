@@ -25,4 +25,11 @@ chmod 0755 "$MODPATH/service.sh" 2>/dev/null
 chmod 0755 "$MODPATH/uninstall.sh" 2>/dev/null
 chmod 0644 "$MODPATH/sepolicy.rule" 2>/dev/null
 
+# KernelSU WebUI assets (served when user taps the module in KernelSU Manager)
+if [ -d "$MODPATH/webroot" ]; then
+    find "$MODPATH/webroot" -type d -exec chmod 0755 {} \; 2>/dev/null
+    find "$MODPATH/webroot" -type f -exec chmod 0644 {} \; 2>/dev/null
+    ui_print "  ThermalAI WebUI installed (KernelSU Manager -> tap module)"
+fi
+
 ui_print "  ThermalAI install-time setup complete"
