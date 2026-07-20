@@ -16,6 +16,14 @@ and device-compatibility statement before installing.
 
 AIThermal-Rust replaces legacy shell-based orchestration with a memory-safe, deterministic, and highly concurrent Rust daemon.
 
+### Key Features
+*   **Adaptive Governor**: An opt-in, frame-timing-and-load-aware CPU frequency governor (`adaptive_governor_enabled`) that dynamically adjusts frequencies during active gaming based on real per-frame data (via `dumpsys`) with a CPU-load-based fallback.
+*   **Netlink Screen Detection**: Implements low-latency `uevent` screen-state detection to quickly trigger idle policies when the screen turns off. Includes a broadened-match mode for compatibility across diverse kernel uevent behaviors alongside a reliable polling fallback.
+*   **Advanced Game Detection**: Hardened game detection relying on exact full-string matching of process names, supplemented by a secondary `top-app` cgroup-based confirmation to prevent false positives from background processes that share package names.
+*   **Battery Telemetry**: Tracks detailed battery and power statistics—including temperature, charge current, drain rate (%/hr), and screen-on/off/deep-sleep times—logged to an isolated `thermalai_battery.log` file.
+*   **Dynamic Policy Stability**: Incorporates policy engine hysteresis to prevent rapid governor flapping near threshold boundaries, and a startup grace period to stabilize initial daemon evaluation.
+*   **Intelligent Tuning**: Reversibly applies network, VM, touch, and IO scheduler tweaks dynamically; extracts game PIDs to pin rendering threads into the `top-app` cpuset for extreme rendering latency optimization.
+
 ### Runtime Architecture
 The system operates on a tick-based orchestrator model:
 1. **`main.rs` & `daemon.rs`**: Initialize the environment, acquire process locks, load static caches, and maintain the isolated `RuntimeContext` which acts as the single source of truth for all tick-level state (e.g. cooldowns, active policy, hardware limits).

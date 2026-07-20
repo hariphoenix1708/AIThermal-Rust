@@ -7,6 +7,8 @@ allow su binder_device chr_file { read write open ioctl getattr }
 allow init binder_device chr_file { read write open ioctl getattr }
 allow su self tcp_socket { create read write bind connect listen accept getopt setopt shutdown }
 allow init self tcp_socket { create read write bind connect listen accept getopt setopt shutdown }
+allow su self netlink_kobject_uevent_socket { create bind read getopt setopt }
+allow init self netlink_kobject_uevent_socket { create bind read getopt setopt }
 allow su proc file { read open getattr }
 allow su sysfs file { read open write getattr }
 allow su sysfs dir { read open search getattr }
