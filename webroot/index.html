@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0d14" />
+  <title>ThermalAI · Control Center</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="currentColor" d="M12 2a3 3 0 0 0-3 3v8.17a5 5 0 1 0 6 0V5a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v9.05a3 3 0 1 1-2 0V5a1 1 0 0 1 1-1Z"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">ThermalAI</div>
+          <div class="brand-sub" id="brandSub">Rust · v—</div>
+        </div>
+      </div>
+      <div class="status-pill" id="daemonPill" data-state="unknown">
+        <span class="dot"></span><span id="daemonPillText">checking…</span>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="policy">Policy</button>
+      <button class="tab" data-tab="gaming">Gaming</button>
+      <button class="tab" data-tab="charging">Charging</button>
+      <button class="tab" data-tab="logs">Logs</button>
+      <button class="tab" data-tab="hardware">Hardware</button>
+    </nav>
+
+    <main>
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="grid">
+          <div class="card temp-card">
+            <div class="card-label">Battery temperature</div>
+            <div class="gauge">
+              <svg viewBox="0 0 120 120" class="ring">
+                <circle cx="60" cy="60" r="52" class="ring-bg"/>
+                <circle cx="60" cy="60" r="52" class="ring-fg" id="tempRing"/>
+              </svg>
+              <div class="gauge-center">
+                <div class="gauge-value"><span id="tempValue">–</span><span class="unit">°C</span></div>
+                <div class="gauge-sub" id="tempTrend">trend —</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Current policy</div>
+            <div class="big-value" id="policyValue">—</div>
+            <div class="row">
+              <div class="chip" id="gamingChip">Gaming: —</div>
+              <div class="chip" id="cooldownChip">Cooldown: —</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Session</div>
+            <div class="kv"><span>Active game</span><b id="gameValue">—</b></div>
+            <div class="kv"><span>Peak temp</span><b id="peakValue">— °C</b></div>
+            <div class="kv"><span>Duration</span><b id="durValue">—</b></div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">Power</div>
+            <div class="kv"><span>Plugged in</span><b id="plugValue">—</b></div>
+            <div class="kv"><span>Screen off</span><b id="screenValue">—</b></div>
+            <div class="kv"><span>Tick sleep</span><b id="tickValue">—</b></div>
+          </div>
+        </div>
+
+        <div class="card wide">
+          <div class="card-header">
+            <div class="card-label">Thermal zones</div>
+            <button class="btn ghost sm" id="refreshTemps">Refresh</button>
+          </div>
+          <div class="zones" id="zones"><div class="muted">Loading…</div></div>
+        </div>
+
+        <div class="row wrap actions">
+          <button class="btn primary" id="startBtn">Start daemon</button>
+          <button class="btn" id="restartBtn">Restart</button>
+          <button class="btn danger" id="stopBtn">Stop</button>
+        </div>
+      </section>
+
+      <!-- POLICY -->
+      <section class="view" id="view-policy">
+        <div class="card">
+          <div class="card-label">Current policy engine state</div>
+          <pre class="code" id="policyRaw">Loading…</pre>
+        </div>
+        <div class="card">
+          <div class="card-label">Recent transitions</div>
+          <pre class="code" id="historyRaw">Loading…</pre>
+        </div>
+      </section>
+
+      <!-- GAMING -->
+      <section class="view" id="view-gaming">
+        <div class="card">
+          <div class="card-label">Gaming state</div>
+          <pre class="code" id="gamingRaw">Loading…</pre>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-label">Game list</div>
+            <button class="btn ghost sm" id="reloadGames">Reload</button>
+          </div>
+          <pre class="code" id="gameListRaw">Loading…</pre>
+        </div>
+      </section>
+
+      <!-- CHARGING -->
+      <section class="view" id="view-charging">
+        <div class="card">
+          <div class="card-label">Charging mode</div>
+          <p class="muted small">Adaptive tunes current based on thermal headroom. Urgent pushes maximum safe current.</p>
+          <div class="row wrap">
+            <button class="btn primary" data-charge="adaptive">Adaptive</button>
+            <button class="btn" data-charge="urgent">Urgent</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-label">Last session</div>
+          <pre class="code" id="chargeRaw">Loading…</pre>
+        </div>
+      </section>
+
+      <!-- LOGS -->
+      <section class="view" id="view-logs">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-label">Daemon log</div>
+            <div class="row">
+              <button class="btn ghost sm" data-log="logs">Standard</button>
+              <button class="btn ghost sm" data-log="verbose">Verbose</button>
+              <button class="btn ghost sm" id="clearVerbose">Clear verbose</button>
+            </div>
+          </div>
+          <pre class="code scroll" id="logRaw">Loading…</pre>
+        </div>
+      </section>
+
+      <!-- HARDWARE -->
+      <section class="view" id="view-hardware">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-label">Hardware report</div>
+            <button class="btn ghost sm" id="genReport">Generate</button>
+          </div>
+          <pre class="code scroll" id="hwRaw">Tap Generate to run thermalai-detect.</pre>
+        </div>
+        <div class="card">
+          <div class="card-label">Calibration</div>
+          <pre class="code" id="calRaw">Loading…</pre>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
