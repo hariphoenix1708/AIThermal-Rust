@@ -103,27 +103,28 @@ async function loadDashboard() {
   }
   setDaemon(true);
 
-  const temp = state.battery_temp_c ?? state.batteryTempC ?? null;
+  // Prefer battery temp; fall back to ai-adjusted temp for the gauge value.
+  const temp = state.batt_temp ?? state.ai_temp ?? null;
   document.getElementById("tempValue").textContent = temp != null ? temp : "–";
   updateRing(temp ?? 0);
 
-  const trend = state.trend_score ?? state.trendScore;
+  const trend = state.trend_score;
   document.getElementById("tempTrend").textContent =
     trend != null ? `trend ${trend > 0 ? "▲" : trend < 0 ? "▼" : "→"} ${trend}` : "trend —";
 
-  document.getElementById("policyValue").textContent = state.current_policy ?? state.currentPolicy ?? "—";
-  document.getElementById("gamingChip").textContent = "Gaming: " + (state.last_gaming_state ? "on" : "off");
+  document.getElementById("policyValue").textContent = state.policy ?? "—";
+  document.getElementById("gamingChip").textContent = "Gaming: " + (state.gaming ? "on" : "off");
   document.getElementById("cooldownChip").textContent = "Cooldown: " + (state.cooldown_active ? "active" : "off");
 
-  document.getElementById("gameValue").textContent = state.current_game ?? "—";
-  document.getElementById("peakValue").textContent = (state.game_session_peak_temp ?? "—") + " °C";
+  document.getElementById("gameValue").textContent = state.game_pkg || "—";
+  document.getElementById("peakValue").textContent = (state.session_peak_temp ?? "—") + " °C";
 
-  const startedIso = state.game_session_started_at || state.game_session_started;
+  const startedEpoch = state.session_started_at;
   document.getElementById("durValue").textContent =
-    startedIso ? fmtDuration(Date.now() - new Date(startedIso).getTime()) : "—";
+    startedEpoch ? fmtDuration(Date.now() - startedEpoch * 1000) : "—";
 
-  document.getElementById("plugValue").textContent = state.plugged_in_at ? "yes" : "no";
-  document.getElementById("screenValue").textContent = state.screen_off_since ? "yes" : "no";
+  document.getElementById("plugValue").textContent = state.plugged_in ? "yes" : "no";
+  document.getElementById("screenValue").textContent = state.screen_off ? "yes" : "no";
   document.getElementById("tickValue").textContent = (state.sleep_ms ?? "—") + " ms";
 }
 
@@ -165,21 +166,27 @@ async function loadPolicy() {
 async function loadGaming() {
   const state = await readJson(`${STATE_DIR}/thermalai_state.json`) || {};
   document.getElementById("gamingRaw").textContent = JSON.stringify({
-    gaming: state.last_gaming_state,
-    game: state.current_game,
-    started: state.game_session_started_at,
-    peak_temp: state.game_session_peak_temp,
+    gaming: state.gaming,
+    game: state.game_pkg,
+    started_epoch: state.session_started_at,
+    peak_temp: state.session_peak_temp,
+    session_count: state.session_count,
     cooldown: state.cooldown_active,
     cooldown_source: state.cooldown_source_pkg,
   }, null, 2);
-  const list = await readFile(`${MODULE_DIR}/game_list.conf`) ||
-               await readFile(`/data/adb/modules/thermalai_rust/game_list.conf`);
+  // game_list.conf lives under the module's config/ directory (see main.rs).
+  const list = await readFile(`${MODULE_DIR}/config/game_list.conf`);
   document.getElementById("gameListRaw").textContent = list.trim() || "game_list.conf not found.";
 }
 
 async function loadCharging() {
   const c = await readFile(`${STATE_DIR}/charging_session.json`);
-  document.getElementById("chargeRaw").textContent = c.trim() || "No charging session recorded.";
+  const mode = await readFile(`${STATE_DIR}/charging_mode.json`);
+  const state = await readJson(`${STATE_DIR}/thermalai_state.json`) || {};
+  const header =
+    `Active mode: ${state.charge_state ?? "—"}   Limit: ${state.charge_limit_ma ?? "—"} mA\n` +
+    (mode.trim() ? `Override: ${mode.trim()}\n\n` : "\n");
+  document.getElementById("chargeRaw").textContent = header + (c.trim() || "No charging session recorded.");
 }
 
 let currentLog = "logs";

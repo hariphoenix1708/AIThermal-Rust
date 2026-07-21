@@ -1021,6 +1021,14 @@ impl RuntimeTask for SystemOrchestrator {
             "sleep_ms": ctx.sleep_ms,
             "session_peak_temp": ctx.game_session_peak_temp,
             "session_started_at": ctx.game_session_started_at.map(|t| chrono::Utc::now().timestamp() - t.elapsed().as_secs() as i64),
+            // Extra fields consumed by the KernelSU WebUI - always present
+            // (null when inactive) so the UI never has to guess a schema.
+            "cooldown_active": ctx.cooldown_active,
+            "cooldown_source_pkg": ctx.cooldown_source_pkg,
+            "plugged_in": ctx.plugged_in_at.is_some(),
+            "screen_off": is_screen_off,
+            "recovery_mode": ctx.recovery_mode,
+            "runtime_health": ctx.runtime_health,
             "legacy_write_failures": crate::tuning::backend::TuningBackend::legacy_write_failure_count(),
             "frame_stats_parse_ok": crate::monitor::frame_sampler::last_parse_ok(),
         });
