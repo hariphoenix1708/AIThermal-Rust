@@ -162,6 +162,11 @@ impl Default for ProfilesConfig {
             adaptive_governor_enabled: default_adaptive_governor_enabled(),
             disable_tweaks: default_disable_tweaks(),
             battery_stats_enabled: default_true(),
+            min_actuation_interval_ms: default_min_actuation_interval_ms(),
+            tcp_congestion_control_gaming: default_tcp_cc(),
+            touch_network_stack: default_false(),
+            safe_mode_after_crashes: default_safe_mode_after_crashes(),
+            watchdog_stall_threshold: default_watchdog_stall_threshold(),
         }
     }
 }
