@@ -112,6 +112,25 @@ impl GameDetector {
         self.confirmed_package.as_deref()
     }
 
+    /// Fast path: read /proc/<pid>/cgroup for a known PID and check if any
+    /// entry mentions top-app. Fall back to walking cgroup.procs only when
+    /// we have no confirmed PID yet, or the fast path returns no data.
+    fn is_pid_in_top_app_fast(pid: u32) -> Option<bool> {
+        let paths = [
+            format!("/proc/{}/cgroup", pid),
+            format!("/proc/{}/cpuset", pid),
+        ];
+        for p in &paths {
+            let Ok(content) = std::fs::read_to_string(p) else { continue };
+            if content.contains("top-app") {
+                return Some(true);
+            }
+            // File readable but no top-app mention → not in top-app.
+            return Some(false);
+        }
+        None
+    }
+
     fn is_package_in_foreground_cgroup(target_pkg: &str) -> Option<bool> {
         let candidate_paths = [
             "/dev/cpuset/top-app/cgroup.procs",
@@ -125,20 +144,16 @@ impl GameDetector {
                 if let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) {
                     checked_any = true;
                     let pkg = cmdline.split('\0').next().unwrap_or("").trim();
-                    // Match the base package exactly, OR the base package followed
-                    // by a ":" process-name suffix (Android's standard multi-process
-                    // naming convention) - either means this PID belongs to the
-                    // SAME app as target_pkg, just a different process within it.
                     if pkg == target_pkg || pkg.starts_with(&format!("{}:", target_pkg)) {
                         return Some(true);
                     }
                 }
             }
             if checked_any {
-                return Some(false); // cgroup was readable, had processes, none matched
+                return Some(false);
             }
         }
-        None // cgroup path unreadable/unavailable on this device - can't corroborate either way
+        None
     }
 
     pub fn tick(&mut self) -> Result<bool> {
