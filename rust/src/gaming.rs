@@ -104,6 +104,7 @@ impl GameDetector {
             cached_pid: None,
             last_scan_pids: HashMap::new(),
             daemon_started_at: Instant::now(),
+            cgroup_negative_streak: 0,
         }
     }
 
