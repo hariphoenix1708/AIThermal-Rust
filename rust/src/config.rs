@@ -72,7 +72,7 @@ pub struct ProfilesConfig {
 }
 
 fn default_false() -> bool { false }
-fn default_min_actuation_interval_ms() -> u64 { 1500 }
+fn default_min_actuation_interval_ms() -> u64 { 2500 }
 fn default_tcp_cc() -> String { "kernel_default".to_string() }
 fn default_safe_mode_after_crashes() -> u32 { 2 }
 fn default_watchdog_stall_threshold() -> u32 { 5 }

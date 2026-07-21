@@ -103,6 +103,30 @@ fn main() -> Result<()> {
     tracing::info!(" Config loaded: {:?}", config.profiles);
     tracing::info!("════════════════════════════════════════");
 
+    let crash_marker = std::path::Path::new(&state_dir).join("crash_marker.json");
+    let crash_count: u32 = std::fs::read_to_string(&crash_marker)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("count").and_then(|c| c.as_u64()))
+        .map(|c| c as u32)
+        .unwrap_or(0);
+
+    let mut config = config; // shadow so we can force safe mode
+    if crash_count >= config.profiles.safe_mode_after_crashes {
+        tracing::warn!(
+            "Entering SAFE MODE: {} consecutive crashes detected — forcing disable_tweaks=true",
+            crash_count
+        );
+        config.profiles.disable_tweaks = true;
+    }
+
+    // Write a fresh crash_marker BEFORE we start, so if we die before
+    // clean shutdown the next boot sees +1.
+    let _ = std::fs::write(
+        &crash_marker,
+        serde_json::json!({ "count": crash_count + 1 }).to_string(),
+    );
+
     let mut daemon = Daemon::new(
         &pid_file,
         config,
@@ -145,6 +169,8 @@ fn main() -> Result<()> {
     daemon.register_task(Box::new(orchestrator));
 
     daemon.start()?;
+
+    let _ = std::fs::remove_file(&crash_marker);
 
     tracing::info!("ThermalAI daemon shutdown complete.");
 

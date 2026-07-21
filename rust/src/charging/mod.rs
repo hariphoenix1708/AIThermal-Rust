@@ -62,6 +62,8 @@ pub struct ChargingEngine {
     pub last_known_good_ma: Option<i64>,
     pub rejected_ceiling: Option<i64>,
     pub last_apply_attempt: Option<std::time::Instant>,
+    pub limit_write_failure_count: u32,
+    pub limit_write_disabled: bool,
 }
 
 impl ChargingEngine {
@@ -111,6 +113,8 @@ impl ChargingEngine {
             last_known_good_ma: None,
             rejected_ceiling: None,
             last_apply_attempt: None,
+            limit_write_failure_count: 0,
+            limit_write_disabled: false,
         }
     }
 
@@ -323,6 +327,8 @@ impl ChargingEngine {
             if self.current_state != ChargeState::Disconnected {
                 // Session finished
                 self.finish_session(state_dir, soc);
+                self.limit_write_failure_count = 0;
+                self.limit_write_disabled = false;
             }
             self.current_state = next;
             return 0;
@@ -513,6 +519,10 @@ impl ChargingEngine {
             return false;
         }
 
+        if self.limit_write_disabled {
+            return false;
+        }
+
         let clamped_ma = ma.clamp(500, 12_000);
         // Round to nearest 100mA as a first attempt at hitting an accepted step;
         // if EINVAL persists even after this, the device may need a hardcoded
@@ -523,11 +533,25 @@ impl ChargingEngine {
 
         match crate::sysfs::write_first_available(&self.limit_nodes, &micro_amps) {
             Ok(()) => {
+                self.limit_write_failure_count = 0;
                 self.active_limit_ma = rounded_ma;
                 tracing::debug!(target: "charging", "Applied charge limit: {}mA via {}", rounded_ma, self.limit_nodes.first().map(|s| s.as_str()).unwrap_or("?"));
                 true
             }
             Err(e) => {
+                self.limit_write_failure_count = self.limit_write_failure_count.saturating_add(1);
+                if self.limit_write_failure_count >= 5 {
+                    self.limit_write_disabled = true;
+                    if let Some(node) = self.limit_nodes.first() {
+                        tracing::warn!(target: "charging",
+                            "Node {} rejected 5 writes in a row, disabling input_current_limit control for this session",
+                            node);
+                        crate::logger::blacklist_sysfs_node(node);
+                    }
+                    self.rejected_ceiling = Some(rounded_ma);
+                    return false;
+                }
+
                 tracing::debug!(target: "charging", "Failed to apply charge limit {}mA: {}", rounded_ma, e);
                 if let Some(node) = self.limit_nodes.first() {
                     match &e {
