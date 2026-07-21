@@ -123,16 +123,21 @@ impl RuntimeTuner {
 
 
     fn write_and_save(&self, path: &str, value: &str, save: bool) {
+        let mut newly_saved = false;
         if save {
             if let Ok(mut state) = self.original_state.lock() {
                 if !state.contains_key(path)
                     && let Ok(orig_val) = sysfs::read_string(path)
                 {
                     state.insert(path.to_string(), orig_val);
+                    newly_saved = true;
                 }
             }
         }
         crate::tuning::backend::TuningBackend::write_string(path, value);
+        if newly_saved {
+            self.persist_active();
+        }
     }
 
     fn restore_or_default(&self, path: &str, default: &str) {
@@ -152,8 +157,10 @@ impl RuntimeTuner {
             if let Ok(mut locked) = self.locked_sysfs_nodes.lock() {
                 locked.push(path.to_string());
             }
+            self.persist_locked();
         }
     }
+
 
     fn unsupported_block_device(dev: &str) -> bool {
         dev.starts_with("dm-") || dev.starts_with("loop") || dev.starts_with("zram")
