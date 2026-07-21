@@ -150,7 +150,16 @@ impl SystemOrchestrator {
         let recovery = RecoveryManager::new();
         let calibration = CalibrationManager::new(&ctx.state_dir);
         let snapshot = SnapshotManager::new(&ctx.state_dir, hardware.clone());
-        let runtime_tuner = RuntimeTuner::new(hardware.clone());
+        // Rehydrate any stale tuning state from a previous unclean exit
+        // before we take our own baselines this run.
+        crate::tuning::RuntimeTuner::rehydrate_and_restore(&ctx.state_dir);
+        let runtime_tuner = RuntimeTuner::new(hardware.clone())
+            .with_state_dir(&ctx.state_dir)
+            .with_network_config(
+                &ctx.config.profiles.tcp_congestion_control_gaming,
+                ctx.config.profiles.touch_network_stack,
+            );
+
 
         // Restore snapshot early in startup if it exists, and verify policy
         if let Some(_snap) = snapshot.load_snapshot()
