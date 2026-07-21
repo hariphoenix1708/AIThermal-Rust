@@ -230,7 +230,9 @@ impl RuntimeTuner {
                 crate::tuning::backend::TuningBackend::write_string(path, val);
             }
         }
+        self.clear_active();
     }
+
 
     pub fn apply_touch_display_tweaks(
         &self,
