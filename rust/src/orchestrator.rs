@@ -473,10 +473,21 @@ impl RuntimeTask for SystemOrchestrator {
         let is_running = ctx.runtime_health;
 
         // 1. Watchdog
-        if let Ok(true) = self.watchdog.check(is_running) {
-            // Watchdog requested recovery due to stall
-            warn!("Watchdog triggered recovery.");
+        match self.watchdog.check(is_running) {
+            Ok(crate::watchdog::WatchdogVerdict::Healthy) => {}
+            Ok(crate::watchdog::WatchdogVerdict::DegradedRestoreRecommended) => {
+                warn!("Watchdog: degraded — restoring stock thermal governance");
+                self.runtime_tuner.restore_stock_thermal();
+            }
+            Ok(crate::watchdog::WatchdogVerdict::StalledRecoverNow) => {
+                warn!("Watchdog: stalled — restoring all sysfs originals");
+                self.runtime_tuner.restore_all();
+                self.runtime_tuner.restore_stock_thermal();
+                ctx.recovery_mode = true;
+            }
+            Err(e) => tracing::debug!("Watchdog check error: {}", e),
         }
+
 
         // 2. Gaming state
         let was_gaming = ctx.last_gaming_state;
