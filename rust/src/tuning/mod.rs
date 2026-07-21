@@ -177,41 +177,52 @@ impl RuntimeTuner {
         &self,
         policy: &str,
     ) -> Result<(), crate::tuning::backend::BackendError> {
+        // Master off-switch: v3.1.0's TCP writes caused visible connectivity
+        // regressions (DNS failures, stalled HTTPS streams). Off by default.
+        if !self.touch_network_stack {
+            return Ok(());
+        }
+
         let is_perf = policy == "Performance" || policy == "performance";
-        let is_game = policy == "Gaming" || policy == "gaming" || is_perf;
 
         let path_keepalive = "/proc/sys/net/ipv4/tcp_keepalive_time";
-        let path_syn_retries = "/proc/sys/net/ipv4/tcp_syn_retries";
-        let path_synack_retries = "/proc/sys/net/ipv4/tcp_synack_retries";
-        let path_window_scaling = "/proc/sys/net/ipv4/tcp_window_scaling";
-        let path_timestamps = "/proc/sys/net/ipv4/tcp_timestamps";
         let path_congestion = "/proc/sys/net/ipv4/tcp_congestion_control";
 
-        if is_game {
-            self.write_and_save(path_keepalive, "300", true);
-            self.write_and_save(path_syn_retries, "3", true);
-            self.write_and_save(path_synack_retries, "3", true);
-            self.write_and_save(path_window_scaling, "1", true);
-            self.write_and_save(path_timestamps, "0", true);
+        if is_perf {
+            // B3: raise keepalive only mildly (20 min minimum). NEVER touch
+            // tcp_syn_retries / tcp_synack_retries / tcp_timestamps — those
+            // broke connectivity on flaky Wi-Fi / LTE hand-offs.
+            let old_keepalive = sysfs::read_string(path_keepalive).ok().unwrap_or_default();
+            self.write_and_save(path_keepalive, "1200", true);
+            tracing::info!(target: "network", "NET-01 tcp_keepalive_time {} -> 1200", old_keepalive);
 
-            if self
-                .hardware
-                .network_profile
-                .available_congestion_controls
-                .contains(&"bbr".to_string())
+            // B4: BBR is opt-in via config, and only if available.
+            if self.tcp_cc_gaming != "kernel_default"
+                && self
+                    .hardware
+                    .network_profile
+                    .available_congestion_controls
+                    .contains(&self.tcp_cc_gaming)
             {
-                self.write_and_save(path_congestion, "bbr", true);
+                let old_cc = sysfs::read_string(path_congestion).ok().unwrap_or_default();
+                self.write_and_save(path_congestion, &self.tcp_cc_gaming, true);
+                tracing::info!(target: "network", "NET-01 tcp_congestion_control {} -> {}", old_cc, self.tcp_cc_gaming);
             }
         } else {
             self.restore_or_default(path_keepalive, "7200");
-            self.restore_or_default(path_syn_retries, "6");
-            self.restore_or_default(path_synack_retries, "5");
-            self.restore_or_default(path_window_scaling, "1");
-            self.restore_or_default(path_timestamps, "1");
-            self.restore_or_default(path_congestion, "cubic");
+            if self.tcp_cc_gaming != "kernel_default" {
+                // Only restore if we actually wrote it in the perf branch.
+                if let Ok(state) = self.original_state.lock() {
+                    if state.contains_key(path_congestion) {
+                        drop(state);
+                        self.restore_or_default(path_congestion, "cubic");
+                    }
+                }
+            }
         }
         Ok(())
     }
+
 
     pub fn restore_all(&self) {
         if let Ok(state) = self.original_state.lock() {
