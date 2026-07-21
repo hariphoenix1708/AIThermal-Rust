@@ -473,12 +473,15 @@ impl RuntimeTuner {
             "0",
         );
 
-        if let Ok(locked) = self.locked_sysfs_nodes.lock() {
+        if let Ok(mut locked) = self.locked_sysfs_nodes.lock() {
             for path in locked.iter() {
                 let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644));
             }
+            locked.clear();
         }
+        self.clear_locked();
     }
+
 
     pub fn apply_universal_gpu_control(&self, policy: &str) {
         let is_perf = policy == "Performance" || policy == "performance";
