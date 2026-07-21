@@ -276,10 +276,20 @@ fn set_charging_mode(mode: Option<&str>) {
     let tmp_file = format!("{}/charging_mode.json.tmp", state_dir);
     match mode {
         Some("urgent") => {
-            if std::fs::write(&tmp_file, r#"{"urgent": true}"#).is_ok() {
+            // Auto-expire after 30 minutes so an accidental toggle can't leave
+            // aggressive charging enabled indefinitely. The daemon clears the
+            // override file itself once `expires_at` passes.
+            const URGENT_TTL_SECS: u64 = 30 * 60;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let expires_at = now + URGENT_TTL_SECS;
+            let payload = format!(r#"{{"urgent": true, "expires_at": {}}}"#, expires_at);
+            if std::fs::write(&tmp_file, payload).is_ok() {
                 let _ = std::fs::rename(&tmp_file, &override_file);
             }
-            println!("Set charging mode to Urgent");
+            println!("Set charging mode to Urgent (auto-expires in 30 min)");
         }
         Some("adaptive") | None => {
             if std::fs::write(&tmp_file, r#"{"urgent": false}"#).is_ok() {
