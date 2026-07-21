@@ -150,7 +150,16 @@ impl SystemOrchestrator {
         let recovery = RecoveryManager::new();
         let calibration = CalibrationManager::new(&ctx.state_dir);
         let snapshot = SnapshotManager::new(&ctx.state_dir, hardware.clone());
-        let runtime_tuner = RuntimeTuner::new(hardware.clone());
+        // Rehydrate any stale tuning state from a previous unclean exit
+        // before we take our own baselines this run.
+        crate::tuning::RuntimeTuner::rehydrate_and_restore(&ctx.state_dir);
+        let runtime_tuner = RuntimeTuner::new(hardware.clone())
+            .with_state_dir(&ctx.state_dir)
+            .with_network_config(
+                &ctx.config.profiles.tcp_congestion_control_gaming,
+                ctx.config.profiles.touch_network_stack,
+            );
+
 
         // Restore snapshot early in startup if it exists, and verify policy
         if let Some(_snap) = snapshot.load_snapshot()
@@ -464,10 +473,21 @@ impl RuntimeTask for SystemOrchestrator {
         let is_running = ctx.runtime_health;
 
         // 1. Watchdog
-        if let Ok(true) = self.watchdog.check(is_running) {
-            // Watchdog requested recovery due to stall
-            warn!("Watchdog triggered recovery.");
+        match self.watchdog.check(is_running) {
+            Ok(crate::watchdog::WatchdogVerdict::Healthy) => {}
+            Ok(crate::watchdog::WatchdogVerdict::DegradedRestoreRecommended) => {
+                warn!("Watchdog: degraded — restoring stock thermal governance");
+                self.runtime_tuner.restore_stock_thermal();
+            }
+            Ok(crate::watchdog::WatchdogVerdict::StalledRecoverNow) => {
+                warn!("Watchdog: stalled — restoring all sysfs originals");
+                self.runtime_tuner.restore_all();
+                self.runtime_tuner.restore_stock_thermal();
+                ctx.recovery_mode = true;
+            }
+            Err(e) => tracing::debug!("Watchdog check error: {}", e),
         }
+
 
         // 2. Gaming state
         let was_gaming = ctx.last_gaming_state;

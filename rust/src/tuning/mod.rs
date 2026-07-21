@@ -4,9 +4,13 @@ use crate::sysfs;
 
 use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use tracing::info;
 
 use crate::tuning::backend::{BackendError, VmBackend};
+
+const TUNING_ACTIVE_FILE: &str = "tuning_active.json";
+const LOCKED_NODES_FILE: &str = "locked_sysfs_nodes.json";
 
 pub struct RuntimeTuner {
     hardware: HardwareProfile,
@@ -14,6 +18,9 @@ pub struct RuntimeTuner {
     last_gpu_boost: std::sync::Mutex<Option<std::time::Instant>>,
     unsupported_cooling_nodes: std::sync::Mutex<std::collections::HashSet<String>>,
     locked_sysfs_nodes: std::sync::Mutex<Vec<String>>,
+    state_dir: Option<PathBuf>,
+    tcp_cc_gaming: String,
+    touch_network_stack: bool,
 }
 
 impl RuntimeTuner {
@@ -24,20 +31,113 @@ impl RuntimeTuner {
             last_gpu_boost: std::sync::Mutex::new(None),
             unsupported_cooling_nodes: std::sync::Mutex::new(std::collections::HashSet::new()),
             locked_sysfs_nodes: std::sync::Mutex::new(Vec::new()),
+            state_dir: None,
+            tcp_cc_gaming: "kernel_default".to_string(),
+            touch_network_stack: false,
         }
     }
 
+    pub fn with_state_dir(mut self, dir: &str) -> Self {
+        if !dir.is_empty() {
+            self.state_dir = Some(PathBuf::from(dir));
+        }
+        self
+    }
+
+    pub fn with_network_config(mut self, tcp_cc_gaming: &str, touch_network_stack: bool) -> Self {
+        self.tcp_cc_gaming = tcp_cc_gaming.to_string();
+        self.touch_network_stack = touch_network_stack;
+        self
+    }
+
+    fn persist_active(&self) {
+        let Some(dir) = &self.state_dir else { return };
+        let Ok(state) = self.original_state.lock() else { return };
+        if state.is_empty() { return; }
+        let path = dir.join(TUNING_ACTIVE_FILE);
+        let tmp = dir.join(format!("{}.tmp", TUNING_ACTIVE_FILE));
+        if let Ok(json) = serde_json::to_string(&*state) {
+            let _ = std::fs::write(&tmp, json);
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+
+    fn persist_locked(&self) {
+        let Some(dir) = &self.state_dir else { return };
+        let Ok(nodes) = self.locked_sysfs_nodes.lock() else { return };
+        let path = dir.join(LOCKED_NODES_FILE);
+        let tmp = dir.join(format!("{}.tmp", LOCKED_NODES_FILE));
+        if let Ok(json) = serde_json::to_string(&*nodes) {
+            let _ = std::fs::write(&tmp, json);
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+
+    fn clear_active(&self) {
+        if let Some(dir) = &self.state_dir {
+            let _ = std::fs::remove_file(dir.join(TUNING_ACTIVE_FILE));
+        }
+    }
+
+    fn clear_locked(&self) {
+        if let Some(dir) = &self.state_dir {
+            let _ = std::fs::remove_file(dir.join(LOCKED_NODES_FILE));
+        }
+    }
+
+    /// Startup helper: if the previous daemon run left a `tuning_active.json`
+    /// (unclean exit), restore every saved (path, original_value) pair before
+    /// the first tick. Called from `main.rs` immediately after Daemon::new.
+    pub fn rehydrate_and_restore(state_dir: &str) {
+        if state_dir.is_empty() { return; }
+        let base = PathBuf::from(state_dir);
+        let active = base.join(TUNING_ACTIVE_FILE);
+        if active.exists() {
+            if let Ok(content) = std::fs::read_to_string(&active) {
+                if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&content) {
+                    tracing::warn!(
+                        "Found stale tuning_active.json ({} entries) from previous run — restoring originals",
+                        map.len()
+                    );
+                    for (path, val) in map {
+                        crate::tuning::backend::TuningBackend::write_string(&path, &val);
+                    }
+                }
+            }
+            let _ = std::fs::remove_file(&active);
+        }
+
+        // D11: unlock any 0o444 nodes left behind by write_and_lock.
+        let locked = base.join(LOCKED_NODES_FILE);
+        if locked.exists() {
+            if let Ok(content) = std::fs::read_to_string(&locked) {
+                if let Ok(list) = serde_json::from_str::<Vec<String>>(&content) {
+                    for p in list {
+                        let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644));
+                    }
+                }
+            }
+            let _ = std::fs::remove_file(&locked);
+        }
+    }
+
+
     fn write_and_save(&self, path: &str, value: &str, save: bool) {
+        let mut newly_saved = false;
         if save {
             if let Ok(mut state) = self.original_state.lock() {
                 if !state.contains_key(path)
                     && let Ok(orig_val) = sysfs::read_string(path)
                 {
                     state.insert(path.to_string(), orig_val);
+                    newly_saved = true;
                 }
             }
         }
         crate::tuning::backend::TuningBackend::write_string(path, value);
+        if newly_saved {
+            self.persist_active();
+        }
     }
 
     fn restore_or_default(&self, path: &str, default: &str) {
@@ -57,8 +157,10 @@ impl RuntimeTuner {
             if let Ok(mut locked) = self.locked_sysfs_nodes.lock() {
                 locked.push(path.to_string());
             }
+            self.persist_locked();
         }
     }
+
 
     fn unsupported_block_device(dev: &str) -> bool {
         dev.starts_with("dm-") || dev.starts_with("loop") || dev.starts_with("zram")
@@ -75,41 +177,52 @@ impl RuntimeTuner {
         &self,
         policy: &str,
     ) -> Result<(), crate::tuning::backend::BackendError> {
+        // Master off-switch: v3.1.0's TCP writes caused visible connectivity
+        // regressions (DNS failures, stalled HTTPS streams). Off by default.
+        if !self.touch_network_stack {
+            return Ok(());
+        }
+
         let is_perf = policy == "Performance" || policy == "performance";
-        let is_game = policy == "Gaming" || policy == "gaming" || is_perf;
 
         let path_keepalive = "/proc/sys/net/ipv4/tcp_keepalive_time";
-        let path_syn_retries = "/proc/sys/net/ipv4/tcp_syn_retries";
-        let path_synack_retries = "/proc/sys/net/ipv4/tcp_synack_retries";
-        let path_window_scaling = "/proc/sys/net/ipv4/tcp_window_scaling";
-        let path_timestamps = "/proc/sys/net/ipv4/tcp_timestamps";
         let path_congestion = "/proc/sys/net/ipv4/tcp_congestion_control";
 
-        if is_game {
-            self.write_and_save(path_keepalive, "300", true);
-            self.write_and_save(path_syn_retries, "3", true);
-            self.write_and_save(path_synack_retries, "3", true);
-            self.write_and_save(path_window_scaling, "1", true);
-            self.write_and_save(path_timestamps, "0", true);
+        if is_perf {
+            // B3: raise keepalive only mildly (20 min minimum). NEVER touch
+            // tcp_syn_retries / tcp_synack_retries / tcp_timestamps — those
+            // broke connectivity on flaky Wi-Fi / LTE hand-offs.
+            let old_keepalive = sysfs::read_string(path_keepalive).ok().unwrap_or_default();
+            self.write_and_save(path_keepalive, "1200", true);
+            tracing::info!(target: "network", "NET-01 tcp_keepalive_time {} -> 1200", old_keepalive);
 
-            if self
-                .hardware
-                .network_profile
-                .available_congestion_controls
-                .contains(&"bbr".to_string())
+            // B4: BBR is opt-in via config, and only if available.
+            if self.tcp_cc_gaming != "kernel_default"
+                && self
+                    .hardware
+                    .network_profile
+                    .available_congestion_controls
+                    .contains(&self.tcp_cc_gaming)
             {
-                self.write_and_save(path_congestion, "bbr", true);
+                let old_cc = sysfs::read_string(path_congestion).ok().unwrap_or_default();
+                self.write_and_save(path_congestion, &self.tcp_cc_gaming, true);
+                tracing::info!(target: "network", "NET-01 tcp_congestion_control {} -> {}", old_cc, self.tcp_cc_gaming);
             }
         } else {
             self.restore_or_default(path_keepalive, "7200");
-            self.restore_or_default(path_syn_retries, "6");
-            self.restore_or_default(path_synack_retries, "5");
-            self.restore_or_default(path_window_scaling, "1");
-            self.restore_or_default(path_timestamps, "1");
-            self.restore_or_default(path_congestion, "cubic");
+            if self.tcp_cc_gaming != "kernel_default" {
+                // Only restore if we actually wrote it in the perf branch.
+                if let Ok(state) = self.original_state.lock() {
+                    if state.contains_key(path_congestion) {
+                        drop(state);
+                        self.restore_or_default(path_congestion, "cubic");
+                    }
+                }
+            }
         }
         Ok(())
     }
+
 
     pub fn restore_all(&self) {
         if let Ok(state) = self.original_state.lock() {
@@ -117,7 +230,9 @@ impl RuntimeTuner {
                 crate::tuning::backend::TuningBackend::write_string(path, val);
             }
         }
+        self.clear_active();
     }
+
 
     pub fn apply_touch_display_tweaks(
         &self,
@@ -275,6 +390,25 @@ impl RuntimeTuner {
         }
 
         for dev in &self.hardware.thermal_profile.cooling_devices {
+            // D2: only silence CPU/GPU thermal caps. Never disarm modem,
+            // charger, display, or battery cooling devices — those matter
+            // for radio safety and battery health even when we own the CPU.
+            let dtype_lower = dev.device_type.to_lowercase();
+            let is_cpu_gpu = dtype_lower.contains("cpu")
+                || dtype_lower.contains("cluster")
+                || dtype_lower.contains("gpu")
+                || dtype_lower.contains("kgsl")
+                || dtype_lower.contains("thermal-cpufreq")
+                || dtype_lower.contains("thermal-devfreq");
+            if !is_cpu_gpu {
+                tracing::debug!(
+                    target: "tuning",
+                    "Preserving non-CPU/GPU cooling device: {} (type={})",
+                    dev.sysfs_path, dev.device_type
+                );
+                continue;
+            }
+
             let cur_state = format!("{}/cur_state", dev.sysfs_path);
             if self
                 .unsupported_cooling_nodes
@@ -298,6 +432,7 @@ impl RuntimeTuner {
                 }
             }
         }
+
 
         self.disable_migt_if_present();
     }
@@ -338,12 +473,15 @@ impl RuntimeTuner {
             "0",
         );
 
-        if let Ok(locked) = self.locked_sysfs_nodes.lock() {
+        if let Ok(mut locked) = self.locked_sysfs_nodes.lock() {
             for path in locked.iter() {
                 let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644));
             }
+            locked.clear();
         }
+        self.clear_locked();
     }
+
 
     pub fn apply_universal_gpu_control(&self, policy: &str) {
         let is_perf = policy == "Performance" || policy == "performance";

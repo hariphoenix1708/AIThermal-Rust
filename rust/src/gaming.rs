@@ -4,6 +4,11 @@ use std::time::{Duration, Instant};
 
 use std::collections::HashMap;
 
+/// How many consecutive top-app-cgroup misses are required before we allow
+/// them to invalidate an otherwise-valid process-scan detection. Prevents
+/// one flaky read from erasing a real game latch (the 73 s Roblox stall).
+const CGROUP_NEGATIVE_STREAK_THRESHOLD: u32 = 3;
+
 pub struct GameDetector {
     pub known_games: Vec<String>,
     pub is_gaming: bool,
@@ -17,6 +22,7 @@ pub struct GameDetector {
     cached_pid: Option<u32>,
     last_scan_pids: HashMap<u32, Option<String>>,
     daemon_started_at: Instant,
+    cgroup_negative_streak: u32,
 }
 
 impl GameDetector {
@@ -98,11 +104,31 @@ impl GameDetector {
             cached_pid: None,
             last_scan_pids: HashMap::new(),
             daemon_started_at: Instant::now(),
+            cgroup_negative_streak: 0,
         }
     }
 
     pub fn confirmed_package(&self) -> Option<&str> {
         self.confirmed_package.as_deref()
+    }
+
+    /// Fast path: read /proc/<pid>/cgroup for a known PID and check if any
+    /// entry mentions top-app. Fall back to walking cgroup.procs only when
+    /// we have no confirmed PID yet, or the fast path returns no data.
+    fn is_pid_in_top_app_fast(pid: u32) -> Option<bool> {
+        let paths = [
+            format!("/proc/{}/cgroup", pid),
+            format!("/proc/{}/cpuset", pid),
+        ];
+        for p in &paths {
+            let Ok(content) = std::fs::read_to_string(p) else { continue };
+            if content.contains("top-app") {
+                return Some(true);
+            }
+            // File readable but no top-app mention → not in top-app.
+            return Some(false);
+        }
+        None
     }
 
     fn is_package_in_foreground_cgroup(target_pkg: &str) -> Option<bool> {
@@ -118,20 +144,16 @@ impl GameDetector {
                 if let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) {
                     checked_any = true;
                     let pkg = cmdline.split('\0').next().unwrap_or("").trim();
-                    // Match the base package exactly, OR the base package followed
-                    // by a ":" process-name suffix (Android's standard multi-process
-                    // naming convention) - either means this PID belongs to the
-                    // SAME app as target_pkg, just a different process within it.
                     if pkg == target_pkg || pkg.starts_with(&format!("{}:", target_pkg)) {
                         return Some(true);
                     }
                 }
             }
             if checked_any {
-                return Some(false); // cgroup was readable, had processes, none matched
+                return Some(false);
             }
         }
-        None // cgroup path unreadable/unavailable on this device - can't corroborate either way
+        None
     }
 
     pub fn tick(&mut self) -> Result<bool> {
@@ -162,30 +184,43 @@ impl GameDetector {
 
         if detected {
             if let Some(ref p) = pkg {
-                match Self::is_package_in_foreground_cgroup(p) {
+                // Fast path first: read /proc/<confirmed_pid>/cgroup when we
+                // already have a PID we trust. Only fall back to the full
+                // top-app/cgroup.procs walk when the fast read is missing.
+                let cgroup_result = pid
+                    .and_then(Self::is_pid_in_top_app_fast)
+                    .map(Some)
+                    .unwrap_or_else(|| Self::is_package_in_foreground_cgroup(p));
+
+                match cgroup_result {
                     Some(false) => {
+                        self.cgroup_negative_streak =
+                            self.cgroup_negative_streak.saturating_add(1);
                         tracing::debug!(
                             target: "gaming",
-                            "Package {} matched process scan but not found in top-app cgroup, treating as unconfirmed",
-                            p
+                            "Package {} matched process scan but not found in top-app cgroup (streak {}/{}); keeping prior detection state",
+                            p, self.cgroup_negative_streak, CGROUP_NEGATIVE_STREAK_THRESHOLD
                         );
-                        detected = false;
-                        pkg = None;
-                        pid = None;
+                        if self.cgroup_negative_streak >= CGROUP_NEGATIVE_STREAK_THRESHOLD {
+                            detected = false;
+                            pkg = None;
+                            pid = None;
+                        }
+                        // else: treat as still gaming; do NOT clear the latch
+                        // on one flaky sample.
                     }
                     Some(true) => {
+                        self.cgroup_negative_streak = 0;
                         tracing::debug!(target: "gaming", "Confirmed {} in top-app cgroup", p);
                     }
                     None => {
-                        // Cgroup unavailable/unreadable on this device - fall back to
-                        // trusting the primary exact-match scan alone, exactly as it
-                        // worked before this round's cgroup-corroboration feature was
-                        // added. Never let an unreadable cgroup path cancel an
-                        // otherwise-confirmed detection.
+                        // Cgroup unreadable: do NOT touch the streak; trust
+                        // the process scan alone (pre-cgroup behavior).
                     }
                 }
             }
         }
+
 
         if detected {
             self.is_gaming = true;
