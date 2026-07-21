@@ -4,9 +4,13 @@ use crate::sysfs;
 
 use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use tracing::info;
 
 use crate::tuning::backend::{BackendError, VmBackend};
+
+const TUNING_ACTIVE_FILE: &str = "tuning_active.json";
+const LOCKED_NODES_FILE: &str = "locked_sysfs_nodes.json";
 
 pub struct RuntimeTuner {
     hardware: HardwareProfile,
@@ -14,6 +18,9 @@ pub struct RuntimeTuner {
     last_gpu_boost: std::sync::Mutex<Option<std::time::Instant>>,
     unsupported_cooling_nodes: std::sync::Mutex<std::collections::HashSet<String>>,
     locked_sysfs_nodes: std::sync::Mutex<Vec<String>>,
+    state_dir: Option<PathBuf>,
+    tcp_cc_gaming: String,
+    touch_network_stack: bool,
 }
 
 impl RuntimeTuner {
@@ -24,8 +31,96 @@ impl RuntimeTuner {
             last_gpu_boost: std::sync::Mutex::new(None),
             unsupported_cooling_nodes: std::sync::Mutex::new(std::collections::HashSet::new()),
             locked_sysfs_nodes: std::sync::Mutex::new(Vec::new()),
+            state_dir: None,
+            tcp_cc_gaming: "kernel_default".to_string(),
+            touch_network_stack: false,
         }
     }
+
+    pub fn with_state_dir(mut self, dir: &str) -> Self {
+        if !dir.is_empty() {
+            self.state_dir = Some(PathBuf::from(dir));
+        }
+        self
+    }
+
+    pub fn with_network_config(mut self, tcp_cc_gaming: &str, touch_network_stack: bool) -> Self {
+        self.tcp_cc_gaming = tcp_cc_gaming.to_string();
+        self.touch_network_stack = touch_network_stack;
+        self
+    }
+
+    fn persist_active(&self) {
+        let Some(dir) = &self.state_dir else { return };
+        let Ok(state) = self.original_state.lock() else { return };
+        if state.is_empty() { return; }
+        let path = dir.join(TUNING_ACTIVE_FILE);
+        let tmp = dir.join(format!("{}.tmp", TUNING_ACTIVE_FILE));
+        if let Ok(json) = serde_json::to_string(&*state) {
+            let _ = std::fs::write(&tmp, json);
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+
+    fn persist_locked(&self) {
+        let Some(dir) = &self.state_dir else { return };
+        let Ok(nodes) = self.locked_sysfs_nodes.lock() else { return };
+        let path = dir.join(LOCKED_NODES_FILE);
+        let tmp = dir.join(format!("{}.tmp", LOCKED_NODES_FILE));
+        if let Ok(json) = serde_json::to_string(&*nodes) {
+            let _ = std::fs::write(&tmp, json);
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+
+    fn clear_active(&self) {
+        if let Some(dir) = &self.state_dir {
+            let _ = std::fs::remove_file(dir.join(TUNING_ACTIVE_FILE));
+        }
+    }
+
+    fn clear_locked(&self) {
+        if let Some(dir) = &self.state_dir {
+            let _ = std::fs::remove_file(dir.join(LOCKED_NODES_FILE));
+        }
+    }
+
+    /// Startup helper: if the previous daemon run left a `tuning_active.json`
+    /// (unclean exit), restore every saved (path, original_value) pair before
+    /// the first tick. Called from `main.rs` immediately after Daemon::new.
+    pub fn rehydrate_and_restore(state_dir: &str) {
+        if state_dir.is_empty() { return; }
+        let base = PathBuf::from(state_dir);
+        let active = base.join(TUNING_ACTIVE_FILE);
+        if active.exists() {
+            if let Ok(content) = std::fs::read_to_string(&active) {
+                if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&content) {
+                    tracing::warn!(
+                        "Found stale tuning_active.json ({} entries) from previous run — restoring originals",
+                        map.len()
+                    );
+                    for (path, val) in map {
+                        crate::tuning::backend::TuningBackend::write_string(&path, &val);
+                    }
+                }
+            }
+            let _ = std::fs::remove_file(&active);
+        }
+
+        // D11: unlock any 0o444 nodes left behind by write_and_lock.
+        let locked = base.join(LOCKED_NODES_FILE);
+        if locked.exists() {
+            if let Ok(content) = std::fs::read_to_string(&locked) {
+                if let Ok(list) = serde_json::from_str::<Vec<String>>(&content) {
+                    for p in list {
+                        let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644));
+                    }
+                }
+            }
+            let _ = std::fs::remove_file(&locked);
+        }
+    }
+
 
     fn write_and_save(&self, path: &str, value: &str, save: bool) {
         if save {
