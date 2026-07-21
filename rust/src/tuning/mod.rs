@@ -390,6 +390,25 @@ impl RuntimeTuner {
         }
 
         for dev in &self.hardware.thermal_profile.cooling_devices {
+            // D2: only silence CPU/GPU thermal caps. Never disarm modem,
+            // charger, display, or battery cooling devices — those matter
+            // for radio safety and battery health even when we own the CPU.
+            let dtype_lower = dev.dev_type.to_lowercase();
+            let is_cpu_gpu = dtype_lower.contains("cpu")
+                || dtype_lower.contains("cluster")
+                || dtype_lower.contains("gpu")
+                || dtype_lower.contains("kgsl")
+                || dtype_lower.contains("thermal-cpufreq")
+                || dtype_lower.contains("thermal-devfreq");
+            if !is_cpu_gpu {
+                tracing::debug!(
+                    target: "tuning",
+                    "Preserving non-CPU/GPU cooling device: {} (type={})",
+                    dev.sysfs_path, dev.dev_type
+                );
+                continue;
+            }
+
             let cur_state = format!("{}/cur_state", dev.sysfs_path);
             if self
                 .unsupported_cooling_nodes
@@ -413,6 +432,7 @@ impl RuntimeTuner {
                 }
             }
         }
+
 
         self.disable_migt_if_present();
     }
