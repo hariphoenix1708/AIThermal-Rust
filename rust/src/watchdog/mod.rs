@@ -62,7 +62,8 @@ impl Watchdog {
         // more than N since last healthy tick, most writes are being rejected
         // by the kernel or SELinux and we should back off to safe defaults.
         let current_failures = crate::tuning::backend::TuningBackend::legacy_write_failure_count();
-        let jumped = current_failures.saturating_sub(self.last_legacy_write_failures) > 20;
+        let jumped_by = current_failures.saturating_sub(self.last_legacy_write_failures);
+        let jumped = jumped_by > 20;
         if is_running_properly {
             self.last_legacy_write_failures = current_failures;
         }
@@ -75,13 +76,13 @@ impl Watchdog {
                 self.heartbeat_failures
             );
             WatchdogVerdict::StalledRecoverNow
-        } else if jumped {
-            warn!(
-                "Watchdog: sysfs write failures jumped by {} — degraded restore",
-                current_failures.saturating_sub(self.last_legacy_write_failures)
-            );
-            WatchdogVerdict::DegradedRestoreRecommended
         } else {
+            if jumped {
+                warn!(
+                    "Watchdog: sysfs write failures jumped by {} — degraded restore",
+                    jumped_by
+                );
+            }
             WatchdogVerdict::DegradedRestoreRecommended
         };
 

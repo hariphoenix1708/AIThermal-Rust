@@ -25,6 +25,12 @@ impl AdaptiveGovernorState {
         }
     }
 
+    pub fn nudge_on_screen_on(&mut self) {
+        if matches!(self.current_tier, FrequencyTier::Eco) {
+            self.current_tier = FrequencyTier::Balanced;
+        }
+    }
+
     pub fn should_sample(&self) -> bool {
         match self.last_sample_at {
             Some(t) => t.elapsed() >= self.sample_interval,
