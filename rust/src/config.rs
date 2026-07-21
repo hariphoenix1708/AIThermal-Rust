@@ -47,7 +47,35 @@ pub struct ProfilesConfig {
     pub adaptive_governor_enabled: bool,
     #[serde(default = "default_true")]
     pub battery_stats_enabled: bool,
+    // Minimum interval between two consecutive actuation bursts (governor /
+    // cpuset / GPU rewrites). Prevents sub-second thrash observed in v3.1.0.
+    #[serde(default = "default_min_actuation_interval_ms")]
+    pub min_actuation_interval_ms: u64,
+    // Congestion control algorithm to install while a game is active.
+    // "kernel_default" keeps whatever the kernel already picked (recommended
+    // for most carriers; avoids BBR / captive-portal interactions).
+    #[serde(default = "default_tcp_cc")]
+    pub tcp_congestion_control_gaming: String,
+    // Master off-switch for every /proc/sys/net/ipv4/tcp_* write. Off by
+    // default because network tweaks in v3.1.0 caused visible connectivity
+    // issues on some kernels.
+    #[serde(default = "default_false")]
+    pub touch_network_stack: bool,
+    // Number of consecutive unclean daemon exits that arm safe mode on the
+    // next boot (disable_tweaks forced true; telemetry-only).
+    #[serde(default = "default_safe_mode_after_crashes")]
+    pub safe_mode_after_crashes: u32,
+    // Watchdog failure count above which we escalate from
+    // DegradedRestoreRecommended to StalledRecoverNow (full snapshot restore).
+    #[serde(default = "default_watchdog_stall_threshold")]
+    pub watchdog_stall_threshold: u32,
 }
+
+fn default_false() -> bool { false }
+fn default_min_actuation_interval_ms() -> u64 { 1500 }
+fn default_tcp_cc() -> String { "kernel_default".to_string() }
+fn default_safe_mode_after_crashes() -> u32 { 2 }
+fn default_watchdog_stall_threshold() -> u32 { 5 }
 
 fn default_true() -> bool {
     true
