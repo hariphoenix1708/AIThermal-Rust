@@ -393,7 +393,7 @@ impl RuntimeTuner {
             // D2: only silence CPU/GPU thermal caps. Never disarm modem,
             // charger, display, or battery cooling devices — those matter
             // for radio safety and battery health even when we own the CPU.
-            let dtype_lower = dev.dev_type.to_lowercase();
+            let dtype_lower = dev.device_type.to_lowercase();
             let is_cpu_gpu = dtype_lower.contains("cpu")
                 || dtype_lower.contains("cluster")
                 || dtype_lower.contains("gpu")
@@ -404,7 +404,7 @@ impl RuntimeTuner {
                 tracing::debug!(
                     target: "tuning",
                     "Preserving non-CPU/GPU cooling device: {} (type={})",
-                    dev.sysfs_path, dev.dev_type
+                    dev.sysfs_path, dev.device_type
                 );
                 continue;
             }
