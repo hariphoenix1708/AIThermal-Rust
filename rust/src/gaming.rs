@@ -4,6 +4,11 @@ use std::time::{Duration, Instant};
 
 use std::collections::HashMap;
 
+/// How many consecutive top-app-cgroup misses are required before we allow
+/// them to invalidate an otherwise-valid process-scan detection. Prevents
+/// one flaky read from erasing a real game latch (the 73 s Roblox stall).
+const CGROUP_NEGATIVE_STREAK_THRESHOLD: u32 = 3;
+
 pub struct GameDetector {
     pub known_games: Vec<String>,
     pub is_gaming: bool,
@@ -17,6 +22,7 @@ pub struct GameDetector {
     cached_pid: Option<u32>,
     last_scan_pids: HashMap<u32, Option<String>>,
     daemon_started_at: Instant,
+    cgroup_negative_streak: u32,
 }
 
 impl GameDetector {
