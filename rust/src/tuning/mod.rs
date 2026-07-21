@@ -100,6 +100,7 @@ impl RuntimeTuner {
                         map.len()
                     );
                     for (path, val) in map {
+                        if !std::path::Path::new(&path).exists() { continue; }
                         crate::tuning::backend::TuningBackend::write_string(&path, &val);
                     }
                 }
@@ -197,26 +198,26 @@ impl RuntimeTuner {
             tracing::info!(target: "network", "NET-01 tcp_keepalive_time {} -> 1200", old_keepalive);
 
             // B4: BBR is opt-in via config, and only if available.
-            if self.tcp_cc_gaming != "kernel_default"
-                && self
-                    .hardware
-                    .network_profile
-                    .available_congestion_controls
-                    .contains(&self.tcp_cc_gaming)
-            {
+            let requested_cc = self.tcp_cc_gaming.trim();
+            let should_write_cc = !requested_cc.is_empty()
+                && requested_cc != "kernel_default"
+                && self.hardware.network_profile
+                      .available_congestion_controls
+                      .iter()
+                      .any(|c| c == requested_cc);
+
+            if should_write_cc {
                 let old_cc = sysfs::read_string(path_congestion).ok().unwrap_or_default();
-                self.write_and_save(path_congestion, &self.tcp_cc_gaming, true);
-                tracing::info!(target: "network", "NET-01 tcp_congestion_control {} -> {}", old_cc, self.tcp_cc_gaming);
+                self.write_and_save(path_congestion, requested_cc, true);
+                tracing::info!(target: "network",
+                    "NET-01 tcp_congestion_control {} -> {}", old_cc, requested_cc);
             }
         } else {
             self.restore_or_default(path_keepalive, "7200");
-            if self.tcp_cc_gaming != "kernel_default" {
-                // Only restore if we actually wrote it in the perf branch.
-                if let Ok(state) = self.original_state.lock() {
-                    if state.contains_key(path_congestion) {
-                        drop(state);
-                        self.restore_or_default(path_congestion, "cubic");
-                    }
+            if let Ok(state) = self.original_state.lock() {
+                if state.contains_key(path_congestion) {
+                    drop(state);
+                    self.restore_or_default(path_congestion, "cubic");
                 }
             }
         }
@@ -480,6 +481,7 @@ impl RuntimeTuner {
             locked.clear();
         }
         self.clear_locked();
+        tracing::debug!(target: "tuning", "restore_stock_thermal: unlocked and cleared locked-node registry");
     }
 
 

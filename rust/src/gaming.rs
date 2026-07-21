@@ -122,8 +122,17 @@ impl GameDetector {
         ];
         for p in &paths {
             let Ok(content) = std::fs::read_to_string(p) else { continue };
-            if content.contains("top-app") {
-                return Some(true);
+            for line in content.lines() {
+                // Format is `<hier-id>:<controllers>:<path>`; we want
+                // the path segment to end with `/top-app`.
+                if let Some(path) = line.rsplit(':').next() {
+                    let path = path.trim();
+                    if path == "/top-app"
+                        || path.ends_with("/top-app")
+                        || path.ends_with("/top-app/") {
+                        return Some(true);
+                    }
+                }
             }
             // File readable but no top-app mention → not in top-app.
             return Some(false);

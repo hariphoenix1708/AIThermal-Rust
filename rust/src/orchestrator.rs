@@ -42,9 +42,21 @@ pub struct SystemOrchestrator {
     battery_stats: crate::telemetry::battery_stats::BatteryStatsTracker,
     last_battery_log_time: Option<std::time::Instant>,
     last_battery_summary_time: Option<std::time::Instant>,
+    last_actuation_at: Option<std::time::Instant>,
+    recovery_applied_this_stall: bool,
 }
 
 impl SystemOrchestrator {
+    fn actuation_allowed(&self, ctx: &RuntimeContext) -> bool {
+        let min_ms = ctx.config.profiles.min_actuation_interval_ms;
+        if min_ms == 0 {
+            return true;
+        }
+        match self.last_actuation_at {
+            None => true,
+            Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
+        }
+    }
     fn get_context_score(
         wifi_active: bool,
         screen_brightness: i32,
@@ -150,16 +162,6 @@ impl SystemOrchestrator {
         let recovery = RecoveryManager::new();
         let calibration = CalibrationManager::new(&ctx.state_dir);
         let snapshot = SnapshotManager::new(&ctx.state_dir, hardware.clone());
-        // Rehydrate any stale tuning state from a previous unclean exit
-        // before we take our own baselines this run.
-        crate::tuning::RuntimeTuner::rehydrate_and_restore(&ctx.state_dir);
-        let runtime_tuner = RuntimeTuner::new(hardware.clone())
-            .with_state_dir(&ctx.state_dir)
-            .with_network_config(
-                &ctx.config.profiles.tcp_congestion_control_gaming,
-                ctx.config.profiles.touch_network_stack,
-            );
-
 
         // Restore snapshot early in startup if it exists, and verify policy
         if let Some(_snap) = snapshot.load_snapshot()
@@ -167,6 +169,18 @@ impl SystemOrchestrator {
         {
             snapshot.restore_snapshot();
         }
+
+        // Rehydrate any stale tuning state from a previous unclean exit
+        // before we take our own baselines this run. (Done AFTER snapshot
+        // restore so snapshot covers baseline cleanly).
+        crate::tuning::RuntimeTuner::rehydrate_and_restore(&ctx.state_dir);
+
+        let runtime_tuner = RuntimeTuner::new(hardware.clone())
+            .with_state_dir(&ctx.state_dir)
+            .with_network_config(
+                &ctx.config.profiles.tcp_congestion_control_gaming,
+                ctx.config.profiles.touch_network_stack,
+            );
 
         Self {
             sensors,
@@ -190,6 +204,8 @@ impl SystemOrchestrator {
             battery_stats: crate::telemetry::battery_stats::BatteryStatsTracker::new(),
             last_battery_log_time: None,
             last_battery_summary_time: None,
+            last_actuation_at: None,
+            recovery_applied_this_stall: false,
         }
     }
 
@@ -405,6 +421,8 @@ impl SystemOrchestrator {
             battery_stats: crate::telemetry::battery_stats::BatteryStatsTracker::new(),
             last_battery_log_time: None,
             last_battery_summary_time: None,
+            last_actuation_at: None,
+            recovery_applied_this_stall: false,
         }
     }
 
@@ -472,17 +490,29 @@ impl RuntimeTask for SystemOrchestrator {
 
         let is_running = ctx.runtime_health;
 
+        let is_screen_off_now = crate::hardware::display::is_screen_off();
+        let just_woke = ctx.screen_off_since.is_some() && !is_screen_off_now;
+        if just_woke {
+            self.adaptive_governor.nudge_on_screen_on();
+            self.last_actuation_at = None; // let the next apply run immediately
+        }
+
         // 1. Watchdog
         match self.watchdog.check(is_running) {
-            Ok(crate::watchdog::WatchdogVerdict::Healthy) => {}
+            Ok(crate::watchdog::WatchdogVerdict::Healthy) => {
+                self.recovery_applied_this_stall = false;
+            }
             Ok(crate::watchdog::WatchdogVerdict::DegradedRestoreRecommended) => {
                 warn!("Watchdog: degraded — restoring stock thermal governance");
                 self.runtime_tuner.restore_stock_thermal();
             }
             Ok(crate::watchdog::WatchdogVerdict::StalledRecoverNow) => {
                 warn!("Watchdog: stalled — restoring all sysfs originals");
-                self.runtime_tuner.restore_all();
-                self.runtime_tuner.restore_stock_thermal();
+                if !self.recovery_applied_this_stall {
+                    self.runtime_tuner.restore_all();
+                    self.runtime_tuner.restore_stock_thermal();
+                    self.recovery_applied_this_stall = true;
+                }
                 ctx.recovery_mode = true;
             }
             Err(e) => tracing::debug!("Watchdog check error: {}", e),
@@ -681,6 +711,8 @@ impl RuntimeTask for SystemOrchestrator {
         // Check if tweaks are disabled
         let disable_tweaks = ctx.config.profiles.disable_tweaks;
 
+        let hard_immediate = final_policy == PolicyState::EmergencyCool || final_policy == PolicyState::Suspend || ctx.recovery_mode;
+        let can_actuate = self.actuation_allowed(ctx) || hard_immediate;
 
         if !disable_tweaks {
             // If game was just detected and confirmed, try pinning critical render thread
@@ -700,7 +732,14 @@ impl RuntimeTask for SystemOrchestrator {
             self.select_gpu_governor(&["powersave", "msm-adreno-tz", "simple_ondemand"]);
         let cpu_gov_perf = self.select_cpu_governor(&["walt", "performance", "schedutil"]);
         let cpu_gov_bal = self.select_cpu_governor(&["schedutil", "walt"]);
-        let cpu_gov_cons = self.select_cpu_governor(&["conservative", "schedutil"]);
+
+        let is_plugged = self.plug_state().0;
+        let cpu_gov_cons = if is_screen_off_now || !is_plugged {
+            self.select_cpu_governor(&["schedutil"]) // Use schedutil unconditionally for cooldown/conservative
+        } else {
+            self.select_cpu_governor(&["schedutil"]) // Also schedutil here, we avoid "conservative" due to scrolling stutter
+        };
+
         let cpu_gov_save = self.select_cpu_governor(&["powersave", "schedutil"]);
 
         // Grace period to avoid burst-apply stutter at game launch, tune threshold based on real-device testing.
@@ -710,8 +749,10 @@ impl RuntimeTask for SystemOrchestrator {
             .unwrap_or(true);
 
         if !disable_tweaks && policy_changed && (final_policy != PolicyState::Performance || game_grace_elapsed) {
-            match final_policy {
-                PolicyState::Performance => {
+            if can_actuate {
+                self.last_actuation_at = Some(std::time::Instant::now());
+                match final_policy {
+                    PolicyState::Performance => {
                     if let Some(gov) = &cpu_gov_perf {
                         if let Err(e) = self.governors.apply_cpu_governor(gov) {
                             tracing::warn!("Failed to apply CPU governor: {}", e);
@@ -787,8 +828,9 @@ impl RuntimeTask for SystemOrchestrator {
                             tracing::warn!("Failed to apply GPU governor: {}", e);
                         }
                     }
-                    if let Err(e) = self.cpuset.apply_cpuset("powersave") {
-                        tracing::warn!("Failed to apply cpuset: {}", e);
+                        if let Err(e) = self.cpuset.apply_cpuset("powersave") {
+                            tracing::warn!("Failed to apply cpuset: {}", e);
+                        }
                     }
                 }
             }
@@ -822,8 +864,10 @@ impl RuntimeTask for SystemOrchestrator {
 
                 let tier = self.adaptive_governor.decide_tier(frame_stats.as_ref(), utilization);
 
-                for cluster in &self.hardware.cpu_topology.clusters {
-                    let target = match tier {
+                if can_actuate {
+                    self.last_actuation_at = Some(std::time::Instant::now());
+                    for cluster in &self.hardware.cpu_topology.clusters {
+                        let target = match tier {
                         crate::scheduler::adaptive_governor::FrequencyTier::Max => crate::governors::GovernorManager::max_freq(&cluster.available_frequencies),
                         crate::scheduler::adaptive_governor::FrequencyTier::High => {
                             let min = crate::governors::GovernorManager::min_freq(&cluster.available_frequencies).unwrap_or(0);
@@ -841,10 +885,11 @@ impl RuntimeTask for SystemOrchestrator {
                         crate::scheduler::adaptive_governor::FrequencyTier::Eco => crate::governors::GovernorManager::min_freq(&cluster.available_frequencies),
                     };
 
-                    if let Some(freq) = target {
-                        let path = format!("{}/scaling_max_freq", cluster.policy_path);
-                        if crate::tuning::backend::TuningBackend::try_write_string(&path, &freq.to_string()).is_ok() {
-                            tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+                        if let Some(freq) = target {
+                            let path = format!("{}/scaling_max_freq", cluster.policy_path);
+                            if crate::tuning::backend::TuningBackend::try_write_string(&path, &freq.to_string()).is_ok() {
+                                tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+                            }
                         }
                     }
                 }
@@ -853,17 +898,20 @@ impl RuntimeTask for SystemOrchestrator {
 
         // Runtime Tuner application on policy transitions
         if !disable_tweaks && policy_changed {
-            if let Err(e) = self.runtime_tuner.apply_network_tweaks(policy_str) {
-                tracing::warn!("Failed to apply network tweaks: {}", e);
+            if can_actuate {
+                self.last_actuation_at = Some(std::time::Instant::now());
+                if let Err(e) = self.runtime_tuner.apply_network_tweaks(policy_str) {
+                    tracing::warn!("Failed to apply network tweaks: {}", e);
+                }
+                if let Err(e) = self.runtime_tuner.apply_touch_display_tweaks(policy_str) {
+                    tracing::warn!("Failed to apply touch display tweaks: {}", e);
+                }
+                self.runtime_tuner.apply_vm_params(policy_str);
+                if let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
+                    tracing::warn!("Failed to apply scheduler: {}", e);
+                }
+                self.runtime_tuner.apply_universal_gpu_control(policy_str);
             }
-            if let Err(e) = self.runtime_tuner.apply_touch_display_tweaks(policy_str) {
-                tracing::warn!("Failed to apply touch display tweaks: {}", e);
-            }
-            self.runtime_tuner.apply_vm_params(policy_str);
-            if let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
-                tracing::warn!("Failed to apply scheduler: {}", e);
-            }
-            self.runtime_tuner.apply_universal_gpu_control(policy_str);
 
             // Stock thermal enable/disable based on gaming/perf
             let is_perf = policy_str == "Performance" || policy_str == "Gaming";
@@ -964,16 +1012,27 @@ impl RuntimeTask for SystemOrchestrator {
             && clamped_trend <= 0; // only back off further if not actively heating
 
         ctx.sleep_ms = if clamped_trend > 15 {
-            50 // avoid true 0 sleep to prevent CPU spin
+            250 // was 50; avoids CPU spin without under-sleeping the daemon
         } else if clamped_trend > 8 {
             1000
         } else if long_idle {
             30_000 // device has been screen-off, cool/cooling, and idle for 2+ minutes
-        } else if (-2..=2).contains(&clamped_trend) && !is_gaming {
+        } else if is_screen_off && !is_gaming && (-2..=2).contains(&clamped_trend) {
             ctx.config.profiles.poll_interval.saturating_mul(4000)
+        } else if !is_gaming && (-2..=2).contains(&clamped_trend) {
+            // Screen ON, low trend, no game: keep it interactive.
+            ctx.config.profiles.poll_interval.saturating_mul(1000)
         } else {
             ctx.config.profiles.poll_interval.saturating_mul(1000)
         };
+
+        let is_screen_off_now = crate::hardware::display::is_screen_off();
+        let just_woke = ctx.screen_off_since.is_some() && !is_screen_off_now;
+
+        if just_woke {
+            // Cap the pending sleep so the screen-on tick lands immediately.
+            ctx.sleep_ms = ctx.sleep_ms.min(150);
+        }
 
         let tick_interval_secs = ctx.sleep_ms / 1000;
 
