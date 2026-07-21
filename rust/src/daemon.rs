@@ -38,7 +38,18 @@ pub struct Daemon {
     screen_on: Arc<AtomicBool>,
     last_screen_netlink_update: Arc<AtomicU64>,
     was_netlink_fresh_last_check: bool,
+    last_tick_completed: Option<std::time::Instant>,
 }
+
+/// Monotonic tick counter used by the heartbeat instrumentation in the main
+/// loop. Emitted at DEBUG so a future silent-stall episode can be pinpointed
+/// to before-vs-during `tick()` by inspecting the verbose log gap.
+static TICK_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Threshold above which a sleep is considered an intentional long-idle
+/// (screen-off) tier and excluded from the stall-detection warning. Anything
+/// below this is a normal poll interval and should never take this long.
+const STALL_WARN_THRESHOLD_SECS: u64 = 30;
 
 impl Daemon {
     pub fn new(pid_file: &str, config: AppConfig, state_dir: &str, config_path: String, game_list_path: String) -> Self {
@@ -80,6 +91,7 @@ impl Daemon {
             screen_on: Arc::new(AtomicBool::new(!initial_screen_off)),
             last_screen_netlink_update: Arc::new(AtomicU64::new(now)),
             was_netlink_fresh_last_check: true,
+            last_tick_completed: None,
         }
     }
 
@@ -189,9 +201,30 @@ impl Daemon {
                 self.ctx.config = new_config;
             }
 
+            // Stall-visible check: if the previous tick completed but we never
+            // got back here within a generous window, log it loudly so a future
+            // recurrence of the ~115s silent-gap bug is immediately visible
+            // instead of only inferable from log archaeology after the fact.
+            // Long-idle screen-off sleeps are intentional and excluded.
+            if let Some(last) = self.last_tick_completed {
+                let elapsed = last.elapsed().as_secs();
+                let prev_sleep_secs = self.ctx.sleep_ms / 1000;
+                let was_long_idle_sleep = prev_sleep_secs >= STALL_WARN_THRESHOLD_SECS;
+                if !was_long_idle_sleep && elapsed > STALL_WARN_THRESHOLD_SECS {
+                    warn!(
+                        "Tick loop may have stalled: {}s since last completed tick (expected sleep ~{}s)",
+                        elapsed, prev_sleep_secs
+                    );
+                }
+            }
+
+            let n = TICK_COUNTER.fetch_add(1, Ordering::Relaxed);
+            tracing::debug!(target: "heartbeat", "tick #{} starting", n);
+
             if let Err(e) = self.tick() {
                 error!("Error in daemon tick: {}", e);
             }
+            self.last_tick_completed = Some(std::time::Instant::now());
 
             let sleep_ms = self.ctx.sleep_ms.max(1);
             let was_screen_off = self.check_screen_off();
