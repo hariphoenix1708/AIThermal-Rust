@@ -47,11 +47,15 @@ pub struct SystemOrchestrator {
 }
 
 impl SystemOrchestrator {
-    fn actuation_allowed(&self, ctx: &RuntimeContext) -> bool {
-        let min_ms = ctx.config.profiles.min_actuation_interval_ms;
-        if min_ms == 0 {
+    fn actuation_allowed(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
+        let base_ms = ctx.config.profiles.min_actuation_interval_ms;
+        if base_ms == 0 {
             return true;
         }
+        // While a game is running, hold the floor at 8 s. Burst-
+        // rewriting governors mid-frame is worse than a slightly
+        // stale policy.
+        let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
         match self.last_actuation_at {
             None => true,
             Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
@@ -593,8 +597,7 @@ impl RuntimeTask for SystemOrchestrator {
         }
 
         // 5. Policy
-        let is_screen_off = crate::hardware::display::is_screen_off();
-        if is_screen_off {
+        if is_screen_off_now {
             if ctx.screen_off_since.is_none() {
                 ctx.screen_off_since = Some(std::time::Instant::now());
             }
@@ -623,7 +626,7 @@ impl RuntimeTask for SystemOrchestrator {
             wifi_active,
             screen_brightness,
             ambient_temp,
-            is_screen_off,
+            is_screen_off_now,
             is_gaming,
         );
         let cooling_eff = Self::get_cooling_efficiency(trend_score, gpu_load, is_cooling);
@@ -635,7 +638,7 @@ impl RuntimeTask for SystemOrchestrator {
             predicted_temp,
             trend_score,
             is_gaming,
-            is_screen_off,
+            is_screen_off_now,
             final_context,
             game_modifier,
             comfort_weight,
@@ -712,7 +715,7 @@ impl RuntimeTask for SystemOrchestrator {
         let disable_tweaks = ctx.config.profiles.disable_tweaks;
 
         let hard_immediate = final_policy == PolicyState::EmergencyCool || final_policy == PolicyState::Suspend || ctx.recovery_mode;
-        let can_actuate = self.actuation_allowed(ctx) || hard_immediate;
+        let can_actuate = self.actuation_allowed(ctx, is_gaming) || hard_immediate;
 
         if !disable_tweaks {
             // If game was just detected and confirmed, try pinning critical render thread
@@ -733,12 +736,9 @@ impl RuntimeTask for SystemOrchestrator {
         let cpu_gov_perf = self.select_cpu_governor(&["walt", "performance", "schedutil"]);
         let cpu_gov_bal = self.select_cpu_governor(&["schedutil", "walt"]);
 
-        let is_plugged = self.plug_state().0;
-        let cpu_gov_cons = if is_screen_off_now || !is_plugged {
-            self.select_cpu_governor(&["schedutil"]) // Use schedutil unconditionally for cooldown/conservative
-        } else {
-            self.select_cpu_governor(&["schedutil"]) // Also schedutil here, we avoid "conservative" due to scrolling stutter
-        };
+        // Cooldown governor is always schedutil (never conservative)
+        // to keep scrolling responsive after game exit.
+        let cpu_gov_cons = self.select_cpu_governor(&["schedutil"]);
 
         let cpu_gov_save = self.select_cpu_governor(&["powersave", "schedutil"]);
 
@@ -811,7 +811,7 @@ impl RuntimeTask for SystemOrchestrator {
                             tracing::warn!("Failed to apply GPU governor: {}", e);
                         }
                     }
-                    if let Err(e) = self.cpuset.apply_cpuset("conservative") {
+                    if let Err(e) = self.cpuset.apply_cpuset("balanced") {
                         tracing::warn!("Failed to apply cpuset: {}", e);
                     }
                 }
@@ -988,7 +988,7 @@ impl RuntimeTask for SystemOrchestrator {
             is_plugged,
             plug_state_reliable,
             is_gaming,
-            screen_off: is_screen_off,
+            screen_off: is_screen_off_now,
             gpu_load,
             urgent: false,
             seconds_since_plugged,
@@ -1003,7 +1003,7 @@ impl RuntimeTask for SystemOrchestrator {
         let clamped_trend = (trend_score * 50).clamp(-50, 50);
         ctx.trend_score = clamped_trend;
 
-        let long_idle = is_screen_off
+        let long_idle = is_screen_off_now
             && !is_gaming
             && ctx
                 .screen_off_since
@@ -1017,7 +1017,7 @@ impl RuntimeTask for SystemOrchestrator {
             1000
         } else if long_idle {
             30_000 // device has been screen-off, cool/cooling, and idle for 2+ minutes
-        } else if is_screen_off && !is_gaming && (-2..=2).contains(&clamped_trend) {
+        } else if is_screen_off_now && !is_gaming && (-2..=2).contains(&clamped_trend) {
             ctx.config.profiles.poll_interval.saturating_mul(4000)
         } else if !is_gaming && (-2..=2).contains(&clamped_trend) {
             // Screen ON, low trend, no game: keep it interactive.
@@ -1025,9 +1025,6 @@ impl RuntimeTask for SystemOrchestrator {
         } else {
             ctx.config.profiles.poll_interval.saturating_mul(1000)
         };
-
-        let is_screen_off_now = crate::hardware::display::is_screen_off();
-        let just_woke = ctx.screen_off_since.is_some() && !is_screen_off_now;
 
         if just_woke {
             // Cap the pending sleep so the screen-on tick lands immediately.
@@ -1043,7 +1040,7 @@ impl RuntimeTask for SystemOrchestrator {
                 bat_temp,
                 soc,
                 current_now_ua,
-                !is_screen_off,
+                !is_screen_off_now,
                 is_gaming,
                 is_plugged,
                 long_idle,
@@ -1061,7 +1058,7 @@ impl RuntimeTask for SystemOrchestrator {
                     bat_temp, soc,
                     current_now_ua.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string()),
                     drain_rate.map(|d| format!("{:.2}", d.percent_per_hour)).unwrap_or_else(|| "?".to_string()),
-                    !is_screen_off, is_gaming, is_plugged
+                    !is_screen_off_now, is_gaming, is_plugged
                 );
                 self.last_battery_log_time = Some(std::time::Instant::now());
             }
@@ -1087,7 +1084,7 @@ impl RuntimeTask for SystemOrchestrator {
             "charge_state": format!("{:?}", self.charging.current_state),
             "charge_limit_ma": self.charging.active_limit_ma,
             "trend_score": ctx.trend_score,
-            "screen_state": !is_screen_off,
+            "screen_state": !is_screen_off_now,
             "mem_pressure": mem_pressure,
             "slow_cooler": is_cooling,
             "session_count": ctx.current_game
@@ -1105,7 +1102,7 @@ impl RuntimeTask for SystemOrchestrator {
             "cooldown_active": ctx.cooldown_active,
             "cooldown_source_pkg": ctx.cooldown_source_pkg,
             "plugged_in": ctx.plugged_in_at.is_some(),
-            "screen_off": is_screen_off,
+            "screen_off": is_screen_off_now,
             "recovery_mode": ctx.recovery_mode,
             "runtime_health": ctx.runtime_health,
             "legacy_write_failures": crate::tuning::backend::TuningBackend::legacy_write_failure_count(),
