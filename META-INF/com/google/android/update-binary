@@ -4,7 +4,7 @@
 SKIPUNZIP=1
 
 ui_print "-----------------------------------------"
-ui_print "   ThermalAI v3.1.0-beta - Rust Edition"
+ui_print "   ThermalAI v3.1.1-beta - Rust Edition"
 ui_print "   Device Edition: Universal Android"
 ui_print "   Linux 4.14+ / AOSP / HyperOS"
 ui_print "-----------------------------------------"
