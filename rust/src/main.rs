@@ -168,9 +168,9 @@ fn main() -> Result<()> {
 
     daemon.register_task(Box::new(orchestrator));
 
-    daemon.start()?;
-
+    let start_result = daemon.start();
     let _ = std::fs::remove_file(&crash_marker);
+    start_result?;
 
     tracing::info!("ThermalAI daemon shutdown complete.");
 

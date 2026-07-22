@@ -294,8 +294,10 @@ impl AppConfig {
             anyhow::bail!("File does not exist: {:?}", path);
         }
         let content = fs::read_to_string(path).context("Failed to read profiles configuration")?;
-        let config: ProfilesConfig =
-            toml::from_str(&content).context("Invalid TOML format in profiles config")?;
+        let config: ProfilesConfig = match toml::from_str(&content) {
+            Ok(c) => c,
+            Err(e) => anyhow::bail!("Invalid TOML format in profiles config ({})", e),
+        };
 
         // Validation
         if let Err(reason) = config.is_valid() {
