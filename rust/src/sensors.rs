@@ -35,10 +35,10 @@ impl SensorManager {
             for entry in entries.flatten() {
                 let path = entry.path().join("in_temp_input");
                 if path.exists() {
-                    self.ambient_sensor_path = Some(path.to_string_lossy().to_string());
                     if let Ok(content) = std::fs::read_to_string(&path)
                         && let Ok(val) = content.trim().parse::<i32>()
                     {
+                        self.ambient_sensor_path = Some(path.to_string_lossy().to_string());
                         return val / 1000;
                     }
                 }

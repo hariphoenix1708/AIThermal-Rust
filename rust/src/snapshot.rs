@@ -57,10 +57,6 @@ impl SnapshotManager {
             "/proc/sys/vm/dirty_ratio".to_string(),
             "/proc/sys/vm/dirty_background_ratio".to_string(),
             "/proc/sys/net/ipv4/tcp_keepalive_time".to_string(),
-            "/proc/sys/net/ipv4/tcp_syn_retries".to_string(),
-            "/proc/sys/net/ipv4/tcp_synack_retries".to_string(),
-            "/proc/sys/net/ipv4/tcp_window_scaling".to_string(),
-            "/proc/sys/net/ipv4/tcp_timestamps".to_string(),
         ]);
 
         let root = &self.hardware.cpuset_profile.root_path;

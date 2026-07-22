@@ -12,27 +12,20 @@ pub enum PolicyState {
 
 pub struct PolicyEngine {
     pub current_policy: PolicyState,
-    debounce_ticks: u64,
-    ticks_since_change: u64,
+    pub debounce: std::time::Duration,
+    pub last_change_at: std::time::Instant,
     startup_time: std::time::Instant,
     startup_grace_secs: u64,
 }
 
 impl PolicyEngine {
-    pub fn new(debounce_sec: u64, poll_interval_sec: u64) -> Self {
-        let debounce_ticks = if poll_interval_sec > 0 {
-            std::cmp::max(
-                1,
-                (debounce_sec as f64 / poll_interval_sec as f64).ceil() as u64,
-            )
-        } else {
-            1
-        };
+    pub fn new(debounce_sec: u64, _poll_interval_sec: u64) -> Self {
+        let debounce = std::time::Duration::from_secs(debounce_sec.max(1));
 
         Self {
             current_policy: PolicyState::Balanced,
-            debounce_ticks,
-            ticks_since_change: 0,
+            debounce,
+            last_change_at: std::time::Instant::now(),
             startup_time: std::time::Instant::now(),
             startup_grace_secs: 30, // Default 30s grace period for inputs to stabilize
         }
@@ -53,8 +46,6 @@ impl PolicyEngine {
         comfort_weight: f64,
         config: &ProfilesConfig,
     ) -> PolicyState {
-        self.ticks_since_change += 1;
-
         //
         let s_temp = (composite_temp as f64 - config.temp_cool as f64).max(0.0) * 2.0;
         let s_pred = (predicted_temp as f64 - config.temp_cool as f64).max(0.0) * 1.5;
@@ -80,7 +71,7 @@ impl PolicyEngine {
             || total_score > 90.0
         {
             PolicyState::EmergencyCool
-        } else if is_screen_off && !is_gaming && total_score < -5.0 && self.ticks_since_change > 10
+        } else if is_screen_off && !is_gaming && total_score < -5.0 && self.last_change_at.elapsed().as_secs() > 10
         {
             PolicyState::Suspend
         } else if total_score > 65.0 {
@@ -101,7 +92,7 @@ impl PolicyEngine {
         if desired == PolicyState::EmergencyCool || desired == PolicyState::Suspend {
             if self.current_policy != desired {
                 self.current_policy = desired.clone();
-                self.ticks_since_change = 0;
+                self.last_change_at = std::time::Instant::now();
             }
             return desired;
         }
@@ -113,7 +104,7 @@ impl PolicyEngine {
         }
 
         // Apply debounce for normal transitions to prevent rapid flapping
-        if desired != self.current_policy && self.ticks_since_change >= self.debounce_ticks {
+        if desired != self.current_policy && self.last_change_at.elapsed() >= self.debounce {
             const HYSTERESIS_MARGIN: f64 = 8.0;
 
             let desired_rank = policy_rank(&desired);
@@ -128,7 +119,7 @@ impl PolicyEngine {
 
             if allowed {
                 self.current_policy = desired.clone();
-                self.ticks_since_change = 0;
+                self.last_change_at = std::time::Instant::now();
             }
         }
 
@@ -142,13 +133,13 @@ mod tests {
 
     #[test]
     fn test_policy_evaluation_and_debounce() {
-        let mut engine = PolicyEngine::new(10, 2); // 5 ticks debounce
+        let mut engine = PolicyEngine::new(10, 2); // 10s debounce
         // bypass startup grace period for normal tests
         engine.startup_grace_secs = 0;
         let config = ProfilesConfig::default();
 
-        // Screen off doesn't override immediately unless score is low and ticks > 10
-        engine.ticks_since_change = 11;
+        // Screen off doesn't override immediately unless score is low and time elapsed > 10
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(11);
         // With temps at 30, they are likely cool, giving 0 for s_temp and s_pred.
         // We pass -10.0 for context_weight to drop the score below -5.0.
         assert_eq!(
@@ -165,18 +156,18 @@ mod tests {
         // Drop to cool should debounce
         assert_eq!(
             engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, &config),
-            PolicyState::EmergencyCool // still emergency because 0 ticks since change < 5
+            PolicyState::EmergencyCool // still emergency because time elapsed is < 10
         );
 
-        // Fast forward ticks
-        engine.ticks_since_change = 10;
+        // Fast forward time
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
         assert_eq!(
             engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, &config),
             PolicyState::Performance
         );
 
         // Rise to warm
-        engine.ticks_since_change = 10;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
         let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, &config);
     }
 }
