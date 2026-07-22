@@ -47,11 +47,15 @@ pub struct SystemOrchestrator {
 }
 
 impl SystemOrchestrator {
-    fn actuation_allowed(&self, ctx: &RuntimeContext) -> bool {
-        let min_ms = ctx.config.profiles.min_actuation_interval_ms;
-        if min_ms == 0 {
+    fn actuation_allowed(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
+        let base_ms = ctx.config.profiles.min_actuation_interval_ms;
+        if base_ms == 0 {
             return true;
         }
+        // While a game is running, hold the floor at 8 s. Burst-
+        // rewriting governors mid-frame is worse than a slightly
+        // stale policy.
+        let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
         match self.last_actuation_at {
             None => true,
             Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
@@ -711,7 +715,7 @@ impl RuntimeTask for SystemOrchestrator {
         let disable_tweaks = ctx.config.profiles.disable_tweaks;
 
         let hard_immediate = final_policy == PolicyState::EmergencyCool || final_policy == PolicyState::Suspend || ctx.recovery_mode;
-        let can_actuate = self.actuation_allowed(ctx) || hard_immediate;
+        let can_actuate = self.actuation_allowed(ctx, is_gaming) || hard_immediate;
 
         if !disable_tweaks {
             // If game was just detected and confirmed, try pinning critical render thread
