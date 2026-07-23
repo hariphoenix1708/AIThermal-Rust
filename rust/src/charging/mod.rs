@@ -64,31 +64,12 @@ pub struct ChargingEngine {
     pub last_apply_attempt: Option<std::time::Instant>,
     pub limit_write_failure_count: u32,
     pub limit_write_disabled: bool,
+    pub no_nodes_warned: bool,
 }
 
 impl ChargingEngine {
-    pub fn new() -> Self {
-        let current_candidates = [
-            "/sys/class/power_supply/battery/constant_charge_current_max",
-            "/sys/class/power_supply/bms/constant_charge_current_max",
-            "/sys/class/power_supply/battery/current_max",
-            "/sys/class/power_supply/main/constant_charge_current_max",
-            "/sys/class/power_supply/main/current_max",
-            "/sys/class/power_supply/usb/current_max",
-            "/sys/class/power_supply/usb/input_current_limit",
-            "/sys/class/power_supply/dc/current_max",
-            "/sys/class/power_supply/dc/input_current_limit",
-            "/sys/class/power_supply/ac/current_max",
-            "/sys/class/power_supply/ac/input_current_limit",
-        ];
-
-        let mut limit_nodes = Vec::new();
-        for node in &current_candidates {
-            let p = Path::new(node);
-            if p.exists() && std::fs::OpenOptions::new().write(true).open(p).is_ok() {
-                limit_nodes.push(node.to_string());
-            }
-        }
+    pub fn new(hw: &crate::hardware::HardwareProfile) -> Self {
+        let limit_nodes = hw.charging_profile.current_limit_nodes.clone();
 
         Self {
             limit_nodes,
@@ -115,6 +96,7 @@ impl ChargingEngine {
             last_apply_attempt: None,
             limit_write_failure_count: 0,
             limit_write_disabled: false,
+            no_nodes_warned: false,
         }
     }
 
@@ -347,6 +329,15 @@ impl ChargingEngine {
             self.total_power_uw_samples = 0;
             self.sample_count = 0;
             tracing::info!(target: "charging", "Charging session started at {}% SOC", soc);
+
+            if let Some(node) = self.limit_nodes.first() {
+                tracing::info!(target: "charging",
+                    "Charge-limit control node: {} ({} candidates writable)",
+                    node, self.limit_nodes.len());
+            } else {
+                tracing::info!(target: "charging",
+                    "Charge-limit control: NONE (device controls current itself)");
+            }
         }
 
         // Tracking peaks and samples
@@ -515,7 +506,13 @@ impl ChargingEngine {
             .retain(|node| !crate::logger::is_sysfs_blacklisted(node));
 
         if self.limit_nodes.is_empty() {
-            tracing::debug!(target: "charging", "No writable charge limit nodes discovered; skipping {}mA limit", ma);
+            if !self.no_nodes_warned {
+                self.no_nodes_warned = true;
+                tracing::info!(target: "charging",
+                    "AIThermal has no writable current-limit node on this device; \
+                     observed charge current is set entirely by kernel/PMIC (typically \
+                     ~900 mA on USB SDP, or the negotiated USB-PD/QC contract).");
+            }
             return false;
         }
 
@@ -573,6 +570,6 @@ impl ChargingEngine {
 
 impl Default for ChargingEngine {
     fn default() -> Self {
-        Self::new()
+        Self::new(&crate::hardware::HardwareProfile::default())
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## [v3.1.1-beta] - Wall-clock hysteresis and telemetry cleanup
+
+*   **Policy & Recovery Stability**: Converted internal PolicyEngine debounce and RecoveryManager thermal threshold limits from cycle tick counts to robust `std::time::Instant` wall-clock seconds. This solves a prominent stutter/judder issue where dynamic sleep-tick changes (adaptive polling) during gaming or screen-wake were improperly accelerating cooldown evaluation logic and thrashing CPU governors.
+*   **Snapshot Cleanup**: Eliminated TCP state paths from being unnecessarily cached within the system snapshot since they are actively being ignored by `touch_network_stack` flags in `profiles.conf`.
+*   **Frame Sampler Guard**: Bolstered the Android frame parsing logic for Adaptive Governor to require at least three timestamps per row, dropping faulty sparse samples (zero-duration frame logs).
+*   **Sensor Hardware Handling**: Secured `ambient_temp_c` sensor parsing to guarantee a faulty/unreadable fallback probe won't clobber the valid path inside the hardware profile cache.
+
 ## [v3.1.0-beta] - Major Features and Stability Update
 
 *   **Adaptive Governor**: Added an opt-in, frame-timing-and-load-aware CPU frequency governor (`adaptive_governor_enabled`) during active gaming, using real per-frame data via `dumpsys` where available, with a CPU-load-based fallback.

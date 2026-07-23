@@ -78,12 +78,11 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
         // within each row's own timestamp fields regardless of exact column
         // count differences between versions.
         let nums: Vec<u64> = fields.iter().filter_map(|f| f.trim().parse::<u64>().ok()).collect();
-        if nums.len() < 2 { continue; }
-        let intended_vsync = nums[1.min(nums.len() - 1)];
+        if nums.len() < 3 { continue; }
+        let intended_vsync = nums[1];
         let frame_completed = *nums.last().unwrap();
-        if frame_completed > intended_vsync {
-            durations.push(frame_completed - intended_vsync);
-        }
+        if frame_completed <= intended_vsync { continue; }
+        durations.push(frame_completed - intended_vsync);
     }
 
     if durations.is_empty() {
