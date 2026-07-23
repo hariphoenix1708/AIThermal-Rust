@@ -38,7 +38,7 @@ fn record_failure(path: &Path) {
         let entry = counts.entry(path.to_path_buf()).or_insert(0);
         *entry = entry.saturating_add(1);
         if *entry == POISON_THRESHOLD {
-            warn!(
+            tracing::warn!(target: "thermal",
                 "Sysfs node {} rejected {} writes in a row, marking unsupported for the rest of this daemon run",
                 path.display(),
                 POISON_THRESHOLD
@@ -78,7 +78,10 @@ impl TuningBackend {
             return;
         }
         match sysfs::write_string(p, value.as_ref()) {
-            Ok(()) => record_success(p),
+            Ok(()) => {
+                record_success(p);
+                tracing::trace!(target: "thermal", "sysfs write ok: {} = {}", p.display(), value.as_ref());
+            },
             Err(e) => {
                 LEGACY_WRITE_FAILURES.fetch_add(1, Ordering::Relaxed);
                 record_failure(p);
@@ -108,6 +111,7 @@ impl TuningBackend {
         match sysfs::write_string(p, value.as_ref()) {
             Ok(()) => {
                 record_success(p);
+                tracing::trace!(target: "thermal", "sysfs write ok: {} = {}", p.display(), value.as_ref());
                 Ok(())
             }
             Err(e) => {
@@ -148,6 +152,7 @@ impl TuningBackend {
         match sysfs::write_string(&node.path, val_str) {
             Ok(()) => {
                 record_success(path);
+                tracing::trace!(target: "thermal", "sysfs write ok: {} = {}", path.display(), val_str);
                 Ok(())
             }
             Err(e) => {

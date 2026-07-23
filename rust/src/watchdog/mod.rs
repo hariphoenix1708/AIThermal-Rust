@@ -86,6 +86,10 @@ impl Watchdog {
             WatchdogVerdict::DegradedRestoreRecommended
         };
 
+        let stall_secs = self.last_healthy_at.map(|t| current_time.duration_since(t).as_secs()).unwrap_or(0);
+        tracing::trace!("Watchdog: tick_count={}, last_healthy_at={:?}, stall_secs={}",
+            self.heartbeat_failures, self.last_healthy_at, stall_secs);
+
         Ok(verdict)
     }
 }

@@ -118,7 +118,12 @@ impl PolicyEngine {
             };
 
             if allowed {
+                let prev = self.current_policy.clone();
                 self.current_policy = desired.clone();
+                tracing::info!(target: "thermal",
+                    "Policy transition {:?} -> {:?} (score={:.1}, elapsed_since_last={}s)",
+                    prev, self.current_policy, total_score,
+                    self.last_change_at.elapsed().as_secs());
                 self.last_change_at = std::time::Instant::now();
             }
         }

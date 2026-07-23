@@ -38,26 +38,41 @@ pub fn probe_charging() -> ChargingProfile {
         }
     }
 
-    let limit_nodes = [
+    // Phase 1: keep only nodes that exist AND accept a probe write of a
+    // small, safe value (500 mA in microamps = "500000"). Nodes that reject
+    // EINVAL on this probe are dropped up front so we never poison them at
+    // runtime.
+    let ordered = [
         "/sys/class/power_supply/battery/constant_charge_current_max",
         "/sys/class/power_supply/bms/constant_charge_current_max",
-        "/sys/class/power_supply/battery/current_max",
         "/sys/class/power_supply/main/constant_charge_current_max",
+        "/sys/class/power_supply/battery/current_max",
         "/sys/class/power_supply/main/current_max",
+        // usb/dc/ac input_current_limit are last-resort only
         "/sys/class/power_supply/usb/current_max",
-        "/sys/class/power_supply/usb/input_current_limit",
         "/sys/class/power_supply/dc/current_max",
-        "/sys/class/power_supply/dc/input_current_limit",
         "/sys/class/power_supply/ac/current_max",
+        "/sys/class/power_supply/usb/input_current_limit",
+        "/sys/class/power_supply/dc/input_current_limit",
         "/sys/class/power_supply/ac/input_current_limit",
     ];
-
-    for node in limit_nodes {
-        if Path::new(node).exists() {
+    for node in ordered {
+        if !Path::new(node).exists() { continue; }
+        // Try a probe write of the current value (read-then-write same value)
+        // so we don’t perturb hardware but do verify EINVAL doesn’t fire.
+        let probe_ok = match std::fs::read_to_string(node) {
+            Ok(current) => crate::sysfs::write_string(node, current.trim()).is_ok(),
+            Err(_) => false,
+        };
+        if probe_ok {
             profile.current_limit_nodes.push(node.to_string());
-            profile
-                .capability_nodes
-                .push(CapabilityNode::new(node, "charge_limit"));
+            profile.capability_nodes.push(CapabilityNode::new(node, "charge_limit"));
+        } else {
+            tracing::info!(
+                target: "charging",
+                "Charge-limit node {} exists but rejected probe write; skipping",
+                node
+            );
         }
     }
 

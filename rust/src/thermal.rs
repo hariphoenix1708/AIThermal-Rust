@@ -17,6 +17,11 @@ impl ThermalEngine {
         }
     }
 
+    pub fn reset_after_long_sleep(&mut self) {
+        self.history.clear();
+        self.ema_temp = 0.0;
+    }
+
     pub fn update(&mut self, current_temp: i32) {
         if self.history.len() >= self.history_size {
             self.history.pop_front();

@@ -2,7 +2,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tracing::{info, warn};
+use tracing::warn;
 
 use std::sync::atomic::AtomicU64;
 
@@ -24,7 +24,7 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
     let mut socket = Socket::new(NETLINK_KOBJECT_UEVENT)?;
     let addr = SocketAddr::new(std::process::id(), 1); // Multicast group 1 for uevents
     socket.bind(&addr)?;
-    tracing::info!("Screen netlink watcher: socket bound successfully, listening for uevents");
+    tracing::info!(target: "wake", "Screen netlink watcher: socket bound successfully, listening for uevents");
 
     let mut buf = vec![0; 8192];
 
@@ -64,15 +64,15 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
         if is_power_subsystem && (power_action == "early_suspend" || power_action == "late_resume") {
             if power_action == "early_suspend" {
                 screen_on.store(false, Ordering::SeqCst);
-                info!("Screen state changed via netlink: OFF");
+                tracing::info!(target: "wake", "Screen state changed via netlink: OFF");
             } else if power_action == "late_resume" {
                 screen_on.store(true, Ordering::SeqCst);
-                info!("Screen state changed via netlink: ON");
+                tracing::info!(target: "wake", "Screen state changed via netlink: ON");
             }
         } else if is_backlight_subsystem && action == "change" {
             let is_off = super::display::is_screen_off();
             screen_on.store(!is_off, Ordering::SeqCst);
-            info!(
+            tracing::info!(target: "wake",
                 "Screen state changed via netlink (backlight change): {}",
                 if is_off { "OFF" } else { "ON" }
             );
@@ -88,7 +88,7 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
                 let currently_tracked_on = screen_on.load(Ordering::SeqCst);
                 if is_off == currently_tracked_on {
                     screen_on.store(!is_off, Ordering::SeqCst);
-                    info!(
+                    tracing::info!(target: "wake",
                         "Screen state changed via netlink (broadened match): {}",
                         if is_off { "OFF" } else { "ON" }
                     );
