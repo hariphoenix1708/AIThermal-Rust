@@ -91,15 +91,6 @@ pub fn init_logger(
     _rotate_mb: u64,
     _retain_count: u32,
 ) -> Result<LoggerGuards> {
-    let log_level = match level.to_uppercase().as_str() {
-        "DEBUG" => LevelFilter::DEBUG,
-        "INFO" => LevelFilter::INFO,
-        "WARN" => LevelFilter::WARN,
-        "ERROR" => LevelFilter::ERROR,
-        "TRACE" => LevelFilter::TRACE,
-        _ => LevelFilter::INFO,
-    };
-
     let _ = fs::create_dir_all(log_dir);
 
     let normal_path = std::path::Path::new(log_dir).join("thermalai.log");
@@ -135,8 +126,10 @@ pub fn init_logger(
         .compact();
 
     // ---- Main log: high-signal lifecycle + warnings + errors, NEVER the
-    //      per-tick domain firehose. Falls back to INFO when RUST_LOG unset.
-    let main_env = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into());
+    //      per-tick domain firehose. RUST_LOG wins; else fall back to the
+    //      `log_level` string from profiles.conf; else "info".
+    let main_env = std::env::var("RUST_LOG")
+        .unwrap_or_else(|_| level.to_lowercase());
     let main_filter = EnvFilter::try_new(&main_env)
         .unwrap_or_else(|_| EnvFilter::new("info"))
         .add_directive("battery=off".parse().unwrap())
