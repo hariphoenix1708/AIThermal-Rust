@@ -6,7 +6,6 @@ use super::report::write_human_report;
 use crate::cache::{load_profile, save_profile};
 use anyhow::{Context, Result};
 use std::fs;
-use tracing::info;
 
 pub fn discover_or_load(state_dir: &str) -> Result<HardwareProfile> {
     fs::create_dir_all(state_dir).context("Failed to create state directory")?;

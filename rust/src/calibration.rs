@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
-use tracing::info;
 
 use serde::{Deserialize, Serialize};
 
@@ -56,7 +55,7 @@ impl CalibrationManager {
             self.cool_ticks = state.cool_ticks;
             self.slow_cooler_persistent = state.slow_cooler_persistent;
             self.consecutive_cool_sessions = state.consecutive_cool_sessions;
-            info!("Loaded calibration offset: {}C", self.active_offset);
+            tracing::info!("Loaded calibration offset: {}C", self.active_offset);
         }
     }
 
@@ -83,7 +82,7 @@ impl CalibrationManager {
                 // Poor cooling
                 self.slow_cooler_persistent = true;
                 self.consecutive_cool_sessions = 0;
-                info!("Marked as persistent slow cooler (drop was {}C).", drop);
+                tracing::info!("Marked as persistent slow cooler (drop was {}C).", drop);
                 let _ = self.save_state();
             } else if drop >= 3 {
                 // Good cooling
@@ -91,7 +90,7 @@ impl CalibrationManager {
                 if self.consecutive_cool_sessions >= 3 {
                     self.slow_cooler_persistent = false;
                     self.consecutive_cool_sessions = 0;
-                    info!("Cleared persistent slow cooler flag.");
+                    tracing::info!("Cleared persistent slow cooler flag.");
                     let _ = self.save_state();
                 }
             }
@@ -109,7 +108,7 @@ impl CalibrationManager {
             if self.hot_ticks > 60 {
                 if self.active_offset > -6 {
                     self.active_offset -= 1;
-                    info!(
+                    tracing::info!(
                         "Calibration adjustment triggered. New offset: {}",
                         self.active_offset
                     );
@@ -129,7 +128,7 @@ impl CalibrationManager {
                 // Decay slowly back to 0
                 if self.cool_ticks > 120 {
                     self.active_offset += 1;
-                    info!(
+                    tracing::info!(
                         "Calibration decay triggered. New offset: {}",
                         self.active_offset
                     );
