@@ -14,3 +14,7 @@ allow su sysfs file { read open write getattr }
 allow su sysfs dir { read open search getattr }
 allow init sysfs file { read open getattr }
 allow init sysfs dir { read open search getattr }
+
+# v3.1.3: allow daemon to control Xiaomi/QCOM voter framework
+allow su sysfs_battery file { read write open getattr };
+allow su sysfs_power_supply file { read write open getattr };

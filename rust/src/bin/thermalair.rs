@@ -118,7 +118,7 @@ fn main() -> Result<()> {
         "gaming" => show_gaming(),
         "charging" => {
             if args.len() < 3 {
-                println!("Usage: thermalair charging <adaptive|urgent>");
+                println!("Usage: thermalair charging <adaptive|urgent|maxspeed|batterycare>");
                 return Ok(());
             }
             set_charging_mode(Some(args[2].as_str()));
@@ -296,6 +296,18 @@ fn set_charging_mode(mode: Option<&str>) {
                 let _ = std::fs::rename(&tmp_file, &override_file);
             }
             println!("Set charging mode to Adaptive (Default)");
+        }
+        Some("maxspeed") => {
+            if std::fs::write(&tmp_file, r#"{"mode": "MaxSpeed"}"#).is_ok() {
+                let _ = std::fs::rename(&tmp_file, &override_file);
+            }
+            println!("Set charging mode to MaxSpeed");
+        }
+        Some("batterycare") => {
+            if std::fs::write(&tmp_file, r#"{"mode": "BatteryCare"}"#).is_ok() {
+                let _ = std::fs::rename(&tmp_file, &override_file);
+            }
+            println!("Set charging mode to BatteryCare");
         }
         Some(other) => println!("Unknown charging mode: {}", other),
     }

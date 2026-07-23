@@ -65,6 +65,9 @@ pub struct ChargingEngine {
     pub limit_write_failure_count: u32,
     pub limit_write_disabled: bool,
     pub no_nodes_warned: bool,
+    pub voter_nodes: Vec<String>,
+    pub voter_dump_done: bool,
+    pub forced_mode: Option<ChargeMode>,
 }
 
 impl ChargingEngine {
@@ -97,17 +100,131 @@ impl ChargingEngine {
             limit_write_failure_count: 0,
             limit_write_disabled: false,
             no_nodes_warned: false,
+            voter_nodes: hw.charging_profile.voter_nodes.clone(),
+            voter_dump_done: false,
+            forced_mode: None,
         }
     }
 
-    fn check_overrides(inputs: &mut ChargingInputs, state_dir: &str) {
+    /// Reads (does NOT write) every discovered voter node plus a
+    /// small set of read-only charger-state nodes and emits them
+    /// to thermalai_charging.log. Called once per session on the
+    /// Disconnected -> Normal transition.
+    fn dump_charger_diagnostics(&mut self) {
+        if self.voter_dump_done { return; }
+        self.voter_dump_done = true;
+
+        let read_only_probes = [
+            "/sys/class/power_supply/usb/pd_active",
+            "/sys/class/power_supply/usb/real_type",
+            "/sys/class/power_supply/usb/typec_mode",
+            "/sys/class/power_supply/usb/voltage_max",
+            "/sys/class/power_supply/usb/voltage_now",
+            "/sys/class/power_supply/usb/current_max",
+            "/sys/class/power_supply/usb/input_current_now",
+            "/sys/class/power_supply/battery/charge_type",
+            "/sys/class/power_supply/battery/constant_charge_current_max",
+        ];
+
+        tracing::info!(target: "charging", "----- charger diagnostic dump -----");
+        for path in read_only_probes {
+            if let Ok(v) = std::fs::read_to_string(path) {
+                tracing::info!(target: "charging", "  {} = {}", path, v.trim());
+            }
+        }
+        for node in &self.voter_nodes.clone() {
+            if let Ok(v) = std::fs::read_to_string(node) {
+                tracing::info!(target: "charging", "  {} = {}  (writable)", node, v.trim());
+            }
+        }
+        tracing::info!(target: "charging", "----- end diagnostic dump -----");
+    }
+
+    /// Writes the correct voter state for the current ChargeMode.
+    /// Idempotent — safe to call every tick; only writes when the
+    /// desired value differs from the currently-read value.
+    fn apply_voters_for_mode(&self, mode: &ChargeMode, target_ma: i64) {
+        // Desired state per mode.
+        // (restrict_chg, restrict_cur_ua, input_suspend, night_charging)
+        let (restrict, cur_ua, suspend, night) = match mode {
+            ChargeMode::MaxSpeed | ChargeMode::Urgent =>
+                (Some("0"), None,                              Some("0"), Some("0")),
+            ChargeMode::BatteryCare => {
+                // Cap current at target_ma; but never below 500 mA and
+                // never above 3000 mA in BatteryCare.
+                let cap_ma = target_ma.clamp(500, 3000);
+                // We leak the string via to_string() into a local; the
+                // helper below only borrows for the write() call.
+                (Some("1"), Some((cap_ma * 1000) as i64), Some("0"), Some("0"))
+            }
+            ChargeMode::UnderLoad => {
+                // Screen-on gaming while plugged: keep restrict off so
+                // the phone can outrun the load, but tell HyperOS not
+                // to switch to night_charging.
+                (Some("0"), None,                              Some("0"), Some("0"))
+            }
+            ChargeMode::Adaptive => {
+                // Neutral: don't fight HyperOS, just make sure charge
+                // isn't accidentally suspended.
+                (None,      None,                              Some("0"), None)
+            }
+        };
+
+        for node in &self.voter_nodes {
+            let want: Option<String> = if node.ends_with("/restrict_chg") {
+                restrict.map(str::to_string)
+            } else if node.ends_with("/restrict_cur") {
+                cur_ua.map(|v| v.to_string())
+            } else if node.ends_with("/input_suspend") {
+                suspend.map(str::to_string)
+            } else if node.ends_with("/night_charging") {
+                night.map(str::to_string)
+            } else {
+                None
+            };
+
+            let Some(want) = want else { continue; };
+            let current = std::fs::read_to_string(node).unwrap_or_default();
+            if current.trim() == want { continue; }
+
+            match crate::sysfs::write_string(node, &want) {
+                Ok(()) => tracing::info!(target: "charging",
+                    "voter {} : {} -> {}", node, current.trim(), want),
+                Err(e) => tracing::warn!(target: "charging",
+                    "voter {} write to {} failed: {}", node, want, e),
+            }
+        }
+    }
+
+    pub fn release_voters_on_shutdown(&self) {
+        for node in &self.voter_nodes {
+            let default = if node.ends_with("/restrict_chg") { "0" }
+                else if node.ends_with("/input_suspend") { "0" }
+                else if node.ends_with("/night_charging") { "0" }
+                else { continue; };
+            let _ = crate::sysfs::write_string(node, default);
+        }
+    }
+
+    fn check_overrides(inputs: &mut ChargingInputs, state_dir: &str, forced_mode: &mut Option<ChargeMode>) {
         let override_path = format!("{}/charging_mode.json", state_dir);
+        *forced_mode = None;
         if let Ok(content) = fs::read_to_string(&override_path) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                 let urgent = json
                     .get("urgent")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
+                let mode_str = json
+                    .get("mode")
+                    .and_then(|v| v.as_str());
+                if let Some(m) = mode_str {
+                    if m == "MaxSpeed" {
+                        *forced_mode = Some(ChargeMode::MaxSpeed);
+                    } else if m == "BatteryCare" {
+                        *forced_mode = Some(ChargeMode::BatteryCare);
+                    }
+                }
                 let expires_at = json.get("expires_at").and_then(|v| v.as_u64());
 
                 if urgent {
@@ -119,6 +236,7 @@ impl ChargingEngine {
                         if now > exp {
                             let _ = fs::remove_file(&override_path);
                             inputs.urgent = false;
+                            *forced_mode = None;
                         } else {
                             inputs.urgent = true;
                         }
@@ -134,9 +252,16 @@ impl ChargingEngine {
         }
     }
 
-    fn select_charge_mode(inputs: &ChargingInputs) -> ChargeMode {
-        if !inputs.is_plugged && inputs.plug_state_reliable {
+    fn select_charge_mode(inputs: &ChargingInputs, forced_mode: &Option<ChargeMode>) -> ChargeMode {
+        // Never let MaxSpeed / Urgent stand if the battery is already hot.
+        // 42°C is the point where Xiaomi's own kernel starts
+        // negotiating down to 5V·3A anyway.
+        let hot = inputs.battery_temp >= 42;
+
+        let chosen = if !inputs.is_plugged && inputs.plug_state_reliable {
             ChargeMode::Adaptive
+        } else if let Some(fm) = forced_mode {
+            fm.clone()
         } else if inputs.urgent {
             ChargeMode::Urgent
         } else if inputs.is_gaming {
@@ -147,7 +272,12 @@ impl ChargingEngine {
             ChargeMode::MaxSpeed
         } else {
             ChargeMode::Adaptive
+        };
+
+        if hot && matches!(chosen, ChargeMode::MaxSpeed | ChargeMode::Urgent) {
+            return if inputs.is_gaming { ChargeMode::UnderLoad } else { ChargeMode::Adaptive };
         }
+        chosen
     }
 
     // NOTE: The specific mA target values below (4500, 2500, 5000, etc.) were empirically
@@ -292,7 +422,7 @@ impl ChargingEngine {
     }
     pub fn evaluate(&mut self, raw_inputs: &ChargingInputs, state_dir: &str) -> i64 {
         let mut inputs = raw_inputs.clone();
-        Self::check_overrides(&mut inputs, state_dir);
+        Self::check_overrides(&mut inputs, state_dir, &mut self.forced_mode);
 
         let soc = inputs.soc;
         let bat_temp = inputs.battery_temp;
@@ -301,7 +431,8 @@ impl ChargingEngine {
             self.session_peak_temp = bat_temp;
         }
 
-        self.charge_mode = Self::select_charge_mode(&inputs);
+        self.charge_mode = Self::select_charge_mode(&inputs, &self.forced_mode);
+        self.apply_voters_for_mode(&self.charge_mode, self.learned_stable_current);
         let mode_clone = self.charge_mode.clone();
         let next = self.next_state(&inputs, &mode_clone);
 
@@ -328,8 +459,11 @@ impl ChargingEngine {
             self.total_current_ua_samples = 0;
             self.total_power_uw_samples = 0;
             self.sample_count = 0;
+            self.voter_dump_done = false;
             tracing::info!(target: "charging", "Charging session started at {}% SOC", soc);
             tracing::info!("Charging session started at {}% SOC", soc);
+
+            self.dump_charger_diagnostics();
 
             if let Some(node) = self.limit_nodes.first() {
                 tracing::info!(target: "charging",

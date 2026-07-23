@@ -195,6 +195,9 @@ async function loadCharging() {
   const header =
     `Active mode: ${state.charge_state ?? "—"}   Limit: ${state.charge_limit_ma ?? "—"} mA\n` +
     `Control node: ${state.charge_control_node ?? "(none — kernel/PMIC controls current)"}\n` +
+    `Charge mode: ${state.charge_mode ?? "?"}\n` +
+    `QCOM voters: ${state.qcom_voter_count ?? 0}\n` +
+    `BatteryCare cap active: ${state.restrict_chg_active ? "yes" : "no"}\n` +
     (mode.trim() ? `Override: ${mode.trim()}\n\n` : "\n");
   document.getElementById("chargeRaw").textContent = header + (c.trim() || "No charging session recorded.");
 }

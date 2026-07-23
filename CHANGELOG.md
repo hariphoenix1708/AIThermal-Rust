@@ -1,5 +1,39 @@
 # Changelog
 
+## [v3.1.3-beta] - IST timestamps, qcom-battery voters, clean uninstall
+
+*   **IST Timestamps**: Every daemon-emitted log stream and the
+    `service.sh` startup log now print wall-clock time in
+    Asia/Kolkata (`YYYY-MM-DD HH:MM:SS.mmm+05:30`), independent
+    of the process TZ.
+*   **QCOM Battery Voter Awareness (peridot / Xiaomi)**: On the
+    first charger-connect of each session the daemon now dumps
+    every readable `qcom-battery` and `power_supply/usb` node
+    into `thermalai_charging.log`, so the actual cause of a
+    slow-charge event is visible in one place. Discovered
+    writable voter nodes (`restrict_chg`, `restrict_cur`,
+    `input_suspend`, `night_charging`) are now driven from
+    `ChargeMode`:
+      - MaxSpeed / Urgent : `restrict_chg=0`, `input_suspend=0`,
+        `night_charging=0`  → releases the ~1000 mA HyperOS cap.
+      - BatteryCare       : `restrict_chg=1`, `restrict_cur`
+        set to the SoC-target current.
+      - Adaptive          : neutral (only clears `input_suspend`
+        if it was asserted).
+    A 42°C thermal guard downgrades MaxSpeed to Adaptive /
+    UnderLoad automatically. Voters are restored to defaults on
+    clean daemon shutdown and on uninstall.
+*   **CLI**: `thermalair charging` now accepts `maxspeed` and
+    `batterycare` in addition to `adaptive` / `urgent`.
+*   **WebUI**: Charging tab now surfaces the current
+    `charge_mode`, discovered voter count, and whether the
+    BatteryCare cap is currently active.
+*   **Uninstall Hygiene**: `uninstall.sh` now removes all six
+    log streams (main / verbose / startup / battery / thermal /
+    charging / gaming) plus any `.1` / `.gz` rotation siblings,
+    and force-resets `restrict_chg`, `input_suspend`, and
+    `night_charging` to `0` before removing the module.
+
 ## [v3.1.2-beta] - Charge-node probe, wake defer, split logging
 
 *   **Charging Node Discovery**: Added a probe-write phase to

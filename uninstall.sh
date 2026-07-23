@@ -20,15 +20,32 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
+# Belt and braces: if the daemon somehow didn't restore the voters
+# in its shutdown path, do it here from shell so uninstall NEVER
+# leaves the charger throttled.
+for node in /sys/class/qcom-battery/restrict_chg \
+            /sys/class/qcom-battery/input_suspend \
+            /sys/class/qcom-battery/night_charging \
+            /sys/class/power_supply/battery/input_suspend; do
+    [ -w "$node" ] && echo 0 > "$node" 2>/dev/null
+done
+
 # The daemon's own SIGTERM handler restores the hardware snapshot on clean
 # shutdown. We just need to clean up every file/folder it creates under
 # LOG_DIR/STATE_DIR so nothing is left behind after the module is removed.
 rm -f "$PID_FILE"
 rm -f "$PID_LOCK_FILE"
-rm -f "$LOG_DIR/thermalai.log"
-rm -f "$LOG_DIR/thermalai_verbose.log"
-rm -f "$LOG_DIR/thermalai_startup.log"
-rm -f "$LOG_DIR/thermalai_battery.log"
+for f in thermalai.log \
+         thermalai_verbose.log \
+         thermalai_startup.log \
+         thermalai_battery.log \
+         thermalai_thermal.log \
+         thermalai_charging.log \
+         thermalai_gaming.log; do
+    rm -f "$LOG_DIR/$f"
+    # Log rotation may leave .1 / .gz siblings; sweep them too.
+    rm -f "$LOG_DIR/${f}.1" "$LOG_DIR/${f}.gz" "$LOG_DIR/${f}.1.gz"
+done
 rm -rf "$STATE_DIR"
 
 echo "Module uninstalled. Daemon stopped and all files under $LOG_DIR and $STATE_DIR cleaned up." >> /dev/kmsg

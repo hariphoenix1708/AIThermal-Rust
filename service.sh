@@ -14,10 +14,14 @@ export THERMALAI_CONFIG_DIR="$MODDIR/config"
 export THERMALAI_LOG_DIR="$LOG_DIR"
 export THERMALAI_STATE_DIR="$STATE_DIR"
 
+# Force wall-clock formatting to IST for daemon-emitted logs and for
+# the `$(date ...)` calls further down in this script.
+export TZ="Asia/Kolkata"
+
 mkdir -p "$LOG_DIR" "$STATE_DIR" 2>/dev/null
 
 log_startup() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$STARTUP_LOG"
+    echo "$(TZ=Asia/Kolkata date '+%Y-%m-%d %H:%M:%S%z') $*" >> "$STARTUP_LOG"
 }
 
 is_alive() {
