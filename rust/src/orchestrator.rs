@@ -474,6 +474,7 @@ impl SystemOrchestrator {
 
 impl RuntimeTask for SystemOrchestrator {
     fn cleanup(&mut self) {
+        self.charging.release_voters_on_shutdown();
         self.runtime_tuner.restore_all();
     }
 
@@ -1214,6 +1215,11 @@ impl RuntimeTask for SystemOrchestrator {
             "adaptive_tier": format!("{:?}", self.adaptive_governor.current_tier),
             "gpu_power_level": self.last_applied_gpu_level,
             "charge_control_node": self.charging.limit_nodes.first().cloned(),
+            "qcom_voter_count": self.charging.voter_nodes.len(),
+            "charge_mode": format!("{:?}", self.charging.charge_mode),
+            "restrict_chg_active": self.charging.voter_nodes.iter()
+                .any(|n| n.ends_with("/restrict_chg"))
+                && self.charging.charge_mode == crate::charging::ChargeMode::BatteryCare,
         });
 
         crate::telemetry::writer::write_telemetry(ctx, &telemetry);

@@ -22,6 +22,26 @@ pub fn is_sysfs_blacklisted(path: &str) -> bool {
     }
 }
 
+use chrono::{FixedOffset, Utc};
+use tracing_subscriber::fmt::time::FormatTime;
+use std::fmt as std_fmt;
+
+/// Formats timestamps in India Standard Time (UTC+05:30) with
+/// millisecond precision. Used by every log stream so on-device
+/// wall-clock time matches what the user sees on the phone.
+#[derive(Clone)]
+struct IstTimer;
+impl FormatTime for IstTimer {
+    fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std_fmt::Result {
+        // 5h30m east of UTC. `unwrap()` is safe because 19800 sec is
+        // within FixedOffset's valid range.
+        let ist = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
+        let now = Utc::now().with_timezone(&ist);
+        // `%.3f` = milliseconds, `%:z` = "+05:30"
+        write!(w, "{}", now.format("%Y-%m-%d %H:%M:%S%.3f%:z"))
+    }
+}
+
 use std::fs;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -123,6 +143,7 @@ pub fn init_logger(
         .with_thread_ids(false)
         .with_thread_names(false)
         .with_ansi(false)
+        .with_timer(IstTimer)
         .compact();
 
     // ---- Main log: high-signal lifecycle + warnings + errors, NEVER the

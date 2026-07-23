@@ -38,6 +38,43 @@ pub fn probe_charging() -> ChargingProfile {
         }
     }
 
+    // Xiaomi/QCOM voter framework (peridot / SM8635 and family).
+    // These control CHARGE current in ways the generic power_supply
+    // nodes cannot on Xiaomi HyperOS kernels.
+    let qcom_root = "/sys/class/qcom-battery";
+    if Path::new(qcom_root).exists() {
+        profile.qcom_battery_root = Some(qcom_root.to_string());
+        for name in ["restrict_chg", "restrict_cur", "input_suspend", "night_charging"] {
+            let p = format!("{}/{}", qcom_root, name);
+            if !Path::new(&p).exists() { continue; }
+            let writable = match std::fs::read_to_string(&p) {
+                Ok(cur) => crate::sysfs::write_string(&p, cur.trim()).is_ok(),
+                Err(_) => false,
+            };
+            if writable {
+                profile.voter_nodes.push(p);
+            } else {
+                tracing::info!(
+                    target: "charging",
+                    "QCOM voter {} exists but is read-only; skipping", p
+                );
+            }
+        }
+    }
+
+    // Legacy fallback for older Xiaomi kernels that expose the
+    // same voters under /sys/class/power_supply/battery/*
+    for name in ["input_suspend", "night_charging"] {
+        let p = format!("/sys/class/power_supply/battery/{}", name);
+        if Path::new(&p).exists() && !profile.voter_nodes.iter().any(|x| x.ends_with(name)) {
+            if let Ok(cur) = std::fs::read_to_string(&p) {
+                if crate::sysfs::write_string(&p, cur.trim()).is_ok() {
+                    profile.voter_nodes.push(p);
+                }
+            }
+        }
+    }
+
     // Phase 1: keep only nodes that exist AND accept a probe write of a
     // small, safe value (500 mA in microamps = "500000"). Nodes that reject
     // EINVAL on this probe are dropped up front so we never poison them at

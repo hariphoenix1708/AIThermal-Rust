@@ -232,6 +232,8 @@ pub struct ChargingProfile {
     pub input_current_limit_nodes: Vec<String>,
     pub charge_enable_nodes: Vec<String>,
     pub fast_charge_nodes: Vec<String>,
+    pub qcom_battery_root: Option<String>,
+    pub voter_nodes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
