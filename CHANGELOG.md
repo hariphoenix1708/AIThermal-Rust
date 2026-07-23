@@ -1,5 +1,32 @@
 # Changelog
 
+## [v3.1.2-beta] - Charge-node probe, wake defer, split logging
+
+*   **Charging Node Discovery**: Added a probe-write phase to
+    hardware discovery that drops sysfs current-limit nodes which
+    reject `EINVAL` at runtime. On peridot this eliminates the
+    repeated `input_current_limit` rejections observed in v35 and
+    logs a single explicit "Charge-limit control: NONE" line when
+    the device manages charge current itself.
+*   **Screen-Wake Actuation Defer**: On screen-on, actuator writes
+    (governors, cpuset, GPU) are deferred for 2500 ms and the
+    thermal EMA/history is reset after long deep-sleep. Eliminates
+    the wake-burst stutter previously observed on POCO F6.
+*   **Adaptive Governor Streaks**: Promotion and demotion between
+    Eco and Balanced tiers now require two consecutive samples,
+    with the Eco cutoff raised from 35% to 55% cluster utilization
+    to stop idle browsing from tripping walt.
+*   **Per-Policy GPU Power Level**: Balanced (non-gaming),
+    Conservative, and Powersave now pin the GPU to its deepest
+    idle power level; Performance and gaming keep the shallowest.
+*   **Split Logging**: Added `thermalai_thermal.log`,
+    `thermalai_charging.log`, and `thermalai_gaming.log`; the main
+    `thermalai.log` is now a curated high-signal stream, and
+    `thermalai_verbose.log` remains TRACE-level for debugging.
+*   **WebUI**: Logs tab exposes all five streams; dashboard and
+    charging views surface adaptive tier, GPU power level, and the
+    active charge-limit control node.
+
 ## [v3.1.1-beta] - Wall-clock hysteresis and telemetry cleanup
 
 *   **Policy & Recovery Stability**: Converted internal PolicyEngine debounce and RecoveryManager thermal threshold limits from cycle tick counts to robust `std::time::Instant` wall-clock seconds. This solves a prominent stutter/judder issue where dynamic sleep-tick changes (adaptive polling) during gaming or screen-wake were improperly accelerating cooldown evaluation logic and thrashing CPU governors.

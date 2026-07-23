@@ -525,6 +525,7 @@ impl RuntimeTask for SystemOrchestrator {
                 + std::time::Duration::from_millis(2_500));
             self.pending_wake_nudge = true;
             tracing::info!(target: "wake", "Screen wake detected; deferring actuation for 2500ms");
+            tracing::info!("Screen wake detected; deferring actuation for 2500ms");
         }
 
         if just_woke
@@ -1019,11 +1020,20 @@ impl RuntimeTask for SystemOrchestrator {
             is_gaming, is_screen_off_now);
 
         if is_gaming {
+            let stats = self.background_frame_sampler.latest_stats();
+            let (jank_str, p90_str) = match stats {
+                Some(s) if s.p90_frame_ns > 0
+                        && s.p90_frame_ns < 500_000_000  // 500 ms sanity cap
+                        && s.frame_count() >= 5 => (
+                    format!("{:.2}", s.jank_ratio() * 100.0),
+                    format!("{:.1}", s.p90_frame_ns as f64 / 1_000_000.0),
+                ),
+                _ => ("n/a".to_string(), "n/a".to_string()),
+            };
             tracing::info!(target: "gaming",
-                "tick pkg={} temp={}C policy={:?} gpu_load={}% jank={:.2}% p90={}ms comfort={} session_peak={}C",
+                "tick pkg={} temp={}C policy={:?} gpu_load={}% jank={}% p90={}ms comfort={} session_peak={}C",
                 confirmed_pkg.as_deref().unwrap_or("?"), comp_temp, final_policy,
-                gpu_load, self.background_frame_sampler.latest_stats().map(|s| s.jank_ratio()).unwrap_or(0.0) * 100.0, self.background_frame_sampler.latest_stats().map(|s| s.p90_frame_ns as f64 / 1_000_000.0).unwrap_or(0.0),
-                comfort_weight, ctx.game_session_peak_temp);
+                gpu_load, jank_str, p90_str, comfort_weight, ctx.game_session_peak_temp);
         }
 
         // 9. Charging
@@ -1201,6 +1211,9 @@ impl RuntimeTask for SystemOrchestrator {
             "runtime_health": ctx.runtime_health,
             "legacy_write_failures": crate::tuning::backend::TuningBackend::legacy_write_failure_count(),
             "frame_stats_parse_ok": crate::monitor::frame_sampler::last_parse_ok(),
+            "adaptive_tier": format!("{:?}", self.adaptive_governor.current_tier),
+            "gpu_power_level": self.last_applied_gpu_level,
+            "charge_control_node": self.charging.limit_nodes.first().cloned(),
         });
 
         crate::telemetry::writer::write_telemetry(ctx, &telemetry);

@@ -124,6 +124,9 @@ impl PolicyEngine {
                     "Policy transition {:?} -> {:?} (score={:.1}, elapsed_since_last={}s)",
                     prev, self.current_policy, total_score,
                     self.last_change_at.elapsed().as_secs());
+                tracing::info!(
+                    "Policy transition {:?} -> {:?} (score={:.1})",
+                    prev, self.current_policy, total_score);
                 self.last_change_at = std::time::Instant::now();
             }
         }

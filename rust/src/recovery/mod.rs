@@ -40,6 +40,7 @@ impl RecoveryManager {
             self.in_recovery = true;
             self.phase = RecoveryPhase::GameExit;
             tracing::info!(target: "thermal", "Recovery -> {:?}", self.phase);
+            tracing::info!("Recovery -> {:?}", self.phase);
             self.recovery_started_at = Some(std::time::Instant::now());
             return true;
         }
@@ -49,6 +50,7 @@ impl RecoveryManager {
             self.in_recovery = true;
             self.phase = RecoveryPhase::Thermal;
             tracing::info!(target: "thermal", "Recovery -> {:?}", self.phase);
+            tracing::info!("Recovery -> {:?}", self.phase);
             self.recovery_started_at = Some(std::time::Instant::now());
             return true;
         }
@@ -70,6 +72,7 @@ impl RecoveryManager {
                 self.phase = RecoveryPhase::None;
                 self.recovery_started_at = None;
                 tracing::info!(target: "thermal", "Recovery cleared after {}s", elapsed_secs);
+                tracing::info!("Recovery cleared after {}s", elapsed_secs);
                 return false;
             }
             return true; // Still recovering

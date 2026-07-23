@@ -29,7 +29,7 @@ impl SnapshotManager {
 
     pub fn take_snapshot(&self, dynamic_paths: Vec<String>) -> Result<()> {
         if self.snapshot_file.exists() {
-            info!("Snapshot already exists, updating...");
+            tracing::info!(target: "lifecycle", "Snapshot already exists, updating...");
         }
 
         let mut snapshot = Snapshot::default();
@@ -87,7 +87,7 @@ impl SnapshotManager {
         fs::write(&self.temp_file, content).context("Failed to write snapshot temp")?;
         fs::rename(&self.temp_file, &self.snapshot_file).context("Failed to commit snapshot")?;
 
-        info!(
+        tracing::info!(target: "lifecycle",
             "Taken system snapshot with {} entries",
             snapshot.values.len()
         );
@@ -134,7 +134,7 @@ impl SnapshotManager {
         #[allow(clippy::collapsible_if)]
         if let Ok(content) = fs::read_to_string(&self.snapshot_file) {
             if let Ok(snapshot) = serde_json::from_str::<Snapshot>(&content) {
-                info!("Restoring {} snapshot entries...", snapshot.values.len());
+                tracing::info!(target: "lifecycle", "Restoring {} snapshot entries...", snapshot.values.len());
                 for (path, val) in snapshot.values {
                     if Self::is_unsupported_block_path(&path) {
                         tracing::debug!("Skipping unsupported block path during restore: {}", path);

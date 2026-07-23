@@ -40,7 +40,7 @@ pub struct ChargingInputs {
 }
 
 pub struct ChargingEngine {
-    limit_nodes: Vec<String>,
+    pub limit_nodes: Vec<String>,
     pub active_limit_ma: i64,
     pub previous_target: i64,
     pub current_state: ChargeState,
@@ -329,13 +329,19 @@ impl ChargingEngine {
             self.total_power_uw_samples = 0;
             self.sample_count = 0;
             tracing::info!(target: "charging", "Charging session started at {}% SOC", soc);
+            tracing::info!("Charging session started at {}% SOC", soc);
 
             if let Some(node) = self.limit_nodes.first() {
                 tracing::info!(target: "charging",
                     "Charge-limit control node: {} ({} candidates writable)",
                     node, self.limit_nodes.len());
+                tracing::info!(
+                    "Charge-limit control node: {} ({} candidates writable)",
+                    node, self.limit_nodes.len());
             } else {
                 tracing::info!(target: "charging",
+                    "Charge-limit control: NONE (device controls current itself)");
+                tracing::info!(
                     "Charge-limit control: NONE (device controls current itself)");
             }
         }
@@ -499,6 +505,7 @@ impl ChargingEngine {
         }
 
         tracing::info!(target: "charging", "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C", self.session_start_soc, final_soc, duration, self.session_peak_temp);
+        tracing::info!("Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C", self.session_start_soc, final_soc, duration, self.session_peak_temp);
     }
 
     fn apply_limit(&mut self, ma: i64) -> bool {

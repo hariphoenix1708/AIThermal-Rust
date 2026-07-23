@@ -23,6 +23,10 @@ impl FrameStats {
         if self.sample_count == 0 { return 0.0; }
         self.janky_frames as f32 / self.sample_count as f32
     }
+
+    pub fn frame_count(&self) -> usize {
+        self.sample_count as usize
+    }
 }
 
 // Target frame budget for jank classification. 16_666_667ns = 60fps budget.

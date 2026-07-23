@@ -134,24 +134,28 @@ pub fn init_logger(
         .with_ansi(false)
         .compact();
 
-    // Main log: everything at configured level, MINUS domain-specific streams
-    let main_filter = EnvFilter::from_default_env()
-        .add_directive(log_level.into())
+    // ---- Main log: high-signal lifecycle + warnings + errors, NEVER the
+    //      per-tick domain firehose. Falls back to INFO when RUST_LOG unset.
+    let main_env = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into());
+    let main_filter = EnvFilter::try_new(&main_env)
+        .unwrap_or_else(|_| EnvFilter::new("info"))
         .add_directive("battery=off".parse().unwrap())
         .add_directive("thermal=off".parse().unwrap())
         .add_directive("charging=off".parse().unwrap())
         .add_directive("gaming=off".parse().unwrap())
-        .add_directive("wake=off".parse().unwrap()); // wake events go verbose only
+        .add_directive("wake=off".parse().unwrap());
 
-    // Verbose: TRACE everything, no exclusions
+    // ---- Verbose: everything, always.
     let verbose_filter = EnvFilter::from_default_env()
         .add_directive(LevelFilter::TRACE.into());
 
-    // Domain filters: default off, only admit that domain at INFO+
-    let battery_filter = EnvFilter::new("off,battery=info");
-    let thermal_filter = EnvFilter::new("off,thermal=info");
-    let charging_filter = EnvFilter::new("off,charging=info");
-    let gaming_filter = EnvFilter::new("off,gaming=info");
+    // ---- Domain writers: default OFF, admit only their own target at INFO+.
+    //      Anchor with a leading module-off directive so untargeted
+    //      thermalai_daemon::* events cannot leak in.
+    let battery_filter  = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,battery=info");
+    let thermal_filter  = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,thermal=info");
+    let charging_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,charging=info");
+    let gaming_filter   = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,gaming=info");
 
     tracing_subscriber::registry()
         .with(
