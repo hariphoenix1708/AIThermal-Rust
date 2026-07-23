@@ -6,6 +6,7 @@ pub enum RecoveryPhase {
     Thermal,
     Charging,
     GameExit,
+    GameExitSettling,
 }
 
 pub struct RecoveryManager {
@@ -61,8 +62,12 @@ impl RecoveryManager {
                 .map(|t| t.elapsed().as_secs())
                 .unwrap_or(u64::MAX);
 
+            if self.phase == RecoveryPhase::GameExit && elapsed_secs >= 4 {
+                self.phase = RecoveryPhase::GameExitSettling;
+            }
+
             let threshold_secs = match self.phase {
-                RecoveryPhase::GameExit => 20,
+                RecoveryPhase::GameExit | RecoveryPhase::GameExitSettling => 20,
                 RecoveryPhase::Thermal => 45,
                 _ => 25,
             };

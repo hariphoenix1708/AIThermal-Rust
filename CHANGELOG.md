@@ -1,5 +1,17 @@
 # Changelog
 
+## [v3.1.4-beta] - Smooth game-exit
+
+*   **Game-exit hot phase**: for the first ~4 s after a
+    fullscreen game exits, the daemon holds cpuset, CPU
+    governor, mi_thermald hand-off, and I/O scheduler in
+    their in-game configuration. This eliminates the
+    rare screen-blank / auto-lock that could happen when
+    SurfaceFlinger's exit animation collided with the
+    policy-transition write burst.
+*   **Telemetry**: WebUI Overview now shows the current
+    recovery phase.
+
 ## [v3.1.3-beta] - IST timestamps, qcom-battery voters, clean uninstall
 
 *   **IST Timestamps**: Every daemon-emitted log stream and the
