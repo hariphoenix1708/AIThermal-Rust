@@ -5,7 +5,6 @@ use crate::sysfs;
 use std::collections::HashMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use tracing::info;
 
 use crate::tuning::backend::{BackendError, VmBackend};
 
@@ -555,7 +554,7 @@ impl RuntimeTuner {
     }
 
     pub fn discover_cpu_topology(&self) {
-        info!("Discovering CPU topology dynamically through hardware profile...");
+        tracing::info!("Discovering CPU topology dynamically through hardware profile...");
         //
     }
 
