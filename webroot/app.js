@@ -125,6 +125,15 @@ async function loadDashboard() {
 
   document.getElementById("plugValue").textContent = state.plugged_in ? "yes" : "no";
   document.getElementById("screenValue").textContent = state.screen_off ? "yes" : "no";
+
+  // Adaptive tier + GPU level are shown in the Session card only
+  // when they are meaningful (i.e., not null and not a bare "—").
+  const extraChips = [];
+  if (state.adaptive_tier)   extraChips.push(`Tier: ${state.adaptive_tier}`);
+  if (state.gpu_power_level != null) extraChips.push(`GPU lvl: ${state.gpu_power_level}`);
+  const durEl = document.getElementById("durValue");
+  if (extraChips.length) durEl.title = extraChips.join("  ·  ");
+
   document.getElementById("tickValue").textContent = (state.sleep_ms ?? "—") + " ms";
 }
 
@@ -185,19 +194,26 @@ async function loadCharging() {
   const state = await readJson(`${STATE_DIR}/thermalai_state.json`) || {};
   const header =
     `Active mode: ${state.charge_state ?? "—"}   Limit: ${state.charge_limit_ma ?? "—"} mA\n` +
+    `Control node: ${state.charge_control_node ?? "(none — kernel/PMIC controls current)"}\n` +
     (mode.trim() ? `Override: ${mode.trim()}\n\n` : "\n");
   document.getElementById("chargeRaw").textContent = header + (c.trim() || "No charging session recorded.");
 }
 
+const LOG_FILES = {
+  logs:     "thermalai.log",
+  thermal:  "thermalai_thermal.log",
+  charging: "thermalai_charging.log",
+  gaming:   "thermalai_gaming.log",
+  battery:  "thermalai_battery.log",
+  verbose:  "thermalai_verbose.log",
+};
 let currentLog = "logs";
 async function loadLogs(kind = currentLog) {
   currentLog = kind;
   const el = document.getElementById("logRaw");
   el.textContent = "Loading…";
-  const file = kind === "verbose"
-    ? `${LOG_DIR}/thermalai_verbose.log`
-    : `${LOG_DIR}/thermalai.log`;
-  const r = await ksuExec(`tail -n 300 "${file}" 2>/dev/null`);
+  const name = LOG_FILES[kind] || LOG_FILES.logs;
+  const r = await ksuExec(`tail -n 400 "${LOG_DIR}/${name}" 2>/dev/null`);
   el.textContent = r.stdout.trim() || "Log empty or missing.";
   el.scrollTop = el.scrollHeight;
 }

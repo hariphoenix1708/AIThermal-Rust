@@ -5,6 +5,8 @@ pub struct AdaptiveGovernorState {
     pub sample_interval: Duration,      // e.g. 1.5s - tunable
     pub current_tier: FrequencyTier,
     pub consecutive_good_samples: u32,  // for controlled step-down
+    pub promotion_streak: u8,
+    pub demotion_streak: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -22,6 +24,8 @@ impl AdaptiveGovernorState {
             sample_interval: Duration::from_millis(sample_interval_secs * 1000), // use millis internally for fractional support if wanted
             current_tier: FrequencyTier::Balanced,
             consecutive_good_samples: 0,
+            promotion_streak: 0,
+            demotion_streak: 0,
         }
     }
 
@@ -49,42 +53,54 @@ impl AdaptiveGovernorState {
     ) -> FrequencyTier {
         self.last_sample_at = Some(Instant::now());
 
-        let next_tier = if let Some(stats) = frame_stats {
+        let raw_next_tier = if let Some(stats) = frame_stats {
             let jank_ratio = stats.jank_ratio();
-            // Thresholds are intentionally coarse and conservative - tune only
-            // after observing real jank_ratio values from this device in a
-            // logged session, do not assume these exact numbers are optimal.
             if jank_ratio > 0.15 || stats.worst_frame_ns > 50_000_000 {
-                // More than 15% of recent frames missed budget, or at least
-                // one frame took over 50ms - clear, real stutter. Go to max.
                 FrequencyTier::Max
             } else if jank_ratio > 0.05 {
-                // Some jank, not severe - step up but not to max.
                 FrequencyTier::High
-            } else if jank_ratio == 0.0 && cluster_utilization < 0.35 {
-                // Perfectly smooth AND low measured load - safe to ease off.
+            } else if jank_ratio == 0.0 && cluster_utilization < 0.55 {
                 FrequencyTier::Eco
             } else {
                 FrequencyTier::Balanced
             }
         } else {
-            // No frame data available this sample (dumpsys call failed, or no
-            // game currently detected) - fall back to pure load-based decision.
             if cluster_utilization > 0.75 {
                 FrequencyTier::High
-            } else if cluster_utilization < 0.25 {
+            } else if cluster_utilization < 0.55 {
                 FrequencyTier::Eco
             } else {
                 FrequencyTier::Balanced
             }
         };
 
-        // Rate limiting: only allow stepping DOWN one tier at a time, but
-        // allow stepping UP immediately to any tier (react fast to stutter,
-        // back off cautiously to avoid oscillating right back into jank).
+        let next_tier = if self.current_tier == FrequencyTier::Eco && raw_next_tier == FrequencyTier::Balanced {
+            self.promotion_streak += 1;
+            if self.promotion_streak >= 2 {
+                self.promotion_streak = 0;
+                FrequencyTier::Balanced
+            } else {
+                FrequencyTier::Eco
+            }
+        } else if self.current_tier == FrequencyTier::Balanced && raw_next_tier == FrequencyTier::Eco {
+            self.demotion_streak += 1;
+            if self.demotion_streak >= 2 {
+                self.demotion_streak = 0;
+                FrequencyTier::Eco
+            } else {
+                FrequencyTier::Balanced
+            }
+        } else {
+            if raw_next_tier == FrequencyTier::Eco {
+                self.promotion_streak = 0;
+            }
+            if raw_next_tier == FrequencyTier::Balanced {
+                self.demotion_streak = 0;
+            }
+            raw_next_tier
+        };
+
         let stepped_tier = if tier_rank(next_tier) < tier_rank(self.current_tier) {
-            // Stepping down - only move one rank down per sample, and only
-            // after 2 consecutive samples agree it's safe to do so.
             if next_tier == self.current_tier {
                 self.consecutive_good_samples = 0;
             } else {
@@ -98,8 +114,16 @@ impl AdaptiveGovernorState {
             }
         } else {
             self.consecutive_good_samples = 0;
-            next_tier // stepping up or staying - apply immediately
+            next_tier
         };
+
+        if self.current_tier != stepped_tier {
+            let jank = frame_stats.map(|s| s.jank_ratio()).unwrap_or(0.0);
+            tracing::info!(target: "thermal",
+                "Adaptive tier {:?} -> {:?} (util={:.0}%, jank={:.2}%, streak={})",
+                self.current_tier, stepped_tier, cluster_utilization*100.0, jank*100.0, self.promotion_streak);
+            tracing::debug!(target: "thermal", "Adaptive tier {:?} -> {:?}", self.current_tier, stepped_tier);
+        }
 
         self.current_tier = stepped_tier;
         stepped_tier

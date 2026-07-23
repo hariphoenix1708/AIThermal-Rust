@@ -31,6 +31,9 @@ pub struct LoggerGuards {
     pub _normal: WorkerGuard,
     pub _verbose: WorkerGuard,
     pub _battery: WorkerGuard,
+    pub _thermal: WorkerGuard,
+    pub _charging: WorkerGuard,
+    pub _gaming: WorkerGuard,
 }
 
 const LOG_TRUNCATE_INTERVAL_SECS: u64 = 2 * 60 * 60;
@@ -99,20 +102,29 @@ pub fn init_logger(
 
     let _ = fs::create_dir_all(log_dir);
 
-    // Normal log: thermalai.log
     let normal_path = std::path::Path::new(log_dir).join("thermalai.log");
     let normal_appender = HourlyTruncatingWriter::new(&normal_path)?;
     let (normal_writer, normal_guard) = tracing_appender::non_blocking(normal_appender);
 
-    // Verbose log: thermalai_verbose.log
     let verbose_path = std::path::Path::new(log_dir).join("thermalai_verbose.log");
     let verbose_appender = HourlyTruncatingWriter::new(&verbose_path)?;
     let (verbose_writer, verbose_guard) = tracing_appender::non_blocking(verbose_appender);
 
-    // Battery log: thermalai_battery.log
     let battery_path = std::path::Path::new(log_dir).join("thermalai_battery.log");
     let battery_appender = HourlyTruncatingWriter::new(&battery_path)?;
     let (battery_writer, battery_guard) = tracing_appender::non_blocking(battery_appender);
+
+    let thermal_path = std::path::Path::new(log_dir).join("thermalai_thermal.log");
+    let thermal_appender = HourlyTruncatingWriter::new(&thermal_path)?;
+    let (thermal_writer, thermal_guard) = tracing_appender::non_blocking(thermal_appender);
+
+    let charging_path = std::path::Path::new(log_dir).join("thermalai_charging.log");
+    let charging_appender = HourlyTruncatingWriter::new(&charging_path)?;
+    let (charging_writer, charging_guard) = tracing_appender::non_blocking(charging_appender);
+
+    let gaming_path = std::path::Path::new(log_dir).join("thermalai_gaming.log");
+    let gaming_appender = HourlyTruncatingWriter::new(&gaming_path)?;
+    let (gaming_writer, gaming_guard) = tracing_appender::non_blocking(gaming_appender);
 
     let format = fmt::format()
         .with_level(true)
@@ -122,25 +134,35 @@ pub fn init_logger(
         .with_ansi(false)
         .compact();
 
-    let battery_filter = EnvFilter::new("battery=info");
+    // ---- Main log: high-signal lifecycle + warnings + errors, NEVER the
+    //      per-tick domain firehose. Falls back to INFO when RUST_LOG unset.
+    let main_env = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into());
+    let main_filter = EnvFilter::try_new(&main_env)
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("battery=off".parse().unwrap())
+        .add_directive("thermal=off".parse().unwrap())
+        .add_directive("charging=off".parse().unwrap())
+        .add_directive("gaming=off".parse().unwrap())
+        .add_directive("wake=off".parse().unwrap());
 
-    // Normal filter should explicitly exclude battery target to avoid double logging
-    // And also we might want to let only normal target log lines through, but since
-    // user could use normal tracing, we'll just filter out battery.
-    let normal_filter = EnvFilter::from_default_env()
-        .add_directive(log_level.into())
-        .add_directive("battery=off".parse().unwrap());
-
+    // ---- Verbose: everything, always.
     let verbose_filter = EnvFilter::from_default_env()
-        .add_directive(LevelFilter::TRACE.into())
-        .add_directive("battery=off".parse().unwrap());
+        .add_directive(LevelFilter::TRACE.into());
+
+    // ---- Domain writers: default OFF, admit only their own target at INFO+.
+    //      Anchor with a leading module-off directive so untargeted
+    //      thermalai_daemon::* events cannot leak in.
+    let battery_filter  = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,battery=info");
+    let thermal_filter  = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,thermal=info");
+    let charging_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,charging=info");
+    let gaming_filter   = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,gaming=info");
 
     tracing_subscriber::registry()
         .with(
             fmt::layer()
                 .event_format(format.clone())
                 .with_writer(normal_writer)
-                .with_filter(normal_filter),
+                .with_filter(main_filter),
         )
         .with(
             fmt::layer()
@@ -150,9 +172,27 @@ pub fn init_logger(
         )
         .with(
             fmt::layer()
-                .event_format(format)
+                .event_format(format.clone())
                 .with_writer(battery_writer)
                 .with_filter(battery_filter),
+        )
+        .with(
+            fmt::layer()
+                .event_format(format.clone())
+                .with_writer(thermal_writer)
+                .with_filter(thermal_filter),
+        )
+        .with(
+            fmt::layer()
+                .event_format(format.clone())
+                .with_writer(charging_writer)
+                .with_filter(charging_filter),
+        )
+        .with(
+            fmt::layer()
+                .event_format(format)
+                .with_writer(gaming_writer)
+                .with_filter(gaming_filter),
         )
         .init();
 
@@ -160,5 +200,8 @@ pub fn init_logger(
         _normal: normal_guard,
         _verbose: verbose_guard,
         _battery: battery_guard,
+        _thermal: thermal_guard,
+        _charging: charging_guard,
+        _gaming: gaming_guard,
     })
 }

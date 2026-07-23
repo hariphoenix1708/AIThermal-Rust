@@ -12,12 +12,12 @@ pub fn discover_or_load(state_dir: &str) -> Result<HardwareProfile> {
     fs::create_dir_all(state_dir).context("Failed to create state directory")?;
 
     if let Ok(profile) = load_profile(state_dir) {
-        info!("Successfully loaded hardware profile from cache.");
+        tracing::info!(target: "lifecycle", "Successfully loaded hardware profile from cache.");
         write_human_report(&profile, state_dir)?;
         return Ok(profile);
     }
 
-    info!("Hardware profile not found or invalid in cache. Running full discovery...");
+    tracing::info!(target: "lifecycle", "Hardware profile not found or invalid in cache. Running full discovery...");
     let mut profile = HardwareProbe::probe()?;
 
     if crate::hardware::peridot::matches(&profile) {
@@ -33,7 +33,7 @@ pub fn discover_or_load(state_dir: &str) -> Result<HardwareProfile> {
 pub fn discover_force_rescan(state_dir: &str) -> Result<HardwareProfile> {
     fs::create_dir_all(state_dir).context("Failed to create state directory")?;
 
-    info!("Forcing hardware discovery rescan...");
+    tracing::info!(target: "lifecycle", "Forcing hardware discovery rescan...");
     let mut profile = HardwareProbe::probe()?;
 
     if crate::hardware::peridot::matches(&profile) {

@@ -11,7 +11,7 @@ pub enum RecoveryPhase {
 pub struct RecoveryManager {
     pub in_recovery: bool,
     pub phase: RecoveryPhase,
-    recovery_ticks: u64,
+    pub recovery_started_at: Option<std::time::Instant>,
 }
 
 impl Default for RecoveryManager {
@@ -25,7 +25,7 @@ impl RecoveryManager {
         Self {
             in_recovery: false,
             phase: RecoveryPhase::None,
-            recovery_ticks: 0,
+            recovery_started_at: None,
         }
     }
 
@@ -39,7 +39,9 @@ impl RecoveryManager {
         if was_gaming && !is_gaming {
             self.in_recovery = true;
             self.phase = RecoveryPhase::GameExit;
-            self.recovery_ticks = 0;
+            tracing::info!(target: "thermal", "Recovery -> {:?}", self.phase);
+            tracing::info!("Recovery -> {:?}", self.phase);
+            self.recovery_started_at = Some(std::time::Instant::now());
             return true;
         }
 
@@ -47,23 +49,30 @@ impl RecoveryManager {
         if *current_policy == PolicyState::EmergencyCool {
             self.in_recovery = true;
             self.phase = RecoveryPhase::Thermal;
-            self.recovery_ticks = 0;
+            tracing::info!(target: "thermal", "Recovery -> {:?}", self.phase);
+            tracing::info!("Recovery -> {:?}", self.phase);
+            self.recovery_started_at = Some(std::time::Instant::now());
             return true;
         }
 
         // Keep recovery active until we've been out of emergency for a while (gradual)
         if self.in_recovery {
-            self.recovery_ticks += 1;
+            let elapsed_secs = self.recovery_started_at
+                .map(|t| t.elapsed().as_secs())
+                .unwrap_or(u64::MAX);
 
-            let threshold = match self.phase {
-                RecoveryPhase::GameExit => 5,
-                RecoveryPhase::Thermal => 15,
-                _ => 10,
+            let threshold_secs = match self.phase {
+                RecoveryPhase::GameExit => 20,
+                RecoveryPhase::Thermal => 45,
+                _ => 25,
             };
 
-            if self.recovery_ticks > threshold && *current_policy != PolicyState::EmergencyCool {
+            if elapsed_secs > threshold_secs && *current_policy != PolicyState::EmergencyCool {
                 self.in_recovery = false;
                 self.phase = RecoveryPhase::None;
+                self.recovery_started_at = None;
+                tracing::info!(target: "thermal", "Recovery cleared after {}s", elapsed_secs);
+                tracing::info!("Recovery cleared after {}s", elapsed_secs);
                 return false;
             }
             return true; // Still recovering
@@ -85,12 +94,11 @@ mod tests {
         assert!(rm.check_recovery(&PolicyState::EmergencyCool, false, false));
         assert_eq!(rm.phase, RecoveryPhase::Thermal);
 
-        // Stay in recovery
-        for _ in 0..15 {
-            assert!(rm.check_recovery(&PolicyState::Performance, false, false));
-        }
+        // Stay in recovery (elapsed time < threshold)
+        assert!(rm.check_recovery(&PolicyState::Performance, false, false));
 
-        // Exit recovery
+        // Fast forward time to exit recovery
+        rm.recovery_started_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(46));
         assert!(!rm.check_recovery(&PolicyState::Performance, false, false));
         assert_eq!(rm.phase, RecoveryPhase::None);
 

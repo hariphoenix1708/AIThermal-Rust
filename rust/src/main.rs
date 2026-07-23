@@ -87,21 +87,21 @@ fn main() -> Result<()> {
     let kernel_version =
         std::fs::read_to_string("/proc/version").unwrap_or_else(|_| "Unknown".to_string());
 
-    tracing::info!("════════════════════════════════════════");
-    tracing::info!(" ThermalAI daemon starting up...");
-    tracing::info!(" Version                   : {}", version);
-    tracing::info!(" PID                       : {}", current_pid);
-    tracing::info!(" Executable Path           : {}", current_exe);
-    tracing::info!(" Resolved Module Directory : {}", module_dir);
-    tracing::info!(" Resolved Config Directory : {}", config_dir);
-    tracing::info!(" Resolved Log Directory    : {}", log_dir);
-    tracing::info!(" Resolved State Directory  : {}", state_dir);
-    tracing::info!(" Resolved PID File Path    : {}", pid_file);
-    tracing::info!(" Android Version           : {}", android_version);
-    tracing::info!(" Kernel Version            : {}", kernel_version);
-    tracing::info!(" Startup Timestamp         : {}", startup_timestamp);
-    tracing::info!(" Config loaded: {:?}", config.profiles);
-    tracing::info!("════════════════════════════════════════");
+    tracing::info!(target: "lifecycle", "════════════════════════════════════════");
+    tracing::info!(target: "lifecycle", " ThermalAI daemon starting up...");
+    tracing::info!(target: "lifecycle", " Version                   : {}", version);
+    tracing::info!(target: "lifecycle", " PID                       : {}", current_pid);
+    tracing::info!(target: "lifecycle", " Executable Path           : {}", current_exe);
+    tracing::info!(target: "lifecycle", " Resolved Module Directory : {}", module_dir);
+    tracing::info!(target: "lifecycle", " Resolved Config Directory : {}", config_dir);
+    tracing::info!(target: "lifecycle", " Resolved Log Directory    : {}", log_dir);
+    tracing::info!(target: "lifecycle", " Resolved State Directory  : {}", state_dir);
+    tracing::info!(target: "lifecycle", " Resolved PID File Path    : {}", pid_file);
+    tracing::info!(target: "lifecycle", " Android Version           : {}", android_version);
+    tracing::info!(target: "lifecycle", " Kernel Version            : {}", kernel_version);
+    tracing::info!(target: "lifecycle", " Startup Timestamp         : {}", startup_timestamp);
+    tracing::info!(target: "lifecycle", " Config loaded: {:?}", config.profiles);
+    tracing::info!(target: "lifecycle", "════════════════════════════════════════");
 
     let crash_marker = std::path::Path::new(&state_dir).join("crash_marker.json");
     let crash_count: u32 = std::fs::read_to_string(&crash_marker)
@@ -136,7 +136,7 @@ fn main() -> Result<()> {
     );
 
     // Hardware Discovery & Profile Loading
-    tracing::info!("Starting hardware discovery...");
+    tracing::info!(target: "lifecycle", "Starting hardware discovery...");
     let hardware_cache_path = std::path::Path::new(&state_dir).join("hardware_profile.json");
     let cache_existed_before_discovery = hardware_cache_path.exists();
     let hw_profile_result = hardware::discovery::discover_or_load(&state_dir);
@@ -148,8 +148,8 @@ fn main() -> Result<()> {
             } else {
                 "GENERATED"
             };
-            tracing::info!(" Cache Status              : {}", cache_status);
-            tracing::info!(" Detected Device/SOC       : {}", profile.device_identity);
+            tracing::info!(target: "lifecycle", " Cache Status              : {}", cache_status);
+            tracing::info!(target: "lifecycle", " Detected Device/SOC       : {}", profile.device_identity);
             profile
         }
         Err(e) => {
@@ -164,15 +164,15 @@ fn main() -> Result<()> {
         return Err(e);
     }
 
-    tracing::info!("Daemon initialized successfully.");
+    tracing::info!(target: "lifecycle", "Daemon initialized successfully.");
 
     daemon.register_task(Box::new(orchestrator));
 
-    daemon.start()?;
-
+    let start_result = daemon.start();
     let _ = std::fs::remove_file(&crash_marker);
+    start_result?;
 
-    tracing::info!("ThermalAI daemon shutdown complete.");
+    tracing::info!(target: "lifecycle", "ThermalAI daemon shutdown complete.");
 
     Ok(())
 }
