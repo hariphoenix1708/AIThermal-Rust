@@ -1,5 +1,22 @@
 # Changelog
 
+## [v3.1.7] (317) - First stable release
+
+*   Zero-lag loosening actuation on wake: the first tick after screen
+    wake now flips CPU/GPU governors back to their active state in
+    the same tick as the Suspend -> Balanced transition (previously
+    deferred up to ~4 s by the min_actuation_interval throttle).
+*   Removed two panic paths in the daemon tick loop (SystemTime
+    unwrap() replaced with unwrap_or(0)).
+*   Installer banner now reflects the actual module version instead
+    of a hardcoded string.
+*   Removed the obsolete/incorrect updater-script; Magisk and KSU
+    both use update-binary under SKIPUNZIP=1.
+*   sepolicy.rule normalized (trailing semicolons removed), plus
+    additional rules for netlink_route and gpu_device access.
+*   No behavioural regressions vs v3.1.6-beta. All v40..v42 fixes
+    (H1..H9 + I1..I6) carry forward unchanged.
+
 ## [v3.1.6-beta] (316)
 - Fix 97-second wake lag: dropped actuation on transition ticks is
   now retried until it succeeds (drift-corrected apply).

@@ -546,12 +546,11 @@ impl RuntimeTask for SystemOrchestrator {
         let is_screen_off_now = crate::hardware::display::is_screen_off();
         let just_woke = ctx.screen_off_since.is_some() && !is_screen_off_now;
         if just_woke {
-            // Wake burst protection: do NOT actuate governors/cpuset/GPU on the
-            // wake tick. Push last_actuation_at forward so the min_actuation_interval
-            // guard blocks writes for this tick and the next 2-3 seconds. The
-            // adaptive governor can be nudged AFTER the deferral window - not
-            // during - because the nudge itself would trigger a write.
-            self.last_actuation_at = Some(std::time::Instant::now());
+            // Wake burst protection: keep the defer window for TIGHTENING
+            // transitions (Powersave/EmergencyCool/Suspend), but do NOT push
+            // last_actuation_at forward - the loosening-bypass helper needs
+            // it clean so the first post-wake tick can flip the governor
+            // from powersave back to schedutil immediately.
             self.wake_defer_until = Some(std::time::Instant::now()
                 + std::time::Duration::from_millis(800));
             self.pending_wake_nudge = true;

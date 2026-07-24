@@ -1,4 +1,5 @@
-# AIThermal-Rust
+# ThermalAI - Rust Edition (Stable)
+Stable  |  Android 14-17  |  Kernel 4.14 - 6.1+  |  AArch64
 
 A highly optimized, adaptive thermal and performance orchestrator for Android devices, natively written in Rust for safety, minimal overhead, and rigorous stability. It scales device responsiveness intelligently across dynamic system states (Idle, Gaming, Charging, Emergency).
 
