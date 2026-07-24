@@ -16,6 +16,13 @@ pub fn probe_memory() -> MemoryProfile {
         memory_pressure_avg10: None,
         memory_pressure_avg60: None,
         memory_pressure_avg300: None,
+        cpu_pressure_some_avg10: None,
+        cpu_pressure_some_avg60: None,
+        cpu_pressure_full_avg10: None,
+        io_pressure_full_avg10: None,
+        io_pressure_full_avg60: None,
+        has_cpu_psi: Path::new("/proc/pressure/cpu").exists(),
+        has_io_psi: Path::new("/proc/pressure/io").exists(),
         vm_parameters: std::collections::HashMap::new(),
         zram_devices: Vec::new(),
     };
@@ -33,6 +40,47 @@ pub fn probe_memory() -> MemoryProfile {
                             "SwapTotal:" => profile.swap_total_kb = Some(val),
                             "SwapFree:" => profile.swap_free_kb = Some(val),
                             _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if profile.has_cpu_psi {
+        if let Ok(psi) = std::fs::read_to_string("/proc/pressure/cpu") {
+            for line in psi.lines() {
+                if line.starts_with("some ") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    for part in parts {
+                        if let Some(val_str) = part.strip_prefix("avg10=") {
+                            profile.cpu_pressure_some_avg10 = val_str.parse::<f32>().ok();
+                        } else if let Some(val_str) = part.strip_prefix("avg60=") {
+                            profile.cpu_pressure_some_avg60 = val_str.parse::<f32>().ok();
+                        }
+                    }
+                } else if line.starts_with("full ") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    for part in parts {
+                        if let Some(val_str) = part.strip_prefix("avg10=") {
+                            profile.cpu_pressure_full_avg10 = val_str.parse::<f32>().ok();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if profile.has_io_psi {
+        if let Ok(psi) = std::fs::read_to_string("/proc/pressure/io") {
+            for line in psi.lines() {
+                if line.starts_with("full ") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    for part in parts {
+                        if let Some(val_str) = part.strip_prefix("avg10=") {
+                            profile.io_pressure_full_avg10 = val_str.parse::<f32>().ok();
+                        } else if let Some(val_str) = part.strip_prefix("avg60=") {
+                            profile.io_pressure_full_avg60 = val_str.parse::<f32>().ok();
                         }
                     }
                 }
