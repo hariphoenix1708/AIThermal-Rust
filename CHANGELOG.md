@@ -1,5 +1,36 @@
 # Changelog
 
+## [v3.1.6-beta] (316)
+- Fix 97-second wake lag: dropped actuation on transition ticks is
+  now retried until it succeeds (drift-corrected apply).
+- Wake defer shortened from 2500 ms to 800 ms.
+- Loosening transitions out of Suspend bypass wake defer to keep
+  the launcher responsive.
+- Telemetry exposes last_applied_policy for drift diagnostics.
+
+## [v3.1.5-beta] (315) - Self-heat + idle-drain reductions
+
+*   Fast-tick threshold hardened; requires sustained hot trend
+*   Idle screen-on can no longer pick Performance policy
+*   Same-value guards on VM / IO / governor / kgsl tunings
+*   Sticky stock-thermal state (no sconfig ping-pong)
+*   Frame sampler parks for 10 s when no game is top-app
+*   Watchdog counter now advances every healthy tick
+*   state.json throttled to <=2 s cadence during steady state
+*   Screen-off deep-idle entry brought forward to 30 s
+
+## [v3.1.4-beta] - Smooth game-exit
+
+*   **Game-exit hot phase**: for the first ~4 s after a
+    fullscreen game exits, the daemon holds cpuset, CPU
+    governor, mi_thermald hand-off, and I/O scheduler in
+    their in-game configuration. This eliminates the
+    rare screen-blank / auto-lock that could happen when
+    SurfaceFlinger's exit animation collided with the
+    policy-transition write burst.
+*   **Telemetry**: WebUI Overview now shows the current
+    recovery phase.
+
 ## [v3.1.3-beta] - IST timestamps, qcom-battery voters, clean uninstall
 
 *   **IST Timestamps**: Every daemon-emitted log stream and the

@@ -49,6 +49,13 @@ pub struct SystemOrchestrator {
     last_applied_cpu_gov: Option<String>,
     last_applied_gpu_gov: Option<String>,
     last_applied_gpu_level: Option<u32>,
+    /// Some(true)  -> stock thermal is currently disabled by us
+    /// Some(false) -> stock thermal is currently restored
+    /// None        -> not yet decided this run
+    stock_thermal_disabled: Option<bool>,
+    last_telemetry_write_at: Option<std::time::Instant>,
+    last_telemetry_policy: Option<String>,
+    last_applied_policy: Option<String>,
 }
 
 impl SystemOrchestrator {
@@ -63,6 +70,17 @@ impl SystemOrchestrator {
         // While a game is running, hold the floor at 8 s. Burst-
         // rewriting governors mid-frame is worse than a slightly
         // stale policy.
+        let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
+        match self.last_actuation_at {
+            None => true,
+            Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
+        }
+    }
+
+    fn actuation_allowed_bypass_wake(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
+        // Same throttle as actuation_allowed but ignores wake_defer_until.
+        let base_ms = ctx.config.profiles.min_actuation_interval_ms;
+        if base_ms == 0 { return true; }
         let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
         match self.last_actuation_at {
             None => true,
@@ -223,6 +241,10 @@ impl SystemOrchestrator {
             last_applied_cpu_gov: None,
             last_applied_gpu_gov: None,
             last_applied_gpu_level: None,
+            stock_thermal_disabled: None,
+            last_telemetry_write_at: None,
+            last_telemetry_policy: None,
+            last_applied_policy: None,
         }
     }
 
@@ -401,6 +423,7 @@ impl SystemOrchestrator {
             runtime_health: true,
             battery_temp_c: 0,
             trend_score: 0,
+            prev_hot_trend: false,
             sleep_ms: config.profiles.poll_interval.saturating_mul(1000),
             current_policy: None,
             current_game: None,
@@ -445,6 +468,10 @@ impl SystemOrchestrator {
             last_applied_cpu_gov: None,
             last_applied_gpu_gov: None,
             last_applied_gpu_level: None,
+            stock_thermal_disabled: None,
+            last_telemetry_write_at: None,
+            last_telemetry_policy: None,
+            last_applied_policy: None,
         }
     }
 
@@ -476,6 +503,9 @@ impl RuntimeTask for SystemOrchestrator {
     fn cleanup(&mut self) {
         self.charging.release_voters_on_shutdown();
         self.runtime_tuner.restore_all();
+        self.runtime_tuner.restore_stock_thermal();
+        self.stock_thermal_disabled = Some(false);
+        self.last_applied_policy = None;
     }
 
     fn execute(&mut self, ctx: &mut RuntimeContext) -> Result<()> {
@@ -523,10 +553,9 @@ impl RuntimeTask for SystemOrchestrator {
             // during - because the nudge itself would trigger a write.
             self.last_actuation_at = Some(std::time::Instant::now());
             self.wake_defer_until = Some(std::time::Instant::now()
-                + std::time::Duration::from_millis(2_500));
+                + std::time::Duration::from_millis(800));
             self.pending_wake_nudge = true;
-            tracing::info!(target: "wake", "Screen wake detected; deferring actuation for 2500ms");
-            tracing::info!("Screen wake detected; deferring actuation for 2500ms");
+            tracing::info!(target: "wake", "Screen wake detected; deferring actuation for 800ms");
         }
 
         if just_woke
@@ -739,6 +768,11 @@ impl RuntimeTask for SystemOrchestrator {
             desired_policy
         };
 
+        // NOTE: no explicit unpin — tids die with the process and
+        // cpuset entries are cleaned up by the kernel. Writing to
+        // cpuset here would migrate SystemUI tasks and stall the
+        // exit animation.
+
         // 8. Actuation (Governors, Cpuset, Runtime Tuning)
         let policy_str = Self::policy_state_name(&final_policy);
 
@@ -747,11 +781,35 @@ impl RuntimeTask for SystemOrchestrator {
             None => true,
         };
 
+        // If the previous transition tick could not actuate (wake defer,
+        // actuation throttle, etc.) the policy label was still committed
+        // to ctx.current_policy. Track what we ACTUALLY applied and
+        // retry on any subsequent tick where the effective state has
+        // drifted from the intended one.
+        let needs_apply = policy_changed
+            || self.last_applied_policy.as_deref() != Some(policy_str);
+
+        let in_hot_gameexit =
+            self.recovery.phase == crate::recovery::RecoveryPhase::GameExit;
+
         // Check if tweaks are disabled
         let disable_tweaks = ctx.config.profiles.disable_tweaks;
 
         let hard_immediate = final_policy == PolicyState::EmergencyCool || final_policy == PolicyState::Suspend || ctx.recovery_mode;
         let can_actuate = self.actuation_allowed(ctx, is_gaming) || hard_immediate;
+
+        // Loosening transitions (any policy that is NOT Suspend/Powersave)
+        // coming out of Suspend must actuate immediately, or the CPU stays
+        // pinned to powersave until the next transition and the user sees
+        // lag on every screen wake.
+        let is_loosening_from_suspend = matches!(
+            final_policy,
+            PolicyState::Balanced | PolicyState::Performance | PolicyState::Conservative
+        ) && ctx.current_policy.as_deref() == Some("Suspend");
+
+        let can_actuate = can_actuate
+            || (is_loosening_from_suspend
+                && self.actuation_allowed_bypass_wake(ctx, is_gaming));
 
         if can_actuate && self.pending_wake_nudge {
             self.adaptive_governor.nudge_on_screen_on();
@@ -765,7 +823,7 @@ impl RuntimeTask for SystemOrchestrator {
                     self.runtime_tuner.pin_critical_render_thread(pid, "top-app");
                 }
             }
-        } else if policy_changed {
+        } else if needs_apply {
             tracing::info!(target: "tuning", "Tweaks disabled by config, skipping actuation for policy: {}", policy_str);
         }
 
@@ -800,7 +858,7 @@ impl RuntimeTask for SystemOrchestrator {
             .map(|t| t.elapsed().as_secs() >= 2)
             .unwrap_or(true);
 
-        if !disable_tweaks && policy_changed && (final_policy != PolicyState::Performance || game_grace_elapsed) {
+        if !disable_tweaks && needs_apply && (final_policy != PolicyState::Performance || game_grace_elapsed) {
             if can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
 
@@ -809,15 +867,19 @@ impl RuntimeTask for SystemOrchestrator {
 
                 match final_policy {
                     PolicyState::Performance => {
-                    if let Some(gov) = &cpu_gov_perf {
-                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                    if !in_hot_gameexit {
+                        if let Some(gov) = &cpu_gov_perf {
+                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                            } else {
+                                self.last_applied_cpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            }
                         } else {
-                            self.last_applied_cpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            tracing::warn!("No common supported CPU governor for Performance policy");
                         }
                     } else {
-                        tracing::warn!("No common supported CPU governor for Performance policy");
+                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
                     }
 
                     for cluster in &self.hardware.cpu_topology.clusters {
@@ -839,20 +901,28 @@ impl RuntimeTask for SystemOrchestrator {
                             tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
                         }
                     }
-                    if let Err(e) = self.cpuset.apply_cpuset("performance") {
-                        tracing::warn!("Failed to apply cpuset: {}", e);
+                    if !in_hot_gameexit {
+                        if let Err(e) = self.cpuset.apply_cpuset("performance") {
+                            tracing::warn!("Failed to apply cpuset: {}", e);
+                        }
+                    } else {
+                        tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
                     }
                 }
                 PolicyState::Balanced => {
-                    if let Some(gov) = &cpu_gov_bal {
-                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                    if !in_hot_gameexit {
+                        if let Some(gov) = &cpu_gov_bal {
+                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                            } else {
+                                self.last_applied_cpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            }
                         } else {
-                            self.last_applied_cpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            tracing::warn!("No common supported CPU governor for Balanced policy");
                         }
                     } else {
-                        tracing::warn!("No common supported CPU governor for Balanced policy");
+                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
                     }
                     if let Some(gov) = gpu_gov_bal {
                         if let Err(e) = self.governors.apply_gpu_governor(&gov) {
@@ -862,20 +932,28 @@ impl RuntimeTask for SystemOrchestrator {
                             tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
                         }
                     }
-                    if let Err(e) = self.cpuset.apply_cpuset("balanced") {
-                        tracing::warn!("Failed to apply cpuset: {}", e);
+                    if !in_hot_gameexit {
+                        if let Err(e) = self.cpuset.apply_cpuset("balanced") {
+                            tracing::warn!("Failed to apply cpuset: {}", e);
+                        }
+                    } else {
+                        tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
                     }
                 }
                 PolicyState::Conservative => {
-                    if let Some(gov) = &cpu_gov_cons {
-                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                    if !in_hot_gameexit {
+                        if let Some(gov) = &cpu_gov_cons {
+                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                            } else {
+                                self.last_applied_cpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            }
                         } else {
-                            self.last_applied_cpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            tracing::warn!("No common supported CPU governor for Conservative policy");
                         }
                     } else {
-                        tracing::warn!("No common supported CPU governor for Conservative policy");
+                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
                     }
                     if let Some(gov) = gpu_gov_bal {
                         if let Err(e) = self.governors.apply_gpu_governor(&gov) {
@@ -885,20 +963,28 @@ impl RuntimeTask for SystemOrchestrator {
                             tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
                         }
                     }
-                    if let Err(e) = self.cpuset.apply_cpuset("balanced") {
-                        tracing::warn!("Failed to apply cpuset: {}", e);
+                    if !in_hot_gameexit {
+                        if let Err(e) = self.cpuset.apply_cpuset("balanced") {
+                            tracing::warn!("Failed to apply cpuset: {}", e);
+                        }
+                    } else {
+                        tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
                     }
                 }
                 PolicyState::Powersave | PolicyState::EmergencyCool | PolicyState::Suspend => {
-                    if let Some(gov) = &cpu_gov_save {
-                        if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                            tracing::warn!("Failed to apply CPU governor: {}", e);
+                    if !in_hot_gameexit {
+                        if let Some(gov) = &cpu_gov_save {
+                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                            } else {
+                                self.last_applied_cpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            }
                         } else {
-                            self.last_applied_cpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                            tracing::warn!("No common supported CPU governor for Powersave policy");
                         }
                     } else {
-                        tracing::warn!("No common supported CPU governor for Powersave policy");
+                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
                     }
                     if let Some(gov) = gpu_gov_save {
                         if let Err(e) = self.governors.apply_gpu_governor(&gov) {
@@ -908,8 +994,12 @@ impl RuntimeTask for SystemOrchestrator {
                             tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
                         }
                     }
-                        if let Err(e) = self.cpuset.apply_cpuset("powersave") {
-                            tracing::warn!("Failed to apply cpuset: {}", e);
+                        if !in_hot_gameexit {
+                            if let Err(e) = self.cpuset.apply_cpuset("powersave") {
+                                tracing::warn!("Failed to apply cpuset: {}", e);
+                            }
+                        } else {
+                            tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
                         }
                     }
                 }
@@ -977,7 +1067,7 @@ impl RuntimeTask for SystemOrchestrator {
         }
 
         // Runtime Tuner application on policy transitions
-        if !disable_tweaks && policy_changed {
+        if !disable_tweaks && needs_apply {
             if can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
                 if let Err(e) = self.runtime_tuner.apply_network_tweaks(policy_str) {
@@ -987,18 +1077,31 @@ impl RuntimeTask for SystemOrchestrator {
                     tracing::warn!("Failed to apply touch display tweaks: {}", e);
                 }
                 self.runtime_tuner.apply_vm_params(policy_str);
-                if let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
-                    tracing::warn!("Failed to apply scheduler: {}", e);
+                if !in_hot_gameexit {
+                    if let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
+                        tracing::warn!("Failed to apply scheduler: {}", e);
+                    }
                 }
                 self.runtime_tuner.apply_universal_gpu_control(policy_str);
             }
 
             // Stock thermal enable/disable based on gaming/perf
-            let is_perf = policy_str == "Performance" || policy_str == "Gaming";
-            if is_perf {
+            let want_disabled = policy_str == "Performance" || policy_str == "Gaming";
+            let currently_disabled = self.stock_thermal_disabled.unwrap_or(false);
+
+            if want_disabled && !currently_disabled {
                 self.runtime_tuner.disable_stock_thermal();
-            } else {
+                self.stock_thermal_disabled = Some(true);
+            } else if !want_disabled && currently_disabled && !in_hot_gameexit {
+                // Hand control back to mi_thermald only AFTER the
+                // exit animation has settled (>=4 s after game exit).
                 self.runtime_tuner.restore_stock_thermal();
+                self.stock_thermal_disabled = Some(false);
+            } else if !want_disabled && self.stock_thermal_disabled.is_none() {
+                // First tick after boot -> declare state = restored without a write.
+                self.stock_thermal_disabled = Some(false);
+            } else if !want_disabled && currently_disabled && in_hot_gameexit {
+                tracing::debug!(target: "thermal", "Deferring restore_stock_thermal: still in GameExit hot phase");
             }
 
             // Drop cache transition logic
@@ -1011,6 +1114,10 @@ impl RuntimeTask for SystemOrchestrator {
                     tracing::warn!("Failed to drop cache: {}", e);
                 }
             }
+        }
+
+        if can_actuate && needs_apply {
+            self.last_applied_policy = Some(policy_str.to_string());
         }
 
         // Final tick logging
@@ -1109,31 +1216,47 @@ impl RuntimeTask for SystemOrchestrator {
 
         let long_idle = is_screen_off_now
             && !is_gaming
+            && !ctx.plugged_in_at.is_some()
             && ctx
                 .screen_off_since
-                .map(|t| t.elapsed().as_secs() > 120)
+                .map(|t| t.elapsed().as_secs() > 30)
                 .unwrap_or(false)
             && clamped_trend <= 0; // only back off further if not actively heating
 
-        ctx.sleep_ms = if clamped_trend > 15 {
-            250 // was 50; avoids CPU spin without under-sleeping the daemon
-        } else if clamped_trend > 8 {
-            1000
+        // Require BOTH a real heating trend AND two consecutive hot-trending
+        // ticks before we run at high frequency; this stops the daemon from
+        // spinning at 4 Hz on ordinary micro-fluctuations.
+        let hot_trend_now = clamped_trend > 30;
+        let sustained_hot_trend = hot_trend_now && ctx.prev_hot_trend;
+        ctx.prev_hot_trend = hot_trend_now;
+
+        ctx.sleep_ms = if sustained_hot_trend {
+            750
+        } else if clamped_trend > 15 {
+            1500
         } else if long_idle {
-            30_000 // device has been screen-off, cool/cooling, and idle for 2+ minutes
+            30_000
         } else if is_screen_off_now && !is_gaming && (-2..=2).contains(&clamped_trend) {
             ctx.config.profiles.poll_interval.saturating_mul(4000)
-        } else if !is_gaming && (-2..=2).contains(&clamped_trend) {
-            // Screen ON, low trend, no game: keep it interactive.
-            ctx.config.profiles.poll_interval.saturating_mul(1000)
         } else {
             ctx.config.profiles.poll_interval.saturating_mul(1000)
         };
-        tracing::trace!("adaptive sleep: base={}ms chosen={}ms reason=TODO", ctx.config.profiles.poll_interval.saturating_mul(1000), ctx.sleep_ms);
+        tracing::trace!(
+            "adaptive sleep: base={}ms chosen={}ms trend={} sustained={} long_idle={} screen_off={} gaming={}",
+            ctx.config.profiles.poll_interval.saturating_mul(1000),
+            ctx.sleep_ms, clamped_trend, sustained_hot_trend, long_idle, is_screen_off_now, is_gaming);
+
+        if !needs_apply {
+            // no-op
+        } else if !can_actuate {
+            tracing::debug!(target: "actuation",
+                "policy drift: intended={} applied={:?} - actuation deferred (wake or throttle)",
+                policy_str, self.last_applied_policy);
+        }
 
         if just_woke {
             // Cap the pending sleep so the screen-on tick lands immediately.
-            ctx.sleep_ms = ctx.sleep_ms.min(150);
+            ctx.sleep_ms = ctx.sleep_ms.min(400);
         }
 
         let tick_interval_secs = ctx.sleep_ms / 1000;
@@ -1212,7 +1335,9 @@ impl RuntimeTask for SystemOrchestrator {
             "runtime_health": ctx.runtime_health,
             "legacy_write_failures": crate::tuning::backend::TuningBackend::legacy_write_failure_count(),
             "frame_stats_parse_ok": crate::monitor::frame_sampler::last_parse_ok(),
+            "recovery_phase": format!("{:?}", self.recovery.phase),
             "adaptive_tier": format!("{:?}", self.adaptive_governor.current_tier),
+            "last_applied_policy": self.last_applied_policy.clone().unwrap_or_else(|| "None".to_string()),
             "gpu_power_level": self.last_applied_gpu_level,
             "charge_control_node": self.charging.limit_nodes.first().cloned(),
             "qcom_voter_count": self.charging.voter_nodes.len(),
@@ -1222,7 +1347,20 @@ impl RuntimeTask for SystemOrchestrator {
                 && self.charging.charge_mode == crate::charging::ChargeMode::BatteryCare,
         });
 
-        crate::telemetry::writer::write_telemetry(ctx, &telemetry);
+        let policy_now = Self::policy_state_name(&final_policy).to_string();
+        let due_time = self.last_telemetry_write_at
+            .map(|t| t.elapsed().as_millis() >= 2000)
+            .unwrap_or(true);
+        let policy_changed_for_ui =
+            self.last_telemetry_policy.as_deref() != Some(policy_now.as_str());
+
+        if due_time || policy_changed_for_ui || ctx.recovery_mode {
+            crate::telemetry::writer::write_telemetry(ctx, &telemetry);
+            self.last_telemetry_write_at = Some(std::time::Instant::now());
+            self.last_telemetry_policy = Some(policy_now);
+        }
+
+        self.watchdog.mark_healthy();
 
         Ok(())
     }
