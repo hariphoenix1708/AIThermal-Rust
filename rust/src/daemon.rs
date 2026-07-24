@@ -78,7 +78,10 @@ impl Daemon {
             screen_off_since: None,
         };
 
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
 
         Self {
             pid_file: pid_file.to_string(),
@@ -97,7 +100,10 @@ impl Daemon {
     }
 
     fn check_screen_off(&mut self) -> bool {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         let last_update = self.last_screen_netlink_update.load(Ordering::SeqCst);
         let netlink_fresh = now >= last_update && (now - last_update) < 60;
 

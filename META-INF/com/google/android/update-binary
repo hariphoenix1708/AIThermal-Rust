@@ -3,8 +3,10 @@
 
 SKIPUNZIP=1
 
+MOD_VERSION=$(unzip -p "$ZIPFILE" module.prop 2>/dev/null | grep -E '^version=' | cut -d= -f2)
+MOD_VERSION=${MOD_VERSION:-unknown}
 ui_print "-----------------------------------------"
-ui_print "   ThermalAI v3.1.2-beta - Rust Edition"
+ui_print "   ThermalAI $MOD_VERSION - Rust Edition"
 ui_print "   Device Edition: Universal Android"
 ui_print "   Linux 4.14+ / AOSP / HyperOS"
 ui_print "-----------------------------------------"
