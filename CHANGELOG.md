@@ -1,5 +1,44 @@
 # Changelog
 
+## [v3.1.8] (318) - Stable
+
+*   PSI-aware scoring: CPU (`/proc/pressure/cpu`) and I/O
+    (`/proc/pressure/io`) pressure are now folded into the policy
+    score alongside memory PSI. On idle-warm devices this holds
+    Balanced instead of tightening to Powersave; under real load
+    it accelerates tightening.
+*   Battery cycle-count-aware charge tapering. Reads
+    `/sys/class/power_supply/battery/cycle_count` (or bms/) and
+    multiplies the fast-charge current cap by a factor between
+    1.00 (fresh) and 0.85 (>1200 cycles).
+*   cgroup v2 unified-hierarchy cpuset detection. AOSP A14+ / A16
+    devices that ship v2-only cpuset are now supported without
+    losing the RenderThread/GLThread pinning behaviour used on v1.
+*   Optional atrace/ftrace `trace_marker` hooks for correlating
+    policy transitions with Perfetto captures. Off by default;
+    enable with `trace_markers_enabled = true` in profiles.conf.
+*   sepolicy: added debugfs_tracing / tracing_shell_writable rules
+    (needed only when trace markers are enabled).
+*   No behavioural regression when PSI, cycle_count, cgroup v2, or
+    trace_marker paths are absent - every read is capability-gated.
+
+## [v3.1.7] (317) - First stable release
+
+*   Zero-lag loosening actuation on wake: the first tick after screen
+    wake now flips CPU/GPU governors back to their active state in
+    the same tick as the Suspend -> Balanced transition (previously
+    deferred up to ~4 s by the min_actuation_interval throttle).
+*   Removed two panic paths in the daemon tick loop (SystemTime
+    unwrap() replaced with unwrap_or(0)).
+*   Installer banner now reflects the actual module version instead
+    of a hardcoded string.
+*   Removed the obsolete/incorrect updater-script; Magisk and KSU
+    both use update-binary under SKIPUNZIP=1.
+*   sepolicy.rule normalized (trailing semicolons removed), plus
+    additional rules for netlink_route and gpu_device access.
+*   No behavioural regressions vs v3.1.6-beta. All v40..v42 fixes
+    (H1..H9 + I1..I6) carry forward unchanged.
+
 ## [v3.1.6-beta] (316)
 - Fix 97-second wake lag: dropped actuation on transition ticks is
   now retried until it succeeds (drift-corrected apply).

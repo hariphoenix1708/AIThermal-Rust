@@ -85,7 +85,7 @@ if (Test-Path $srcPath) {
 
         Write-Host "Enforcing LF line endings for Android shell scripts..."
         $TextFiles = Get-ChildItem -Path $StagingDir -Recurse -File | Where-Object {
-            $_.Extension -in @(".sh", ".prop", ".conf", ".md", ".rule", ".html", ".css", ".js") -or $_.Name -in @("update-binary", "updater-script")
+            $_.Extension -in @(".sh", ".prop", ".conf", ".md", ".rule", ".html", ".css", ".js") -or $_.Name -in @("update-binary")
         }
         foreach ($file in $TextFiles) {
             $text = [System.IO.File]::ReadAllText($file.FullName)

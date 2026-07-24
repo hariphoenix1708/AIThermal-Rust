@@ -78,7 +78,10 @@ impl Daemon {
             screen_off_since: None,
         };
 
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
 
         Self {
             pid_file: pid_file.to_string(),
@@ -97,7 +100,10 @@ impl Daemon {
     }
 
     fn check_screen_off(&mut self) -> bool {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         let last_update = self.last_screen_netlink_update.load(Ordering::SeqCst);
         let netlink_fresh = now >= last_update && (now - last_update) < 60;
 
@@ -161,6 +167,16 @@ impl Daemon {
             self.write_lock_file()?;
             self.setup_signal_handlers()?;
             self.ctx.initialized = true;
+
+            // Load hardware profile to check cgroup v2
+            if let Ok(hw) = crate::cache::load_profile(&self.ctx.state_dir) {
+                if hw.cpuset_profile.is_cgroup_v2 && hw.cpuset_profile.controller_ok {
+                    let _ = crate::tuning::backend::TuningBackend::try_write_string(
+                        "/sys/fs/cgroup/cgroup.subtree_control",
+                        "+cpuset"
+                    );
+                }
+            }
 
             crate::watcher::spawn_config_watcher(
                 self.config_path.clone(),

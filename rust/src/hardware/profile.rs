@@ -65,6 +65,20 @@ pub struct MemoryProfile {
     pub memory_pressure_avg10: Option<f32>,
     pub memory_pressure_avg60: Option<f32>,
     pub memory_pressure_avg300: Option<f32>,
+
+    // -- CPU pressure (some avg10 / avg60 / avg300) --
+    pub cpu_pressure_some_avg10: Option<f32>,
+    pub cpu_pressure_some_avg60: Option<f32>,
+    pub cpu_pressure_full_avg10: Option<f32>,
+
+    // -- I/O pressure (full avg10 / avg60) --
+    pub io_pressure_full_avg10: Option<f32>,
+    pub io_pressure_full_avg60: Option<f32>,
+
+    // Capability flags so callers don't re-stat sysfs paths every tick:
+    pub has_cpu_psi: bool,
+    pub has_io_psi: bool,
+
     pub vm_parameters: std::collections::HashMap<String, String>,
     pub zram_devices: Vec<String>,
 }
@@ -225,6 +239,8 @@ pub struct BatteryProfile {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChargingProfile {
+    pub cycle_count: Option<u64>,
+    pub cycle_count_path: Option<String>,
     pub path: String,
     pub is_fast_charge: bool,
     pub capability_nodes: Vec<CapabilityNode>,
@@ -244,4 +260,7 @@ pub struct CpusetProfile {
     pub background_path: Option<String>,
     pub foreground_path: Option<String>,
     pub system_background_path: Option<String>,
+    pub restricted_path: Option<String>,
+    pub is_cgroup_v2: bool,
+    pub controller_ok: bool,
 }

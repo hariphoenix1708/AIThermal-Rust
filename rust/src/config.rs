@@ -69,6 +69,9 @@ pub struct ProfilesConfig {
     // DegradedRestoreRecommended to StalledRecoverNow (full snapshot restore).
     #[serde(default = "default_watchdog_stall_threshold")]
     pub watchdog_stall_threshold: u32,
+
+    #[serde(default = "default_false")]
+    pub trace_markers_enabled: bool,
 }
 
 fn default_false() -> bool { false }
@@ -167,6 +170,7 @@ impl Default for ProfilesConfig {
             touch_network_stack: default_false(),
             safe_mode_after_crashes: default_safe_mode_after_crashes(),
             watchdog_stall_threshold: default_watchdog_stall_threshold(),
+            trace_markers_enabled: default_false(),
         }
     }
 }

@@ -55,7 +55,7 @@ if [ -f "$SRC_PATH" ]; then
     verify_android_arm64_elf "$STAGING_DIR/system/bin/thermalai-daemon"
     verify_android_arm64_elf "$STAGING_DIR/system/bin/thermalai-detect"
     verify_android_arm64_elf "$STAGING_DIR/system/bin/thermalair"
-    find "$STAGING_DIR" -type f \( -name '*.sh' -o -name '*.prop' -o -name '*.conf' -o -name '*.md' -o -name '*.rule' -o -name '*.html' -o -name '*.css' -o -name '*.js' -o -name update-binary -o -name updater-script \) -exec sed -i 's/\r$//' {} +
+    find "$STAGING_DIR" -type f \( -name '*.sh' -o -name '*.prop' -o -name '*.conf' -o -name '*.md' -o -name '*.rule' -o -name '*.html' -o -name '*.css' -o -name '*.js' -o -name update-binary \) -exec sed -i 's/\r$//' {} +
 
     echo "Zipping module..."
     rm -f AIThermal-Rust.zip

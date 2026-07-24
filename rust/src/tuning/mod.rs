@@ -576,7 +576,24 @@ impl RuntimeTuner {
         //
     }
 
+    pub fn cpuset_tasks_file(hw: &crate::hardware::HardwareProfile, subgroup: &str) -> String {
+        let base = &hw.cpuset_profile.root_path;
+        if hw.cpuset_profile.is_cgroup_v2 {
+            // On v2 threaded cgroups, thread migration uses cgroup.threads.
+            // Fall back to cgroup.procs if cgroup.threads is not writable
+            // (i.e. subgroup is not marked threaded).
+            let threads = format!("{}/{}/cgroup.threads", base, subgroup);
+            if std::path::Path::new(&threads).exists() {
+                return threads;
+            }
+            format!("{}/{}/cgroup.procs", base, subgroup)
+        } else {
+            format!("{}/{}/tasks", base, subgroup)
+        }
+    }
+
     pub fn pin_critical_render_thread(&self, game_pid: u32, target_cpu_range: &str) {
+        if self.hardware.cpuset_profile.root_path.is_empty() { return; }
         let task_dir = format!("/proc/{}/task", game_pid);
         let Ok(entries) = std::fs::read_dir(&task_dir) else { return };
         for entry in entries.flatten() {
@@ -585,7 +602,7 @@ impl RuntimeTuner {
             let Ok(comm) = std::fs::read_to_string(&comm_path) else { continue };
             let comm = comm.trim();
             if comm == "RenderThread" || comm == "GLThread" || comm.starts_with("hwuiTask") {
-                let tasks_path = format!("/dev/cpuset/{}/tasks", target_cpu_range);
+                let tasks_path = Self::cpuset_tasks_file(&self.hardware, target_cpu_range);
                 let _ = crate::tuning::backend::TuningBackend::try_write_string(
                     &tasks_path,
                     tid.to_string_lossy().as_ref(),

@@ -44,6 +44,8 @@ impl PolicyEngine {
         context_weight: f64,
         game_modifier: f64,
         comfort_weight: f64,
+        cpu_pressure: f32,
+        io_pressure: f32,
         config: &ProfilesConfig,
     ) -> PolicyState {
         //
@@ -58,9 +60,23 @@ impl PolicyEngine {
         // Trend score is scaled: > 0 means heating rapidly, < 0 means cooling
         let s_trend = (trend_score as f64).clamp(-10.0, 10.0) * 2.5;
 
+        // PSI dampener: if the system is thermally warm but NOT under
+        // CPU or IO pressure, subtract from the score so we don't
+        // unnecessarily tighten. This addresses the case where a warm
+        // pocket / warm ambient causes SoC temp to hover without any
+        // real load.
+        let psi_dampener: f64 = if cpu_pressure < 5.0 && io_pressure < 5.0 {
+            -4.0  // one "rank" of relief; smaller than trend so it never dominates
+        } else if cpu_pressure > 50.0 || io_pressure > 30.0 {
+            // System is genuinely under pressure - amplify tightening.
+            4.0
+        } else {
+            0.0
+        };
+
         // Total evaluation score
         let total_score =
-            s_temp + s_pred + s_game + s_trend + context_weight + game_modifier + comfort_weight;
+            s_temp + s_pred + s_game + s_trend + context_weight + game_modifier + comfort_weight + psi_dampener;
 
         // Threshold evaluation (recalibrated based on the new total_score ranges)
         // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
@@ -153,32 +169,32 @@ mod tests {
         // With temps at 30, they are likely cool, giving 0 for s_temp and s_pred.
         // We pass -10.0 for context_weight to drop the score below -5.0.
         assert_eq!(
-            engine.evaluate(30, 30, 0, false, true, -10.0, 0.0, 0.0, &config),
+            engine.evaluate(30, 30, 0, false, true, -10.0, 0.0, 0.0, 0.0, 0.0, &config),
             PolicyState::Suspend
         );
 
         // Emergency cool overrides immediately (high temp)
         assert_eq!(
-            engine.evaluate(80, 80, 2, false, false, 0.0, 0.0, 0.0, &config),
+            engine.evaluate(80, 80, 2, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config),
             PolicyState::EmergencyCool
         );
 
         // Drop to cool should debounce
         assert_eq!(
-            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, &config),
+            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config),
             PolicyState::EmergencyCool // still emergency because time elapsed is < 10
         );
 
         // Fast forward time
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
         assert_eq!(
-            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, &config),
+            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config),
             PolicyState::Balanced
         );
 
         // Rise to warm
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
-        let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, &config);
+        let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config);
     }
 }
 

@@ -16,5 +16,17 @@ allow init sysfs file { read open getattr }
 allow init sysfs dir { read open search getattr }
 
 # v3.1.3: allow daemon to control Xiaomi/QCOM voter framework
-allow su sysfs_battery file { read write open getattr };
-allow su sysfs_power_supply file { read write open getattr };
+allow su sysfs_battery file { read write open getattr }
+allow su sysfs_power_supply file { read write open getattr }
+
+# v3.1.7-stable: netlink route socket for future PSI / cgroup events
+allow su self netlink_route_socket { create bind read getopt setopt }
+allow init self netlink_route_socket { create bind read getopt setopt }
+
+# v3.1.7-stable: kgsl GPU device node access (needed on some KSU builds
+# where /dev/kgsl-3d0 is not covered by the default su transitions)
+allow su gpu_device chr_file { read write open ioctl getattr }
+
+# v3.1.8: optional atrace/ftrace marker emission (off by default)
+allow su debugfs_tracing file { write open getattr }
+allow su tracing_shell_writable file { write open getattr }

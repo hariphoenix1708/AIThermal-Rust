@@ -71,6 +71,19 @@ pub struct ChargingEngine {
 }
 
 impl ChargingEngine {
+    /// Returns a multiplier in [0.85, 1.00] applied to the fast-charge
+    /// current cap based on battery age. 0 cycles -> 1.00 (no change).
+    /// 300 cycles -> 0.97. 600 -> 0.93. 900 -> 0.89. >=1200 -> 0.85.
+    fn cycle_taper_factor(cycle_count: u64) -> f32 {
+        match cycle_count {
+            0..=200      => 1.00,
+            201..=400    => 0.97,
+            401..=700    => 0.93,
+            701..=1000   => 0.89,
+            _            => 0.85,
+        }
+    }
+
     pub fn new(hw: &crate::hardware::HardwareProfile) -> Self {
         let limit_nodes = hw.charging_profile.current_limit_nodes.clone();
 
@@ -420,7 +433,7 @@ impl ChargingEngine {
             ChargeState::Normal
         }
     }
-    pub fn evaluate(&mut self, raw_inputs: &ChargingInputs, state_dir: &str) -> i64 {
+    pub fn evaluate(&mut self, raw_inputs: &ChargingInputs, state_dir: &str, hw_profile: &crate::hardware::HardwareProfile) -> i64 {
         let mut inputs = raw_inputs.clone();
         Self::check_overrides(&mut inputs, state_dir, &mut self.forced_mode);
 
@@ -523,13 +536,30 @@ impl ChargingEngine {
             base_target
         };
 
-        let final_target = match next {
+        let mut final_target = match next {
             ChargeState::Normal => base_target,
             ChargeState::UnderLoad => base_target.min(2500),
             ChargeState::ThermalThrottle => base_target.min(thermal_cap),
             ChargeState::Emergency => 500.min(base_target),
             ChargeState::Disconnected => 0,
         };
+
+        let live_cycles = hw_profile.charging_profile.cycle_count_path
+            .as_deref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|s: String| s.trim().parse::<u64>().ok())
+            .or(hw_profile.charging_profile.cycle_count);
+        if let Some(cycles) = live_cycles {
+            let f = Self::cycle_taper_factor(cycles);
+            if (f - 1.0).abs() > f32::EPSILON {
+                final_target = ((final_target as f32) * f) as i64;
+                tracing::debug!(
+                    target: "charging",
+                    "cycle taper: cycles={} factor={:.2} cap_after={}",
+                    cycles, f, final_target
+                );
+            }
+        }
 
         let mut target_ma = self.previous_target;
         let step = 200;
