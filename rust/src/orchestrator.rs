@@ -675,6 +675,19 @@ impl RuntimeTask for SystemOrchestrator {
             .memory_profile
             .memory_pressure_avg10
             .unwrap_or(0.0);
+
+        let cpu_pressure = self
+            .hardware
+            .memory_profile
+            .cpu_pressure_some_avg10
+            .unwrap_or(0.0);
+
+        let io_pressure = self
+            .hardware
+            .memory_profile
+            .io_pressure_full_avg10
+            .unwrap_or(0.0);
+
         let comfort_weight =
             Self::compute_comfort_weight(skin_temp, bat_temp, is_cooling, mem_pressure);
 
@@ -706,6 +719,8 @@ impl RuntimeTask for SystemOrchestrator {
             final_context,
             game_modifier,
             comfort_weight,
+            cpu_pressure,
+            io_pressure,
             &ctx.config.profiles,
         );
 
@@ -787,6 +802,13 @@ impl RuntimeTask for SystemOrchestrator {
         // drifted from the intended one.
         let needs_apply = policy_changed
             || self.last_applied_policy.as_deref() != Some(policy_str);
+
+        if policy_changed {
+            crate::telemetry::trace_marker::emit(
+                ctx.config.profiles.trace_markers_enabled,
+                &format!("C|0|thermalai_policy|{}", policy_str),
+            );
+        }
 
         let in_hot_gameexit =
             self.recovery.phase == crate::recovery::RecoveryPhase::GameExit;
@@ -1117,6 +1139,10 @@ impl RuntimeTask for SystemOrchestrator {
 
         if can_actuate && needs_apply {
             self.last_applied_policy = Some(policy_str.to_string());
+            crate::telemetry::trace_marker::emit(
+                ctx.config.profiles.trace_markers_enabled,
+                &format!("I|0|thermalai_apply {}", policy_str),
+            );
         }
 
         // Final tick logging
@@ -1207,7 +1233,7 @@ impl RuntimeTask for SystemOrchestrator {
             voltage_now_uv: None,
             charge_counter_uah: None,
         };
-        self.charging.evaluate(&charging_inputs, &ctx.state_dir);
+        self.charging.evaluate(&charging_inputs, &ctx.state_dir, &self.hardware);
 
         // 10. Adaptive Sleep
         let clamped_trend = (trend_score * 50).clamp(-50, 50);
@@ -1313,6 +1339,8 @@ impl RuntimeTask for SystemOrchestrator {
             "trend_score": ctx.trend_score,
             "screen_state": !is_screen_off_now,
             "mem_pressure": mem_pressure,
+            "cpu_pressure_some_avg10": cpu_pressure,
+            "io_pressure_full_avg10": io_pressure,
             "slow_cooler": is_cooling,
             "session_count": ctx.current_game
                 .as_deref()
@@ -1344,6 +1372,16 @@ impl RuntimeTask for SystemOrchestrator {
             "restrict_chg_active": self.charging.voter_nodes.iter()
                 .any(|n| n.ends_with("/restrict_chg"))
                 && self.charging.charge_mode == crate::charging::ChargeMode::BatteryCare,
+            "cycle_count": self.hardware.charging_profile.cycle_count,
+            "cycle_taper_factor": self.hardware.charging_profile.cycle_count.map(|c| {
+                match c {
+                    0..=200      => 1.00,
+                    201..=400    => 0.97,
+                    401..=700    => 0.93,
+                    701..=1000   => 0.89,
+                    _            => 0.85,
+                }
+            }).unwrap_or(1.0),
         });
 
         let policy_now = Self::policy_state_name(&final_policy).to_string();

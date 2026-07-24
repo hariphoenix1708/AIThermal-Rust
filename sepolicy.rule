@@ -26,3 +26,7 @@ allow init self netlink_route_socket { create bind read getopt setopt }
 # v3.1.7-stable: kgsl GPU device node access (needed on some KSU builds
 # where /dev/kgsl-3d0 is not covered by the default su transitions)
 allow su gpu_device chr_file { read write open ioctl getattr }
+
+# v3.1.8: optional atrace/ftrace marker emission (off by default)
+allow su debugfs_tracing file { write open getattr }
+allow su tracing_shell_writable file { write open getattr }

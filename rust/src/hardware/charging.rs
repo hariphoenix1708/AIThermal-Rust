@@ -75,6 +75,21 @@ pub fn probe_charging() -> ChargingProfile {
         }
     }
 
+    // AOSP paths (Android 14+): /sys/class/power_supply/battery/cycle_count
+    // HyperOS/QC also uses:      /sys/class/power_supply/bms/cycle_count
+    for path in [
+        "/sys/class/power_supply/battery/cycle_count",
+        "/sys/class/power_supply/bms/cycle_count",
+    ] {
+        if let Ok(s) = std::fs::read_to_string(path) {
+            if let Ok(n) = s.trim().parse::<u64>() {
+                profile.cycle_count = Some(n);
+                profile.cycle_count_path = Some(path.to_string());
+                break;
+            }
+        }
+    }
+
     // Phase 1: keep only nodes that exist AND accept a probe write of a
     // small, safe value (500 mA in microamps = "500000"). Nodes that reject
     // EINVAL on this probe are dropped up front so we never poison them at

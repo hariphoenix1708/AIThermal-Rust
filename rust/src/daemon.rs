@@ -168,6 +168,16 @@ impl Daemon {
             self.setup_signal_handlers()?;
             self.ctx.initialized = true;
 
+            // Load hardware profile to check cgroup v2
+            if let Ok(hw) = crate::cache::load_profile(&self.ctx.state_dir) {
+                if hw.cpuset_profile.is_cgroup_v2 && hw.cpuset_profile.controller_ok {
+                    let _ = crate::tuning::backend::TuningBackend::try_write_string(
+                        "/sys/fs/cgroup/cgroup.subtree_control",
+                        "+cpuset"
+                    );
+                }
+            }
+
             crate::watcher::spawn_config_watcher(
                 self.config_path.clone(),
                 self.game_list_path.clone(),
