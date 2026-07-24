@@ -10,6 +10,7 @@ pub struct RuntimeContext {
     // Tick-level ownership:
     pub battery_temp_c: i32,
     pub trend_score: i32,
+    pub prev_hot_trend: bool,
     pub sleep_ms: u64,
     pub current_policy: Option<String>,
     pub current_game: Option<String>,

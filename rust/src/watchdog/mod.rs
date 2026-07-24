@@ -16,6 +16,7 @@ pub struct Watchdog {
     pub stall_threshold: u32,
     last_legacy_write_failures: u64,
     last_healthy_at: Option<Instant>,
+    pub tick_count: u64,
 }
 
 impl Watchdog {
@@ -31,7 +32,13 @@ impl Watchdog {
             stall_threshold,
             last_legacy_write_failures: 0,
             last_healthy_at: None,
+            tick_count: 0,
         }
+    }
+
+    pub fn mark_healthy(&mut self) {
+        self.tick_count = self.tick_count.saturating_add(1);
+        self.last_healthy_at = Some(Instant::now());
     }
 
     pub fn check(&mut self, is_running_properly: bool) -> Result<WatchdogVerdict> {
@@ -48,7 +55,8 @@ impl Watchdog {
 
         if is_running_properly {
             self.last_heartbeat = Some(current_time);
-            self.last_healthy_at = Some(current_time);
+            // last_healthy_at is intentionally NOT set here; mark_healthy()
+            // must be called explicitly at the end of a successful loop tick.
             stalled = false;
         }
 
@@ -88,7 +96,7 @@ impl Watchdog {
 
         let stall_secs = self.last_healthy_at.map(|t| current_time.duration_since(t).as_secs()).unwrap_or(0);
         tracing::trace!("Watchdog: tick_count={}, last_healthy_at={:?}, stall_secs={}",
-            self.heartbeat_failures, self.last_healthy_at, stall_secs);
+            self.tick_count, self.last_healthy_at, stall_secs);
 
         Ok(verdict)
     }

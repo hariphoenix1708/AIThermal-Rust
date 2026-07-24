@@ -59,6 +59,13 @@ impl GovernorManager {
                 );
                 continue;
             }
+
+            if let Ok(current) = std::fs::read_to_string(&cluster.governor_node.path) {
+                if current.trim() == governor.trim() {
+                    continue;
+                }
+            }
+
             crate::tuning::backend::TuningBackend::write_capability(
                 &cluster.governor_node,
                 governor,
@@ -80,12 +87,22 @@ impl GovernorManager {
         }
 
         if self.hardware.gpu_profile.has_devfreq {
+            if let Ok(current) = std::fs::read_to_string(&self.hardware.gpu_profile.devfreq_governor_node.path) {
+                if current.trim() == governor.trim() {
+                    return Ok(());
+                }
+            }
             crate::tuning::backend::TuningBackend::write_capability(
                 &self.hardware.gpu_profile.devfreq_governor_node,
                 governor,
             )?;
             tracing::debug!(target: "governor", "Applied GPU devfreq governor: {} via {}", governor, self.hardware.gpu_profile.devfreq_governor_node.path);
         } else if !self.hardware.gpu_profile.path.is_empty() {
+            if let Ok(current) = std::fs::read_to_string(&self.hardware.gpu_profile.governor_node.path) {
+                if current.trim() == governor.trim() {
+                    return Ok(());
+                }
+            }
             crate::tuning::backend::TuningBackend::write_capability(
                 &self.hardware.gpu_profile.governor_node,
                 governor,

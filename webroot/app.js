@@ -115,6 +115,13 @@ async function loadDashboard() {
   document.getElementById("policyValue").textContent = state.policy ?? "—";
   document.getElementById("gamingChip").textContent = "Gaming: " + (state.gaming ? "on" : "off");
   document.getElementById("cooldownChip").textContent = "Cooldown: " + (state.cooldown_active ? "active" : "off");
+  const recoveryPhaseChip = document.getElementById("recoveryPhaseChip");
+  if (state.recovery_phase && state.recovery_phase !== "None") {
+    recoveryPhaseChip.style.display = "";
+    recoveryPhaseChip.textContent = "Phase: " + state.recovery_phase;
+  } else {
+    recoveryPhaseChip.style.display = "none";
+  }
 
   document.getElementById("gameValue").textContent = state.game_pkg || "—";
   document.getElementById("peakValue").textContent = (state.session_peak_temp ?? "—") + " °C";

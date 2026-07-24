@@ -80,8 +80,10 @@ impl PolicyEngine {
             PolicyState::Conservative
         } else if total_score > 15.0 {
             PolicyState::Balanced
-        } else {
+        } else if is_gaming {
             PolicyState::Performance
+        } else {
+            PolicyState::Balanced
         };
 
         self.apply_transition(desired, total_score)
@@ -171,7 +173,7 @@ mod tests {
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
         assert_eq!(
             engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, &config),
-            PolicyState::Performance
+            PolicyState::Balanced
         );
 
         // Rise to warm
