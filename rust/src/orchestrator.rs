@@ -55,6 +55,7 @@ pub struct SystemOrchestrator {
     stock_thermal_disabled: Option<bool>,
     last_telemetry_write_at: Option<std::time::Instant>,
     last_telemetry_policy: Option<String>,
+    last_applied_policy: Option<String>,
 }
 
 impl SystemOrchestrator {
@@ -69,6 +70,17 @@ impl SystemOrchestrator {
         // While a game is running, hold the floor at 8 s. Burst-
         // rewriting governors mid-frame is worse than a slightly
         // stale policy.
+        let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
+        match self.last_actuation_at {
+            None => true,
+            Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
+        }
+    }
+
+    fn actuation_allowed_bypass_wake(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
+        // Same throttle as actuation_allowed but ignores wake_defer_until.
+        let base_ms = ctx.config.profiles.min_actuation_interval_ms;
+        if base_ms == 0 { return true; }
         let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
         match self.last_actuation_at {
             None => true,
@@ -232,6 +244,7 @@ impl SystemOrchestrator {
             stock_thermal_disabled: None,
             last_telemetry_write_at: None,
             last_telemetry_policy: None,
+            last_applied_policy: None,
         }
     }
 
@@ -458,6 +471,7 @@ impl SystemOrchestrator {
             stock_thermal_disabled: None,
             last_telemetry_write_at: None,
             last_telemetry_policy: None,
+            last_applied_policy: None,
         }
     }
 
@@ -491,6 +505,7 @@ impl RuntimeTask for SystemOrchestrator {
         self.runtime_tuner.restore_all();
         self.runtime_tuner.restore_stock_thermal();
         self.stock_thermal_disabled = Some(false);
+        self.last_applied_policy = None;
     }
 
     fn execute(&mut self, ctx: &mut RuntimeContext) -> Result<()> {
@@ -538,10 +553,9 @@ impl RuntimeTask for SystemOrchestrator {
             // during - because the nudge itself would trigger a write.
             self.last_actuation_at = Some(std::time::Instant::now());
             self.wake_defer_until = Some(std::time::Instant::now()
-                + std::time::Duration::from_millis(2_500));
+                + std::time::Duration::from_millis(800));
             self.pending_wake_nudge = true;
-            tracing::info!(target: "wake", "Screen wake detected; deferring actuation for 2500ms");
-            tracing::info!("Screen wake detected; deferring actuation for 2500ms");
+            tracing::info!(target: "wake", "Screen wake detected; deferring actuation for 800ms");
         }
 
         if just_woke
@@ -767,6 +781,14 @@ impl RuntimeTask for SystemOrchestrator {
             None => true,
         };
 
+        // If the previous transition tick could not actuate (wake defer,
+        // actuation throttle, etc.) the policy label was still committed
+        // to ctx.current_policy. Track what we ACTUALLY applied and
+        // retry on any subsequent tick where the effective state has
+        // drifted from the intended one.
+        let needs_apply = policy_changed
+            || self.last_applied_policy.as_deref() != Some(policy_str);
+
         let in_hot_gameexit =
             self.recovery.phase == crate::recovery::RecoveryPhase::GameExit;
 
@@ -775,6 +797,19 @@ impl RuntimeTask for SystemOrchestrator {
 
         let hard_immediate = final_policy == PolicyState::EmergencyCool || final_policy == PolicyState::Suspend || ctx.recovery_mode;
         let can_actuate = self.actuation_allowed(ctx, is_gaming) || hard_immediate;
+
+        // Loosening transitions (any policy that is NOT Suspend/Powersave)
+        // coming out of Suspend must actuate immediately, or the CPU stays
+        // pinned to powersave until the next transition and the user sees
+        // lag on every screen wake.
+        let is_loosening_from_suspend = matches!(
+            final_policy,
+            PolicyState::Balanced | PolicyState::Performance | PolicyState::Conservative
+        ) && ctx.current_policy.as_deref() == Some("Suspend");
+
+        let can_actuate = can_actuate
+            || (is_loosening_from_suspend
+                && self.actuation_allowed_bypass_wake(ctx, is_gaming));
 
         if can_actuate && self.pending_wake_nudge {
             self.adaptive_governor.nudge_on_screen_on();
@@ -788,7 +823,7 @@ impl RuntimeTask for SystemOrchestrator {
                     self.runtime_tuner.pin_critical_render_thread(pid, "top-app");
                 }
             }
-        } else if policy_changed {
+        } else if needs_apply {
             tracing::info!(target: "tuning", "Tweaks disabled by config, skipping actuation for policy: {}", policy_str);
         }
 
@@ -823,7 +858,7 @@ impl RuntimeTask for SystemOrchestrator {
             .map(|t| t.elapsed().as_secs() >= 2)
             .unwrap_or(true);
 
-        if !disable_tweaks && policy_changed && (final_policy != PolicyState::Performance || game_grace_elapsed) {
+        if !disable_tweaks && needs_apply && (final_policy != PolicyState::Performance || game_grace_elapsed) {
             if can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
 
@@ -1032,7 +1067,7 @@ impl RuntimeTask for SystemOrchestrator {
         }
 
         // Runtime Tuner application on policy transitions
-        if !disable_tweaks && policy_changed {
+        if !disable_tweaks && needs_apply {
             if can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
                 if let Err(e) = self.runtime_tuner.apply_network_tweaks(policy_str) {
@@ -1079,6 +1114,10 @@ impl RuntimeTask for SystemOrchestrator {
                     tracing::warn!("Failed to drop cache: {}", e);
                 }
             }
+        }
+
+        if can_actuate && needs_apply {
+            self.last_applied_policy = Some(policy_str.to_string());
         }
 
         // Final tick logging
@@ -1207,6 +1246,14 @@ impl RuntimeTask for SystemOrchestrator {
             ctx.config.profiles.poll_interval.saturating_mul(1000),
             ctx.sleep_ms, clamped_trend, sustained_hot_trend, long_idle, is_screen_off_now, is_gaming);
 
+        if !needs_apply {
+            // no-op
+        } else if !can_actuate {
+            tracing::debug!(target: "actuation",
+                "policy drift: intended={} applied={:?} - actuation deferred (wake or throttle)",
+                policy_str, self.last_applied_policy);
+        }
+
         if just_woke {
             // Cap the pending sleep so the screen-on tick lands immediately.
             ctx.sleep_ms = ctx.sleep_ms.min(400);
@@ -1290,6 +1337,7 @@ impl RuntimeTask for SystemOrchestrator {
             "frame_stats_parse_ok": crate::monitor::frame_sampler::last_parse_ok(),
             "recovery_phase": format!("{:?}", self.recovery.phase),
             "adaptive_tier": format!("{:?}", self.adaptive_governor.current_tier),
+            "last_applied_policy": self.last_applied_policy.clone().unwrap_or_else(|| "None".to_string()),
             "gpu_power_level": self.last_applied_gpu_level,
             "charge_control_node": self.charging.limit_nodes.first().cloned(),
             "qcom_voter_count": self.charging.voter_nodes.len(),

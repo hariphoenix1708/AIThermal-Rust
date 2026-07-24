@@ -1,5 +1,13 @@
 # Changelog
 
+## [v3.1.6-beta] (316)
+- Fix 97-second wake lag: dropped actuation on transition ticks is
+  now retried until it succeeds (drift-corrected apply).
+- Wake defer shortened from 2500 ms to 800 ms.
+- Loosening transitions out of Suspend bypass wake defer to keep
+  the launcher responsive.
+- Telemetry exposes last_applied_policy for drift diagnostics.
+
 ## [v3.1.5-beta] (315) - Self-heat + idle-drain reductions
 
 *   Fast-tick threshold hardened; requires sustained hot trend
