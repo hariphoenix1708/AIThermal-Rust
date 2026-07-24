@@ -128,16 +128,22 @@ impl BackgroundFrameSampler {
         std::thread::spawn(move || {
             while running_thread.load(Ordering::SeqCst) {
                 let pkg_opt = package_thread.lock().ok().and_then(|p| p.clone());
-                if let Some(pkg) = pkg_opt {
-                    // This blocking call now happens on ITS OWN thread only -
-                    // it can take however long it takes without affecting the
-                    // main daemon thread at all.
-                    let result = sample_frame_stats(&pkg);
-                    if let Ok(mut slot) = latest_thread.lock() {
-                        *slot = result;
+                let sleep_ms = match pkg_opt {
+                    Some(pkg) => {
+                        let result = sample_frame_stats(&pkg);
+                        if let Ok(mut slot) = latest_thread.lock() {
+                            *slot = result;
+                        }
+                        1500
                     }
-                }
-                std::thread::sleep(std::time::Duration::from_millis(1500));
+                    None => {
+                        if let Ok(mut slot) = latest_thread.lock() {
+                            *slot = None;
+                        }
+                        10_000
+                    }
+                };
+                std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
             }
         });
 

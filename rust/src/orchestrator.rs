@@ -49,6 +49,12 @@ pub struct SystemOrchestrator {
     last_applied_cpu_gov: Option<String>,
     last_applied_gpu_gov: Option<String>,
     last_applied_gpu_level: Option<u32>,
+    /// Some(true)  -> stock thermal is currently disabled by us
+    /// Some(false) -> stock thermal is currently restored
+    /// None        -> not yet decided this run
+    stock_thermal_disabled: Option<bool>,
+    last_telemetry_write_at: Option<std::time::Instant>,
+    last_telemetry_policy: Option<String>,
 }
 
 impl SystemOrchestrator {
@@ -223,6 +229,9 @@ impl SystemOrchestrator {
             last_applied_cpu_gov: None,
             last_applied_gpu_gov: None,
             last_applied_gpu_level: None,
+            stock_thermal_disabled: None,
+            last_telemetry_write_at: None,
+            last_telemetry_policy: None,
         }
     }
 
@@ -401,6 +410,7 @@ impl SystemOrchestrator {
             runtime_health: true,
             battery_temp_c: 0,
             trend_score: 0,
+            prev_hot_trend: false,
             sleep_ms: config.profiles.poll_interval.saturating_mul(1000),
             current_policy: None,
             current_game: None,
@@ -445,6 +455,9 @@ impl SystemOrchestrator {
             last_applied_cpu_gov: None,
             last_applied_gpu_gov: None,
             last_applied_gpu_level: None,
+            stock_thermal_disabled: None,
+            last_telemetry_write_at: None,
+            last_telemetry_policy: None,
         }
     }
 
@@ -476,6 +489,8 @@ impl RuntimeTask for SystemOrchestrator {
     fn cleanup(&mut self) {
         self.charging.release_voters_on_shutdown();
         self.runtime_tuner.restore_all();
+        self.runtime_tuner.restore_stock_thermal();
+        self.stock_thermal_disabled = Some(false);
     }
 
     fn execute(&mut self, ctx: &mut RuntimeContext) -> Result<()> {
@@ -1036,14 +1051,21 @@ impl RuntimeTask for SystemOrchestrator {
             }
 
             // Stock thermal enable/disable based on gaming/perf
-            let is_perf = policy_str == "Performance" || policy_str == "Gaming";
-            if is_perf {
+            let want_disabled = policy_str == "Performance" || policy_str == "Gaming";
+            let currently_disabled = self.stock_thermal_disabled.unwrap_or(false);
+
+            if want_disabled && !currently_disabled {
                 self.runtime_tuner.disable_stock_thermal();
-            } else if !in_hot_gameexit {
+                self.stock_thermal_disabled = Some(true);
+            } else if !want_disabled && currently_disabled && !in_hot_gameexit {
                 // Hand control back to mi_thermald only AFTER the
                 // exit animation has settled (>=4 s after game exit).
                 self.runtime_tuner.restore_stock_thermal();
-            } else {
+                self.stock_thermal_disabled = Some(false);
+            } else if !want_disabled && self.stock_thermal_disabled.is_none() {
+                // First tick after boot -> declare state = restored without a write.
+                self.stock_thermal_disabled = Some(false);
+            } else if !want_disabled && currently_disabled && in_hot_gameexit {
                 tracing::debug!(target: "thermal", "Deferring restore_stock_thermal: still in GameExit hot phase");
             }
 
@@ -1155,31 +1177,39 @@ impl RuntimeTask for SystemOrchestrator {
 
         let long_idle = is_screen_off_now
             && !is_gaming
+            && !ctx.plugged_in_at.is_some()
             && ctx
                 .screen_off_since
-                .map(|t| t.elapsed().as_secs() > 120)
+                .map(|t| t.elapsed().as_secs() > 30)
                 .unwrap_or(false)
             && clamped_trend <= 0; // only back off further if not actively heating
 
-        ctx.sleep_ms = if clamped_trend > 15 {
-            250 // was 50; avoids CPU spin without under-sleeping the daemon
-        } else if clamped_trend > 8 {
-            1000
+        // Require BOTH a real heating trend AND two consecutive hot-trending
+        // ticks before we run at high frequency; this stops the daemon from
+        // spinning at 4 Hz on ordinary micro-fluctuations.
+        let hot_trend_now = clamped_trend > 30;
+        let sustained_hot_trend = hot_trend_now && ctx.prev_hot_trend;
+        ctx.prev_hot_trend = hot_trend_now;
+
+        ctx.sleep_ms = if sustained_hot_trend {
+            750
+        } else if clamped_trend > 15 {
+            1500
         } else if long_idle {
-            30_000 // device has been screen-off, cool/cooling, and idle for 2+ minutes
+            30_000
         } else if is_screen_off_now && !is_gaming && (-2..=2).contains(&clamped_trend) {
             ctx.config.profiles.poll_interval.saturating_mul(4000)
-        } else if !is_gaming && (-2..=2).contains(&clamped_trend) {
-            // Screen ON, low trend, no game: keep it interactive.
-            ctx.config.profiles.poll_interval.saturating_mul(1000)
         } else {
             ctx.config.profiles.poll_interval.saturating_mul(1000)
         };
-        tracing::trace!("adaptive sleep: base={}ms chosen={}ms reason=TODO", ctx.config.profiles.poll_interval.saturating_mul(1000), ctx.sleep_ms);
+        tracing::trace!(
+            "adaptive sleep: base={}ms chosen={}ms trend={} sustained={} long_idle={} screen_off={} gaming={}",
+            ctx.config.profiles.poll_interval.saturating_mul(1000),
+            ctx.sleep_ms, clamped_trend, sustained_hot_trend, long_idle, is_screen_off_now, is_gaming);
 
         if just_woke {
             // Cap the pending sleep so the screen-on tick lands immediately.
-            ctx.sleep_ms = ctx.sleep_ms.min(150);
+            ctx.sleep_ms = ctx.sleep_ms.min(400);
         }
 
         let tick_interval_secs = ctx.sleep_ms / 1000;
@@ -1269,7 +1299,20 @@ impl RuntimeTask for SystemOrchestrator {
                 && self.charging.charge_mode == crate::charging::ChargeMode::BatteryCare,
         });
 
-        crate::telemetry::writer::write_telemetry(ctx, &telemetry);
+        let policy_now = Self::policy_state_name(&final_policy).to_string();
+        let due_time = self.last_telemetry_write_at
+            .map(|t| t.elapsed().as_millis() >= 2000)
+            .unwrap_or(true);
+        let policy_changed_for_ui =
+            self.last_telemetry_policy.as_deref() != Some(policy_now.as_str());
+
+        if due_time || policy_changed_for_ui || ctx.recovery_mode {
+            crate::telemetry::writer::write_telemetry(ctx, &telemetry);
+            self.last_telemetry_write_at = Some(std::time::Instant::now());
+            self.last_telemetry_policy = Some(policy_now);
+        }
+
+        self.watchdog.mark_healthy();
 
         Ok(())
     }

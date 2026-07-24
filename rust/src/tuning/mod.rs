@@ -22,6 +22,16 @@ pub struct RuntimeTuner {
     touch_network_stack: bool,
 }
 
+fn write_if_changed(path: &str, value: &str) -> bool {
+    match std::fs::read_to_string(path) {
+        Ok(cur) if cur.trim() == value.trim() => false,
+        _ => {
+            let _ = crate::tuning::backend::TuningBackend::try_write_string(path, value);
+            true
+        }
+    }
+}
+
 impl RuntimeTuner {
     pub fn new(hardware: HardwareProfile) -> Self {
         Self {
@@ -302,10 +312,18 @@ impl RuntimeTuner {
         let is_game = policy == "Gaming" || policy == "gaming" || is_perf;
 
         if is_game {
-            self.write_and_save("/proc/sys/vm/swappiness", "60", true);
-            self.write_and_save("/proc/sys/vm/vfs_cache_pressure", "100", true);
-            self.write_and_save("/proc/sys/vm/dirty_ratio", "20", true);
-            self.write_and_save("/proc/sys/vm/dirty_background_ratio", "10", true);
+            if write_if_changed("/proc/sys/vm/swappiness", "60") {
+                self.write_and_save("/proc/sys/vm/swappiness", "60", true);
+            }
+            if write_if_changed("/proc/sys/vm/vfs_cache_pressure", "100") {
+                self.write_and_save("/proc/sys/vm/vfs_cache_pressure", "100", true);
+            }
+            if write_if_changed("/proc/sys/vm/dirty_ratio", "20") {
+                self.write_and_save("/proc/sys/vm/dirty_ratio", "20", true);
+            }
+            if write_if_changed("/proc/sys/vm/dirty_background_ratio", "10") {
+                self.write_and_save("/proc/sys/vm/dirty_background_ratio", "10", true);
+            }
         } else {
             self.restore_or_default("/proc/sys/vm/swappiness", "100");
             self.restore_or_default("/proc/sys/vm/vfs_cache_pressure", "150");
@@ -336,24 +354,24 @@ impl RuntimeTuner {
             if let Some(available) = self.hardware.storage_profile.available_schedulers.get(dev) {
                 if is_game {
                     if available.contains(&sched.to_string()) {
-                        crate::tuning::backend::TuningBackend::write_string(&p_sched, sched);
+                        write_if_changed(&p_sched, sched);
                     }
                 } else {
                     if let Some(orig) = self.hardware.storage_profile.current_schedulers.get(dev) {
-                        crate::tuning::backend::TuningBackend::write_string(&p_sched, orig);
+                        write_if_changed(&p_sched, orig);
                     } else if available.contains(&sched.to_string()) {
-                        crate::tuning::backend::TuningBackend::write_string(&p_sched, sched);
+                        write_if_changed(&p_sched, sched);
                     }
                 }
             }
 
             if is_game {
-                crate::tuning::backend::TuningBackend::write_string(&p_ra, read_ahead);
+                write_if_changed(&p_ra, read_ahead);
             } else {
                 if let Some(orig_ra) = self.hardware.storage_profile.read_ahead_kb.get(dev) {
-                    crate::tuning::backend::TuningBackend::write_string(&p_ra, orig_ra.to_string());
+                    write_if_changed(&p_ra, &orig_ra.to_string());
                 } else {
-                    crate::tuning::backend::TuningBackend::write_string(&p_ra, read_ahead);
+                    write_if_changed(&p_ra, read_ahead);
                 }
             }
         }
@@ -491,13 +509,13 @@ impl RuntimeTuner {
         if is_game && self.hardware.gpu_profile.is_kgsl {
             if self.hardware.gpu_profile.has_bus_split {
                 let bus_split = format!("{}/bus_split", self.hardware.gpu_profile.path);
-                if crate::tuning::backend::TuningBackend::try_write_string(&bus_split, "0").is_ok() {
+                if write_if_changed(&bus_split, "0") {
                     tracing::debug!(target: "tuning", "Applied GPU bus_split: 0 via {}", bus_split);
                 }
             }
             if self.hardware.gpu_profile.has_force_clk_on {
                 let force_clk = format!("{}/force_clk_on", self.hardware.gpu_profile.path);
-                if crate::tuning::backend::TuningBackend::try_write_string(&force_clk, "1").is_ok() {
+                if write_if_changed(&force_clk, "1") {
                     tracing::debug!(target: "tuning", "Applied GPU force_clk_on: 1 via {}", force_clk);
                 }
             }

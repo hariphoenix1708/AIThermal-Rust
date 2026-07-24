@@ -64,6 +64,7 @@ impl Daemon {
             runtime_health: true,
             battery_temp_c: 0,
             trend_score: 0,
+            prev_hot_trend: false,
             sleep_ms: config.profiles.poll_interval.saturating_mul(1000),
             current_policy: None,
             current_game: None,
