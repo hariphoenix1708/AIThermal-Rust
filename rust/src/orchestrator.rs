@@ -807,6 +807,13 @@ impl RuntimeTask for SystemOrchestrator {
             None => true,
         };
 
+        if policy_changed {
+            tracing::info!(target: "thermal",
+                "Policy transition {} -> {} (score={:.1})",
+                ctx.current_policy.as_deref().unwrap_or("None"),
+                policy_str, final_context);
+        }
+
         // If the previous transition tick could not actuate (wake defer,
         // actuation throttle, etc.) the policy label was still committed
         // to ctx.current_policy. Track what we ACTUALLY applied and
@@ -831,14 +838,12 @@ impl RuntimeTask for SystemOrchestrator {
             || ctx.recovery_mode;
         let can_actuate = self.actuation_allowed(ctx, is_gaming) || hard_immediate;
 
-        // Loosening transitions (any policy that is NOT Suspend/Powersave)
-        // coming out of Suspend must actuate immediately, or the CPU stays
-        // pinned to powersave until the next transition and the user sees
-        // lag on every screen wake.
-        let is_loosening_from_suspend = matches!(
-            final_policy,
-            PolicyState::Balanced | PolicyState::Performance | PolicyState::Conservative
-        ) && ctx.current_policy.as_deref() == Some("Suspend");
+        // Any wake destination other than Suspend itself is a loosening
+        // from Suspend and must bypass the 800 ms wake defer. Leaving
+        // Powersave off this list caused the 5-7 s stutter at 09:24
+        // when a wake landed directly in Powersave.
+        let is_loosening_from_suspend = !matches!(final_policy, PolicyState::Suspend)
+            && ctx.current_policy.as_deref() == Some("Suspend");
 
         let can_actuate = can_actuate
             || (is_loosening_from_suspend && self.actuation_allowed_bypass_wake(ctx, is_gaming));
@@ -872,7 +877,12 @@ impl RuntimeTask for SystemOrchestrator {
         // to keep scrolling responsive after game exit.
         let cpu_gov_cons = self.select_cpu_governor(&["schedutil"]);
 
-        let cpu_gov_save = self.select_cpu_governor(&["powersave", "schedutil"]);
+        // P3: Powersave/EmergencyCool use schedutil, only Suspend uses bare powersave.
+        let cpu_gov_save = if final_policy == PolicyState::Suspend {
+            self.select_cpu_governor(&["powersave", "schedutil"])
+        } else {
+            self.select_cpu_governor(&["schedutil"])
+        };
 
         let gpu_level = match final_policy {
             PolicyState::Performance => self.hardware.gpu_profile.min_power_level.unwrap_or(0),
@@ -955,7 +965,7 @@ impl RuntimeTask for SystemOrchestrator {
                             }
                         }
                         if !in_hot_gameexit {
-                            if let Err(e) = self.cpuset.apply_cpuset("performance") {
+                            if let Err(e) = self.cpuset.apply_cpuset("performance", adj_temp, ctx.config.profiles.temp_hot) {
                                 tracing::warn!("Failed to apply cpuset: {}", e);
                             }
                         } else {
@@ -988,7 +998,7 @@ impl RuntimeTask for SystemOrchestrator {
                             }
                         }
                         if !in_hot_gameexit {
-                            if let Err(e) = self.cpuset.apply_cpuset("balanced") {
+                            if let Err(e) = self.cpuset.apply_cpuset("balanced", adj_temp, ctx.config.profiles.temp_hot) {
                                 tracing::warn!("Failed to apply cpuset: {}", e);
                             }
                         } else {
@@ -1021,7 +1031,7 @@ impl RuntimeTask for SystemOrchestrator {
                             }
                         }
                         if !in_hot_gameexit {
-                            if let Err(e) = self.cpuset.apply_cpuset("balanced") {
+                            if let Err(e) = self.cpuset.apply_cpuset("balanced", adj_temp, ctx.config.profiles.temp_hot) {
                                 tracing::warn!("Failed to apply cpuset: {}", e);
                             }
                         } else {
@@ -1054,7 +1064,7 @@ impl RuntimeTask for SystemOrchestrator {
                             }
                         }
                         if !in_hot_gameexit {
-                            if let Err(e) = self.cpuset.apply_cpuset("powersave") {
+                            if let Err(e) = self.cpuset.apply_cpuset("powersave", adj_temp, ctx.config.profiles.temp_hot) {
                                 tracing::warn!("Failed to apply cpuset: {}", e);
                             }
                         } else {
@@ -1103,53 +1113,65 @@ impl RuntimeTask for SystemOrchestrator {
 
                 if can_actuate {
                     self.last_actuation_at = Some(std::time::Instant::now());
-                    for cluster in &self.hardware.cpu_topology.clusters {
-                        let target = match tier {
-                            crate::scheduler::adaptive_governor::FrequencyTier::Max => {
-                                crate::governors::GovernorManager::max_freq(
-                                    &cluster.available_frequencies,
-                                )
-                            }
-                            crate::scheduler::adaptive_governor::FrequencyTier::High => {
-                                let min = crate::governors::GovernorManager::min_freq(
-                                    &cluster.available_frequencies,
-                                )
-                                .unwrap_or(0);
-                                let max = crate::governors::GovernorManager::max_freq(
-                                    &cluster.available_frequencies,
-                                )
-                                .unwrap_or(0);
-                                let midpoint = (min + max) / 2;
-                                // Snap to the closest value actually present in this cluster's real
-                                // frequency table, rather than trusting an arithmetic midpoint to be a
-                                // valid step.
-                                cluster
-                                    .available_frequencies
-                                    .iter()
-                                    .copied()
-                                    .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
-                            }
-                            crate::scheduler::adaptive_governor::FrequencyTier::Balanced => {
-                                crate::governors::GovernorManager::mid_freq(
-                                    &cluster.available_frequencies,
-                                )
-                            }
-                            crate::scheduler::adaptive_governor::FrequencyTier::Eco => {
-                                crate::governors::GovernorManager::min_freq(
-                                    &cluster.available_frequencies,
-                                )
-                            }
-                        };
 
-                        if let Some(freq) = target {
-                            let path = format!("{}/scaling_max_freq", cluster.policy_path);
-                            if crate::tuning::backend::TuningBackend::try_write_string(
-                                &path,
-                                &freq.to_string(),
-                            )
-                            .is_ok()
-                            {
-                                tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+                    // R2: When policy is one of the P3-clamped states, apply_cluster_settings
+                    // owns scaling_max_freq. Do not fight it from adaptive_governor.
+                    let p3_owns_max_freq = matches!(
+                        policy_str,
+                        "Powersave" | "Conservative" | "EmergencyCool" | "Suspend"
+                    );
+                    if p3_owns_max_freq {
+                        // adaptive_governor still runs its tier/scoring logic for telemetry,
+                        // but must not write scaling_max_freq while P3 has clamp authority.
+                    } else {
+                        for cluster in &self.hardware.cpu_topology.clusters {
+                            let target = match tier {
+                                crate::scheduler::adaptive_governor::FrequencyTier::Max => {
+                                    crate::governors::GovernorManager::max_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                }
+                                crate::scheduler::adaptive_governor::FrequencyTier::High => {
+                                    let min = crate::governors::GovernorManager::min_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                    .unwrap_or(0);
+                                    let max = crate::governors::GovernorManager::max_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                    .unwrap_or(0);
+                                    let midpoint = (min + max) / 2;
+                                    // Snap to the closest value actually present in this cluster's real
+                                    // frequency table, rather than trusting an arithmetic midpoint to be a
+                                    // valid step.
+                                    cluster
+                                        .available_frequencies
+                                        .iter()
+                                        .copied()
+                                        .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
+                                }
+                                crate::scheduler::adaptive_governor::FrequencyTier::Balanced => {
+                                    crate::governors::GovernorManager::mid_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                }
+                                crate::scheduler::adaptive_governor::FrequencyTier::Eco => {
+                                    crate::governors::GovernorManager::min_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                }
+                            };
+
+                            if let Some(freq) = target {
+                                let path = format!("{}/scaling_max_freq", cluster.policy_path);
+                                if crate::tuning::backend::TuningBackend::try_write_string(
+                                    &path,
+                                    &freq.to_string(),
+                                )
+                                .is_ok()
+                                {
+                                    tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+                                }
                             }
                         }
                     }
@@ -1173,6 +1195,7 @@ impl RuntimeTask for SystemOrchestrator {
                         tracing::warn!("Failed to apply scheduler: {}", e);
                     }
                 }
+                self.runtime_tuner.apply_universal_cpu_tuning(policy_str);
                 self.runtime_tuner.apply_universal_gpu_control(policy_str);
             }
 

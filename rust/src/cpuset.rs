@@ -22,38 +22,31 @@ impl CpusetManager {
         self.hardware = hw_profile.clone();
     }
 
-    pub fn apply_profile(&self, mode: &str) -> Result<(), BackendError> {
+    pub fn apply_profile(&self, mode: &str, composite_c: i32, temp_hot: i32) -> Result<(), BackendError> {
         if self.hardware.cpuset_profile.root_path.is_empty() {
             return Ok(());
         }
 
-        // Apply background and system-background first
-        let bg_val = match mode {
-            "powersave" | "emergency_cool" => "0",
-            _ => "0-1",
+        let is_tight = match mode {
+            "powersave" | "emergency_cool" => composite_c >= temp_hot,
+            _ => false,
         };
 
-        let sys_bg_val = match mode {
-            "powersave" | "emergency_cool" => "0-1",
-            _ => "0-2",
-        };
+        // Apply background and system-background first
+        let bg_val = if is_tight { "0" } else { "0-1" };
+        let sys_bg_val = if is_tight { "0-1" } else { "0-2" };
 
         // Apply foreground and top-app
-        let fg_val = match mode {
-            "powersave" | "emergency_cool" => "0-2",
-            _ => "0-6",
-        };
+        let fg_val = if is_tight { "0-2" } else { "0-6" };
 
         let ta_val = match mode {
-            "powersave" | "emergency_cool" => "0-3",
             "performance" => "0-7", // all
-            _ => "0-7",
+            _ => if is_tight { "0-3" } else { "0-7" },
         };
 
         let restricted_val = match mode {
-            "powersave" | "emergency_cool" => "0-3",
             "performance" => "0-6",
-            _ => "0-6",
+            _ => if is_tight { "0-3" } else { "0-6" },
         };
 
         for node in &self.hardware.cpuset_profile.cpuset_nodes {
@@ -87,7 +80,7 @@ impl CpusetManager {
 }
 
 impl CpusetBackend for CpusetManager {
-    fn apply_cpuset(&self, mode: &str) -> Result<(), BackendError> {
-        self.apply_profile(mode)
+    fn apply_cpuset(&self, mode: &str, composite_c: i32, temp_hot: i32) -> Result<(), BackendError> {
+        self.apply_profile(mode, composite_c, temp_hot)
     }
 }

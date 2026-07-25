@@ -185,6 +185,7 @@ pub struct GpuProfile {
     pub current_power_level: Option<u32>,
     pub min_power_level: Option<u32>,
     pub max_power_level: Option<u32>,
+    pub thermal_pwrlevel_path: Option<String>,
     pub has_bus_split: bool,
     pub has_force_clk_on: bool,
 }

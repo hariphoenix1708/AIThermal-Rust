@@ -1,5 +1,36 @@
 # Changelog
 
+## v3.2.1 (versionCode 321)
+### Fixed
+- Idempotent sysfs writes are now consistent across all tuning paths.
+  write_if_changed understands the kernel's bracketed scheduler format,
+  and write_and_save / restore_or_default no longer rewrite unchanged
+  values. Eliminates ~700 redundant queue/scheduler writes and ~100
+  redundant vm.swappiness writes per session (reduces actuation overhead
+  and log noise).
+- Policy transition logs now reflect the ACTUATED policy. Decisions that
+  the orchestrator overrides during post-game cooldown / thermal recovery
+  no longer emit phantom transition lines that contradict the tick state.
+
+## v3.2.0 (versionCode 320)
+### Fixed
+- CPU tuning path: wire apply_universal_cpu_tuning into the orchestrator
+  actuation cycle so the P3 governor mapping and scaling_max_freq clamps
+  (Powersave 70%, Conservative 85%, EmergencyCool 55%) actually take
+  effect on transitions.
+- adaptive_governor no longer writes scaling_max_freq during
+  Powersave/Conservative/EmergencyCool/Suspend — P3 owns the clamp in
+  those states; no more competing writes.
+- Policy transition INFO log now fires for every X -> Suspend transition
+  (Balanced/Conservative/Powersave/Performance/EmergencyCool -> Suspend).
+- Removed the duplicate back-to-back "Policy transition" log emission.
+- Idempotent sysfs writes: try_write_string now skips when the node
+  already holds the target value. Kills repeated no-op writes to
+  vm.*, block/*/queue/scheduler, and cpuset nodes across ticks.
+- P5 Powersave-arm counter: preserve arm_count across the placeholder
+  Conservative step so a sustained two-tick tentative=Powersave actually
+  enters Powersave (previously reset by the else-branch on tick N).
+
 ## [v3.1.9] (319) - Stable
 
 Fixes user-visible 5-7 s stutters on Conservative -> Powersave transitions at moderate temperatures (v3.1.8 regression).
@@ -11,6 +42,9 @@ Fixes user-visible 5-7 s stutters on Conservative -> Powersave transitions at mo
 *   KGSL power-level detection now falls back to `default_pwrlevel` on Adreno 730/735/750 (SM8550/8635/8650) when neither `pwrlevel` nor `current_pwrlevel` are writable. Also records `thermal_pwrlevel` as a floor to avoid fighting the QCOM thermal HAL on HyperOS.
 *   Snapshot/restore path restores `default_pwrlevel` on shutdown for the same devices.
 *   No behavioural regression on kernels/ROMs without any of the new sysfs nodes - every read/write remains capability-gated with silent no-op on ENOENT/EPERM.
+*   Wake-from-Suspend fast path now covers Powersave destinations, not just Balanced/Performance/Conservative. Fixes ~11 s stutter when a screen wake lands directly in Powersave (repro: charging + composite ~46 C at wake).
+*   `default_pwrlevel` (Adreno 730/735/750) added to KGSL probe.
+*   "Skipping GPU power-level control" log downgraded and gated behind std::sync::Once (was printed twice per tick).
 
 
 ## [v3.1.8] (318) - Stable
