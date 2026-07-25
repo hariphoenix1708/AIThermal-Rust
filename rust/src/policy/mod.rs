@@ -14,6 +14,7 @@ pub struct PolicyEngine {
     pub current_policy: PolicyState,
     pub debounce: std::time::Duration,
     pub last_change_at: std::time::Instant,
+    pub(crate) powersave_arm_count: u8,
     startup_time: std::time::Instant,
     startup_grace_secs: u64,
 }
@@ -26,6 +27,7 @@ impl PolicyEngine {
             current_policy: PolicyState::Balanced,
             debounce,
             last_change_at: std::time::Instant::now(),
+            powersave_arm_count: 0,
             startup_time: std::time::Instant::now(),
             startup_grace_secs: 30, // Default 30s grace period for inputs to stabilize
         }
@@ -66,10 +68,15 @@ impl PolicyEngine {
         // pocket / warm ambient causes SoC temp to hover without any
         // real load.
         let psi_dampener: f64 = if cpu_pressure < 5.0 && io_pressure < 5.0 {
-            -4.0 // one "rank" of relief; smaller than trend so it never dominates
-        } else if cpu_pressure > 50.0 || io_pressure > 30.0 {
-            // System is genuinely under pressure - amplify tightening.
-            4.0
+            // Idle relief is temperature-independent.
+            -4.0
+        } else if (cpu_pressure > 50.0 || io_pressure > 30.0)
+            && composite_temp >= config.temp_warm
+        {
+            // Amplify tightening ONLY when the device is actually warm.
+            // Reduced from +4.0 to +3.0 so it cannot single-handedly
+            // cross the Powersave threshold.
+            3.0
         } else {
             0.0
         };
@@ -88,7 +95,7 @@ impl PolicyEngine {
         // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
         // A typical hot score might be: temp diff (45-35)=10 * 2 = 20, pred (45-35)=15, game=10, trend=5, context=..., comfort=...
         // Let's calibrate:
-        let desired = if composite_temp >= config.temp_critical
+        let tentative = if composite_temp >= config.temp_critical
             || predicted_temp >= config.temp_critical
             || total_score > 90.0
         {
@@ -111,14 +118,55 @@ impl PolicyEngine {
             PolicyState::Balanced
         };
 
-        self.apply_transition(desired, total_score)
+        // P5: require sustained pressure before entering Powersave from
+        // a lighter state. Single-tick trend spikes must not cliff the UI.
+        let next_state = if tentative == PolicyState::Powersave
+            && !matches!(self.current_state(),
+                PolicyState::Powersave
+                    | PolicyState::EmergencyCool
+                    | PolicyState::Suspend)
+        {
+            let hot_enough = composite_temp >= config.temp_powersave;
+            if hot_enough {
+                // Composite already at/above temp_powersave — enter now.
+                self.powersave_arm_count = 0;
+                PolicyState::Powersave
+            } else {
+                self.powersave_arm_count = self.powersave_arm_count.saturating_add(1);
+                if self.powersave_arm_count >= 2 {
+                    self.powersave_arm_count = 0;
+                    PolicyState::Powersave
+                } else {
+                    // Stay one step softer for one more tick.
+                    PolicyState::Conservative
+                }
+            }
+        } else {
+            // R5: preserve the arm counter across a placeholder-Conservative
+            // step. Only clear when the tentative itself is NOT Powersave.
+            if tentative != PolicyState::Powersave {
+                self.powersave_arm_count = 0;
+            }
+            tentative
+        };
+
+        self.apply_transition(next_state, total_score)
+    }
+
+    fn current_state(&self) -> &PolicyState {
+        &self.current_policy
     }
 
     fn apply_transition(&mut self, desired: PolicyState, total_score: f64) -> PolicyState {
         // Immediate escalate for Emergency or Suspend
         if desired == PolicyState::EmergencyCool || desired == PolicyState::Suspend {
             if self.current_policy != desired {
+                let prev = self.current_policy.clone();
                 self.current_policy = desired.clone();
+                tracing::info!(target: "thermal",
+                    "Policy transition {:?} -> {:?} (score={:.1}, elapsed_since_last={}s)",
+                    prev, self.current_policy, total_score,
+                    self.last_change_at.elapsed().as_secs());
                 self.last_change_at = std::time::Instant::now();
             }
             return desired;
@@ -151,12 +199,6 @@ impl PolicyEngine {
                     "Policy transition {:?} -> {:?} (score={:.1}, elapsed_since_last={}s)",
                     prev, self.current_policy, total_score,
                     self.last_change_at.elapsed().as_secs());
-                tracing::info!(
-                    "Policy transition {:?} -> {:?} (score={:.1})",
-                    prev,
-                    self.current_policy,
-                    total_score
-                );
                 self.last_change_at = std::time::Instant::now();
             }
         }

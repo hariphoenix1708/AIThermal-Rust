@@ -546,7 +546,13 @@ impl RuntimeTuner {
         }
 
         let Some(gpu) = &self.hardware.gpu_profile.power_level_path else {
-            tracing::debug!("Skipping GPU power-level control: no writable KGSL power-level node");
+            static GPU_PWR_MISSING_WARN: std::sync::Once = std::sync::Once::new();
+            GPU_PWR_MISSING_WARN.call_once(|| {
+                tracing::trace!(
+                    target: "tuning",
+                    "Skipping GPU power-level control: no writable KGSL power-level node"
+                );
+            });
             return;
         };
         let (Some(min_level), Some(max_level)) = (
@@ -657,26 +663,73 @@ impl RuntimeTuner {
         }
     }
 
+    fn snap_to_available_freq(&self, cluster_name: &str, target: u64) -> Option<u64> {
+        let path = format!(
+            "/sys/devices/system/cpu/cpufreq/{}/scaling_available_frequencies",
+            cluster_name
+        );
+        let s = std::fs::read_to_string(&path).ok()?;
+        s.split_ascii_whitespace()
+            .filter_map(|t| t.parse::<u64>().ok())
+            .min_by_key(|f| f.abs_diff(target))
+    }
+
     pub fn apply_cluster_settings(&self, policy: &str) {
-        let is_perf = policy == "Performance" || policy == "performance";
-        let is_game = policy == "Gaming" || policy == "gaming" || is_perf;
+        let (gov, max_pct): (&str, Option<u32>) = match policy {
+            "Performance" | "performance" | "Gaming" | "gaming" =>
+                ("performance", None),
+            "Balanced"                       => ("schedutil", None),
+            "Conservative"                   => ("schedutil", Some(85)),
+            "Powersave"                      => ("schedutil", Some(70)),
+            "EmergencyCool"                  => ("schedutil", Some(55)),
+            "Suspend"                        => ("powersave",  None),
+            _                                => ("schedutil", None),
+        };
 
         for cluster in &self.hardware.cpu_topology.clusters {
-            let gov = if is_game { "performance" } else { "schedutil" };
-
-            if cluster.available_governors.contains(&gov.to_string()) {
-                if let Err(e) = crate::tuning::backend::TuningBackend::write_capability(
-                    &cluster.governor_node,
-                    gov,
-                ) {
-                    tracing::warn!("Failed to apply CPU governor on {}: {}", cluster.name, e);
-                }
+            // Governor write (existing capability check)
+            let effective_gov = if cluster.available_governors.iter().any(|g| g == gov) {
+                gov
+            } else if cluster.available_governors.iter().any(|g| g == "schedutil") {
+                "schedutil"
             } else {
                 tracing::debug!(
-                    "Skipping unsupported CPU governor {} on {}",
-                    gov,
-                    cluster.name
+                    "Skipping unsupported CPU governor {} on {}", gov, cluster.name
                 );
+                continue;
+            };
+            if let Err(e) = crate::tuning::backend::TuningBackend::write_capability(
+                &cluster.governor_node,
+                effective_gov,
+            ) {
+                tracing::warn!("Failed to apply CPU governor on {}: {}", cluster.name, e);
+            }
+
+            // Percent-of-Fmax clamp (only when max_pct is Some).
+            // Reads cpuinfo_max_freq, computes target, snaps to nearest available
+            // frequency, and writes scaling_max_freq. Restores on Balanced/Perf/Game.
+            let scaling_max_path = format!(
+                "/sys/devices/system/cpu/cpufreq/{}/scaling_max_freq",
+                cluster.name
+            );
+            let cpuinfo_max_path = format!(
+                "/sys/devices/system/cpu/cpufreq/{}/cpuinfo_max_freq",
+                cluster.name
+            );
+            if let Some(pct) = max_pct {
+                if let Ok(s) = std::fs::read_to_string(&cpuinfo_max_path) {
+                    if let Ok(fmax) = s.trim().parse::<u64>() {
+                        let target = fmax.saturating_mul(pct as u64) / 100;
+                        let snapped = self.snap_to_available_freq(&cluster.name, target)
+                            .unwrap_or(target);
+                        self.write_and_save(&scaling_max_path, &snapped.to_string(), true);
+                    }
+                }
+            } else {
+                // Restore to Fmax when leaving a clamped state.
+                if let Ok(s) = std::fs::read_to_string(&cpuinfo_max_path) {
+                    self.write_and_save(&scaling_max_path, s.trim(), true);
+                }
             }
         }
     }

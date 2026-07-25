@@ -26,7 +26,10 @@ pub fn probe_gpu() -> GpuProfile {
         profile.min_power_level = read_u32(&min_pwr_path);
         profile.max_power_level = read_u32(&max_pwr_path);
 
-        for current_name in ["pwrlevel", "current_pwrlevel"] {
+        // Adreno 730/735/750 (SM8550/8635/8650) drop `pwrlevel` and
+        // `current_pwrlevel` in favour of `default_pwrlevel` as the
+        // writable per-instance clamp knob. Probe in order.
+        for current_name in ["pwrlevel", "current_pwrlevel", "default_pwrlevel"] {
             let current_path = format!("{}/{}", profile.path, current_name);
 
             if let Some(level) = read_u32(&current_path) {
@@ -37,6 +40,13 @@ pub fn probe_gpu() -> GpuProfile {
                 profile.power_level_path = Some(current_path);
                 break;
             }
+        }
+
+        // Also record thermal_pwrlevel as a read-only floor so we never
+        // fight the QCOM thermal HAL on HyperOS.
+        let thermal_pwr_path = format!("{}/thermal_pwrlevel", profile.path);
+        if std::path::Path::new(&thermal_pwr_path).exists() {
+            profile.thermal_pwrlevel_path = Some(thermal_pwr_path);
         }
 
         let bus_split_path = format!("{}/bus_split", profile.path);
