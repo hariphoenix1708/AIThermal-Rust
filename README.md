@@ -1,5 +1,5 @@
 # ThermalAI - Rust Edition (Stable)
-Stable  |  Android 14-17 (AOSP + HyperOS)  |  Kernel 4.14 - 6.6+  |  AArch64  |  cgroup v1/v2
+Stable | Android 14-17 (AOSP + HyperOS) | Kernel 4.14-6.6+ | AArch64 | cgroup v1/v2 | Adreno 730/735/750 + Mali
 
 A highly optimized, adaptive thermal and performance orchestrator for Android devices, natively written in Rust for safety, minimal overhead, and rigorous stability. It scales device responsiveness intelligently across dynamic system states (Idle, Gaming, Charging, Emergency).
 
@@ -27,6 +27,8 @@ AIThermal-Rust replaces legacy shell-based orchestration with a memory-safe, det
 *   **PSI-aware policy scoring**: Incorporates CPU, memory, and I/O pressure metrics directly into policy evaluation to improve stability.
 *   **Battery cycle-count-aware charge tapering**: Softens the fast-charge limit progressively based on the battery's cycle count to preserve long-term health.
 *   **cgroup v1 + v2 cpuset detection**: Detects unified hierarchy on AOSP 14-17 + HyperOS devices automatically.
+*   **Adreno 730/735/750 KGSL default_pwrlevel support**: Fallback power-level tuning for modern Adreno GPUs lacking standard writable paths.
+*   **Temperature-gated Powersave**: Avoids UI cliffs at moderate temperatures by gracefully degrading UI responsivness only when critically necessary.
 
 ### Runtime Architecture
 The system operates on a tick-based orchestrator model:

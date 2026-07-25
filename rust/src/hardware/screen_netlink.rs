@@ -1,25 +1,33 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use tracing::warn;
 
 use std::sync::atomic::AtomicU64;
 
 pub fn spawn_screen_state_watcher(screen_on: Arc<AtomicBool>, last_update: Arc<AtomicU64>) {
-    std::thread::spawn(move || loop {
-        match watch_uevent_for_screen_state(&screen_on, &last_update) {
-            Ok(()) => {}
-            Err(e) => {
-                warn!("Screen netlink watcher error, falling back to polling: {}", e);
-                std::thread::sleep(std::time::Duration::from_secs(5));
+    std::thread::spawn(move || {
+        loop {
+            match watch_uevent_for_screen_state(&screen_on, &last_update) {
+                Ok(()) => {}
+                Err(e) => {
+                    warn!(
+                        "Screen netlink watcher error, falling back to polling: {}",
+                        e
+                    );
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
             }
         }
     });
 }
 
-fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<AtomicU64>) -> Result<(), Box<dyn std::error::Error>> {
-    use netlink_sys::{protocols::NETLINK_KOBJECT_UEVENT, Socket, SocketAddr};
+fn watch_uevent_for_screen_state(
+    screen_on: &Arc<AtomicBool>,
+    last_update: &Arc<AtomicU64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use netlink_sys::{Socket, SocketAddr, protocols::NETLINK_KOBJECT_UEVENT};
 
     let mut socket = Socket::new(NETLINK_KOBJECT_UEVENT)?;
     let addr = SocketAddr::new(std::process::id(), 1); // Multicast group 1 for uevents
@@ -61,7 +69,8 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
             }
         }
 
-        if is_power_subsystem && (power_action == "early_suspend" || power_action == "late_resume") {
+        if is_power_subsystem && (power_action == "early_suspend" || power_action == "late_resume")
+        {
             if power_action == "early_suspend" {
                 screen_on.store(false, Ordering::SeqCst);
                 tracing::info!(target: "wake", "Screen state changed via netlink: OFF");
@@ -93,14 +102,20 @@ fn watch_uevent_for_screen_state(screen_on: &Arc<AtomicBool>, last_update: &Arc<
                         if is_off { "OFF" } else { "ON" }
                     );
                 }
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
                 last_update.store(now, Ordering::SeqCst);
             }
         }
 
         if is_power_subsystem || is_backlight_subsystem {
-             let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-             last_update.store(now, Ordering::SeqCst);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            last_update.store(now, Ordering::SeqCst);
         }
     }
 }

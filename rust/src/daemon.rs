@@ -52,7 +52,13 @@ static TICK_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64
 const STALL_WARN_THRESHOLD_SECS: u64 = 30;
 
 impl Daemon {
-    pub fn new(pid_file: &str, config: AppConfig, state_dir: &str, config_path: String, game_list_path: String) -> Self {
+    pub fn new(
+        pid_file: &str,
+        config: AppConfig,
+        state_dir: &str,
+        config_path: String,
+        game_list_path: String,
+    ) -> Self {
         let initial_screen_off = crate::hardware::display::is_screen_off();
         let lock_file = format!("{}.lock", pid_file);
         let ctx = RuntimeContext {
@@ -111,7 +117,9 @@ impl Daemon {
             if netlink_fresh {
                 tracing::info!("Screen state: netlink watcher is providing fresh updates");
             } else {
-                tracing::warn!("Screen state: netlink watcher has not reported in 60+s, falling back to polling");
+                tracing::warn!(
+                    "Screen state: netlink watcher has not reported in 60+s, falling back to polling"
+                );
             }
             self.was_netlink_fresh_last_check = netlink_fresh;
         }
@@ -173,7 +181,7 @@ impl Daemon {
                 if hw.cpuset_profile.is_cgroup_v2 && hw.cpuset_profile.controller_ok {
                     let _ = crate::tuning::backend::TuningBackend::try_write_string(
                         "/sys/fs/cgroup/cgroup.subtree_control",
-                        "+cpuset"
+                        "+cpuset",
                     );
                 }
             }
@@ -186,7 +194,7 @@ impl Daemon {
 
             crate::hardware::screen_netlink::spawn_screen_state_watcher(
                 self.screen_on.clone(),
-                self.last_screen_netlink_update.clone()
+                self.last_screen_netlink_update.clone(),
             );
 
             Ok(())
@@ -214,7 +222,10 @@ impl Daemon {
             if self.reload_flag.load(Ordering::SeqCst) {
                 self.reload_flag.store(false, Ordering::SeqCst);
                 tracing::info!("Reloading config due to file change");
-                let (new_config, _) = crate::config::AppConfig::load_or_default(&self.config_path, &self.game_list_path);
+                let (new_config, _) = crate::config::AppConfig::load_or_default(
+                    &self.config_path,
+                    &self.game_list_path,
+                );
                 self.ctx.config = new_config;
             }
 
@@ -383,7 +394,13 @@ mod tests {
         let pid_str = pid_path.to_string_lossy().to_string();
 
         let (config, _) = AppConfig::load_or_default("missing", "missing");
-        let mut daemon = Daemon::new(&pid_str, config, dir.path().to_str().unwrap(), "".to_string(), "".to_string());
+        let mut daemon = Daemon::new(
+            &pid_str,
+            config,
+            dir.path().to_str().unwrap(),
+            "".to_string(),
+            "".to_string(),
+        );
 
         let lock_path = Path::new(&daemon.lock_file).to_path_buf();
 
@@ -409,7 +426,13 @@ mod tests {
         let pid_str = pid_path.to_string_lossy().to_string();
 
         let (config, _) = AppConfig::load_or_default("missing", "missing");
-        let daemon = Daemon::new(&pid_str, config, dir.path().to_str().unwrap(), "".to_string(), "".to_string());
+        let daemon = Daemon::new(
+            &pid_str,
+            config,
+            dir.path().to_str().unwrap(),
+            "".to_string(),
+            "".to_string(),
+        );
 
         let lock_path = Path::new(&daemon.lock_file).to_path_buf();
 
@@ -427,7 +450,13 @@ mod tests {
         let pid_str = pid_path.to_string_lossy().to_string();
 
         let (config, _) = AppConfig::load_or_default("missing", "missing");
-        let daemon = Daemon::new(&pid_str, config, dir.path().to_str().unwrap(), "".to_string(), "".to_string());
+        let daemon = Daemon::new(
+            &pid_str,
+            config,
+            dir.path().to_str().unwrap(),
+            "".to_string(),
+            "".to_string(),
+        );
         let lock_path = Path::new(&daemon.lock_file).to_path_buf();
 
         fs::write(&pid_path, std::process::id().to_string()).unwrap(); // Using our own PID

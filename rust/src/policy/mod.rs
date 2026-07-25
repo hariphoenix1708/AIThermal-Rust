@@ -66,7 +66,7 @@ impl PolicyEngine {
         // pocket / warm ambient causes SoC temp to hover without any
         // real load.
         let psi_dampener: f64 = if cpu_pressure < 5.0 && io_pressure < 5.0 {
-            -4.0  // one "rank" of relief; smaller than trend so it never dominates
+            -4.0 // one "rank" of relief; smaller than trend so it never dominates
         } else if cpu_pressure > 50.0 || io_pressure > 30.0 {
             // System is genuinely under pressure - amplify tightening.
             4.0
@@ -75,8 +75,14 @@ impl PolicyEngine {
         };
 
         // Total evaluation score
-        let total_score =
-            s_temp + s_pred + s_game + s_trend + context_weight + game_modifier + comfort_weight + psi_dampener;
+        let total_score = s_temp
+            + s_pred
+            + s_game
+            + s_trend
+            + context_weight
+            + game_modifier
+            + comfort_weight
+            + psi_dampener;
 
         // Threshold evaluation (recalibrated based on the new total_score ranges)
         // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
@@ -87,7 +93,10 @@ impl PolicyEngine {
             || total_score > 90.0
         {
             PolicyState::EmergencyCool
-        } else if is_screen_off && !is_gaming && total_score < -5.0 && self.last_change_at.elapsed().as_secs() > 10
+        } else if is_screen_off
+            && !is_gaming
+            && total_score < -5.0
+            && self.last_change_at.elapsed().as_secs() > 10
         {
             PolicyState::Suspend
         } else if total_score > 65.0 {
@@ -144,7 +153,10 @@ impl PolicyEngine {
                     self.last_change_at.elapsed().as_secs());
                 tracing::info!(
                     "Policy transition {:?} -> {:?} (score={:.1})",
-                    prev, self.current_policy, total_score);
+                    prev,
+                    self.current_policy,
+                    total_score
+                );
                 self.last_change_at = std::time::Instant::now();
             }
         }

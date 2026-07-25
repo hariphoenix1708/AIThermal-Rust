@@ -11,7 +11,8 @@ fn get_handle() -> &'static Mutex<Option<File>> {
             "/sys/kernel/tracing/trace_marker",
             "/sys/kernel/debug/tracing/trace_marker",
         ];
-        let f = paths.iter()
+        let f = paths
+            .iter()
             .find(|p| Path::new(p).exists())
             .and_then(|p| OpenOptions::new().write(true).open(p).ok());
         Mutex::new(f)
@@ -22,7 +23,9 @@ fn get_handle() -> &'static Mutex<Option<File>> {
 /// file does not exist or the write fails. NEVER logs on the hot
 /// path (would be worse than the feature itself).
 pub fn emit(enabled: bool, msg: &str) {
-    if !enabled { return; }
+    if !enabled {
+        return;
+    }
     if let Ok(mut guard) = get_handle().lock() {
         if let Some(f) = guard.as_mut() {
             let _ = writeln!(f, "{}", msg);

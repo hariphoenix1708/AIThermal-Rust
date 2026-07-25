@@ -2,10 +2,10 @@ use crate::hardware::capability::CapabilityNode;
 use crate::sysfs;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use thiserror::Error;
 use tracing::warn;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 static LEGACY_WRITE_FAILURES: AtomicU64 = AtomicU64::new(0);
 
@@ -81,7 +81,7 @@ impl TuningBackend {
             Ok(()) => {
                 record_success(p);
                 tracing::trace!(target: "thermal", "sysfs write ok: {} = {}", p.display(), value.as_ref());
-            },
+            }
             Err(e) => {
                 LEGACY_WRITE_FAILURES.fetch_add(1, Ordering::Relaxed);
                 record_failure(p);
@@ -97,7 +97,9 @@ impl TuningBackend {
     /// Read the current string value of a sysfs node. Used for idempotent
     /// write suppression (skip writing when the target already matches).
     pub fn read_current<P: AsRef<Path>>(path: P) -> Option<String> {
-        sysfs::read_string(path.as_ref()).ok().map(|s| s.trim().to_string())
+        sysfs::read_string(path.as_ref())
+            .ok()
+            .map(|s| s.trim().to_string())
     }
 
     pub fn try_write_string<P: AsRef<Path>, S: AsRef<str>>(

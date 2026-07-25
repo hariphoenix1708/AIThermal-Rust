@@ -87,7 +87,9 @@ impl GovernorManager {
         }
 
         if self.hardware.gpu_profile.has_devfreq {
-            if let Ok(current) = std::fs::read_to_string(&self.hardware.gpu_profile.devfreq_governor_node.path) {
+            if let Ok(current) =
+                std::fs::read_to_string(&self.hardware.gpu_profile.devfreq_governor_node.path)
+            {
                 if current.trim() == governor.trim() {
                     return Ok(());
                 }
@@ -98,7 +100,9 @@ impl GovernorManager {
             )?;
             tracing::debug!(target: "governor", "Applied GPU devfreq governor: {} via {}", governor, self.hardware.gpu_profile.devfreq_governor_node.path);
         } else if !self.hardware.gpu_profile.path.is_empty() {
-            if let Ok(current) = std::fs::read_to_string(&self.hardware.gpu_profile.governor_node.path) {
+            if let Ok(current) =
+                std::fs::read_to_string(&self.hardware.gpu_profile.governor_node.path)
+            {
                 if current.trim() == governor.trim() {
                     return Ok(());
                 }

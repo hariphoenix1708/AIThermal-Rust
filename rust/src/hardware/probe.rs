@@ -62,8 +62,13 @@ impl HardwareProbe {
                         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                             let path = entry.path();
 
-                            let avail_str = std::fs::read_to_string(path.join("available_frequencies")).unwrap_or_default();
-                            let avail_vec: Vec<u64> = avail_str.split_whitespace().filter_map(|s| s.parse().ok()).collect();
+                            let avail_str =
+                                std::fs::read_to_string(path.join("available_frequencies"))
+                                    .unwrap_or_default();
+                            let avail_vec: Vec<u64> = avail_str
+                                .split_whitespace()
+                                .filter_map(|s| s.parse().ok())
+                                .collect();
 
                             if !avail_vec.is_empty() {
                                 let mut dcvs = DcvsProfile {
@@ -73,11 +78,23 @@ impl HardwareProbe {
                                     ..Default::default()
                                 };
 
-                                if std::fs::OpenOptions::new().write(true).open(path.join("hw_max_freq")).is_ok() {
-                                    dcvs.hw_max_freq_node = Some(path.join("hw_max_freq").to_string_lossy().to_string());
+                                if std::fs::OpenOptions::new()
+                                    .write(true)
+                                    .open(path.join("hw_max_freq"))
+                                    .is_ok()
+                                {
+                                    dcvs.hw_max_freq_node = Some(
+                                        path.join("hw_max_freq").to_string_lossy().to_string(),
+                                    );
                                 }
-                                if std::fs::OpenOptions::new().write(true).open(path.join("hw_min_freq")).is_ok() {
-                                    dcvs.hw_min_freq_node = Some(path.join("hw_min_freq").to_string_lossy().to_string());
+                                if std::fs::OpenOptions::new()
+                                    .write(true)
+                                    .open(path.join("hw_min_freq"))
+                                    .is_ok()
+                                {
+                                    dcvs.hw_min_freq_node = Some(
+                                        path.join("hw_min_freq").to_string_lossy().to_string(),
+                                    );
                                 }
 
                                 profile.dcvs_profiles.push(dcvs);

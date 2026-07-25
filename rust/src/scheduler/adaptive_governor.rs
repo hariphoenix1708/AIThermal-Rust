@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 pub struct AdaptiveGovernorState {
     pub last_sample_at: Option<Instant>,
-    pub sample_interval: Duration,      // e.g. 1.5s - tunable
+    pub sample_interval: Duration, // e.g. 1.5s - tunable
     pub current_tier: FrequencyTier,
-    pub consecutive_good_samples: u32,  // for controlled step-down
+    pub consecutive_good_samples: u32, // for controlled step-down
     pub promotion_streak: u8,
     pub demotion_streak: u8,
 }
@@ -74,7 +74,9 @@ impl AdaptiveGovernorState {
             }
         };
 
-        let next_tier = if self.current_tier == FrequencyTier::Eco && raw_next_tier == FrequencyTier::Balanced {
+        let next_tier = if self.current_tier == FrequencyTier::Eco
+            && raw_next_tier == FrequencyTier::Balanced
+        {
             self.promotion_streak += 1;
             if self.promotion_streak >= 2 {
                 self.promotion_streak = 0;
@@ -82,7 +84,9 @@ impl AdaptiveGovernorState {
             } else {
                 FrequencyTier::Eco
             }
-        } else if self.current_tier == FrequencyTier::Balanced && raw_next_tier == FrequencyTier::Eco {
+        } else if self.current_tier == FrequencyTier::Balanced
+            && raw_next_tier == FrequencyTier::Eco
+        {
             self.demotion_streak += 1;
             if self.demotion_streak >= 2 {
                 self.demotion_streak = 0;

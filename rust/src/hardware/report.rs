@@ -10,8 +10,14 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
     report.push_str("=== thermalai_rust Hardware Report ===\n\n");
     report.push_str(&format!("Device Identity: {}\n", profile.device_identity));
     report.push_str(&format!("SoC Platform: {}\n", profile.soc_info));
-    report.push_str(&format!("MIGT (MI Game Turbo) module present: {}\n", profile.migt_present));
-    report.push_str(&format!("GLK (game low kernel) hooks present: {}\n", profile.glk_present));
+    report.push_str(&format!(
+        "MIGT (MI Game Turbo) module present: {}\n",
+        profile.migt_present
+    ));
+    report.push_str(&format!(
+        "GLK (game low kernel) hooks present: {}\n",
+        profile.glk_present
+    ));
     report.push_str(&format!(
         "Build Fingerprint: {}\n",
         profile.metadata.build_fingerprint
@@ -39,7 +45,10 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
     for cluster in &profile.cpu_topology.clusters {
         report.push_str(&format!("Cluster [{}]: {:?}\n", cluster.name, cluster.cpus));
         report.push_str(&format!("  Policy Path: {}\n", cluster.policy_path));
-        report.push_str(&format!("  Available Frequencies: {:?}\n", cluster.available_frequencies));
+        report.push_str(&format!(
+            "  Available Frequencies: {:?}\n",
+            cluster.available_frequencies
+        ));
     }
     report.push('\n');
 
@@ -56,8 +65,14 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
         }
     }
     report.push_str(&format!("KGSL: {}\n", profile.gpu_profile.is_kgsl));
-    report.push_str(&format!("Bus Split (kgsl): {}\n", profile.gpu_profile.has_bus_split));
-    report.push_str(&format!("Force Clk On (kgsl): {}\n", profile.gpu_profile.has_force_clk_on));
+    report.push_str(&format!(
+        "Bus Split (kgsl): {}\n",
+        profile.gpu_profile.has_bus_split
+    ));
+    report.push_str(&format!(
+        "Force Clk On (kgsl): {}\n",
+        profile.gpu_profile.has_force_clk_on
+    ));
     report.push_str(&format!(
         "Governor: {} (Avail: {:?})\n",
         profile.gpu_profile.current_governor, profile.gpu_profile.available_governors
@@ -179,9 +194,18 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
         for dcvs in &profile.dcvs_profiles {
             report.push_str(&format!("Component: {}\n", dcvs.component));
             report.push_str(&format!("  Path: {}\n", dcvs.path));
-            report.push_str(&format!("  Available Frequencies: {:?}\n", dcvs.available_frequencies));
-            report.push_str(&format!("  hw_max_freq writable: {}\n", dcvs.hw_max_freq_node.is_some()));
-            report.push_str(&format!("  hw_min_freq writable: {}\n", dcvs.hw_min_freq_node.is_some()));
+            report.push_str(&format!(
+                "  Available Frequencies: {:?}\n",
+                dcvs.available_frequencies
+            ));
+            report.push_str(&format!(
+                "  hw_max_freq writable: {}\n",
+                dcvs.hw_max_freq_node.is_some()
+            ));
+            report.push_str(&format!(
+                "  hw_min_freq writable: {}\n",
+                dcvs.hw_min_freq_node.is_some()
+            ));
         }
         report.push('\n');
     }

@@ -1,5 +1,18 @@
 # Changelog
 
+## [v3.1.9] (319) - Stable
+
+Fixes user-visible 5-7 s stutters on Conservative -> Powersave transitions at moderate temperatures (v3.1.8 regression).
+
+*   CPU governor for Powersave / Conservative / EmergencyCool is now `schedutil` with a percentage-of-Fmax clamp (70 % / 85 % / 55 %) instead of bare `powersave`. Same cooling effect, no UI cliff. Suspend still uses `powersave` (screen off; no user impact).
+*   Powersave cpuset ranges are temperature-gated: at composite < temp_hot (58 C default), Powersave keeps Balanced-shaped ranges so foreground UI keeps big cores.
+*   Sustained-heating requirement for Powersave entry: two consecutive ticks above threshold OR composite >= temp_powersave. Prevents single-tick trend spikes from causing UX cliffs.
+*   PSI positive amplifier is gated on composite >= temp_warm and reduced from +4.0 to +3.0. Negative relief unchanged.
+*   KGSL power-level detection now falls back to `default_pwrlevel` on Adreno 730/735/750 (SM8550/8635/8650) when neither `pwrlevel` nor `current_pwrlevel` are writable. Also records `thermal_pwrlevel` as a floor to avoid fighting the QCOM thermal HAL on HyperOS.
+*   Snapshot/restore path restores `default_pwrlevel` on shutdown for the same devices.
+*   No behavioural regression on kernels/ROMs without any of the new sysfs nodes - every read/write remains capability-gated with silent no-op on ENOENT/EPERM.
+
+
 ## [v3.1.8] (318) - Stable
 
 *   PSI-aware scoring: CPU (`/proc/pressure/cpu`) and I/O

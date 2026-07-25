@@ -61,7 +61,9 @@ pub struct SystemOrchestrator {
 impl SystemOrchestrator {
     fn actuation_allowed(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
         if let Some(defer) = self.wake_defer_until {
-            if std::time::Instant::now() < defer { return false; }
+            if std::time::Instant::now() < defer {
+                return false;
+            }
         }
         let base_ms = ctx.config.profiles.min_actuation_interval_ms;
         if base_ms == 0 {
@@ -70,7 +72,11 @@ impl SystemOrchestrator {
         // While a game is running, hold the floor at 8 s. Burst-
         // rewriting governors mid-frame is worse than a slightly
         // stale policy.
-        let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
+        let min_ms = if is_gaming {
+            base_ms.max(8_000)
+        } else {
+            base_ms
+        };
         match self.last_actuation_at {
             None => true,
             Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
@@ -80,8 +86,14 @@ impl SystemOrchestrator {
     fn actuation_allowed_bypass_wake(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
         // Same throttle as actuation_allowed but ignores wake_defer_until.
         let base_ms = ctx.config.profiles.min_actuation_interval_ms;
-        if base_ms == 0 { return true; }
-        let min_ms = if is_gaming { base_ms.max(8_000) } else { base_ms };
+        if base_ms == 0 {
+            return true;
+        }
+        let min_ms = if is_gaming {
+            base_ms.max(8_000)
+        } else {
+            base_ms
+        };
         match self.last_actuation_at {
             None => true,
             Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
@@ -551,14 +563,15 @@ impl RuntimeTask for SystemOrchestrator {
             // last_actuation_at forward - the loosening-bypass helper needs
             // it clean so the first post-wake tick can flip the governor
             // from powersave back to schedutil immediately.
-            self.wake_defer_until = Some(std::time::Instant::now()
-                + std::time::Duration::from_millis(800));
+            self.wake_defer_until =
+                Some(std::time::Instant::now() + std::time::Duration::from_millis(800));
             self.pending_wake_nudge = true;
             tracing::info!(target: "wake", "Screen wake detected; deferring actuation for 800ms");
         }
 
         if just_woke
-            && ctx.screen_off_since
+            && ctx
+                .screen_off_since
                 .map(|t| t.elapsed().as_secs() >= 10)
                 .unwrap_or(false)
         {
@@ -585,7 +598,6 @@ impl RuntimeTask for SystemOrchestrator {
             }
             Err(e) => tracing::debug!("Watchdog check error: {}", e),
         }
-
 
         // 2. Gaming state
         let was_gaming = ctx.last_gaming_state;
@@ -800,8 +812,7 @@ impl RuntimeTask for SystemOrchestrator {
         // to ctx.current_policy. Track what we ACTUALLY applied and
         // retry on any subsequent tick where the effective state has
         // drifted from the intended one.
-        let needs_apply = policy_changed
-            || self.last_applied_policy.as_deref() != Some(policy_str);
+        let needs_apply = policy_changed || self.last_applied_policy.as_deref() != Some(policy_str);
 
         if policy_changed {
             crate::telemetry::trace_marker::emit(
@@ -810,13 +821,14 @@ impl RuntimeTask for SystemOrchestrator {
             );
         }
 
-        let in_hot_gameexit =
-            self.recovery.phase == crate::recovery::RecoveryPhase::GameExit;
+        let in_hot_gameexit = self.recovery.phase == crate::recovery::RecoveryPhase::GameExit;
 
         // Check if tweaks are disabled
         let disable_tweaks = ctx.config.profiles.disable_tweaks;
 
-        let hard_immediate = final_policy == PolicyState::EmergencyCool || final_policy == PolicyState::Suspend || ctx.recovery_mode;
+        let hard_immediate = final_policy == PolicyState::EmergencyCool
+            || final_policy == PolicyState::Suspend
+            || ctx.recovery_mode;
         let can_actuate = self.actuation_allowed(ctx, is_gaming) || hard_immediate;
 
         // Loosening transitions (any policy that is NOT Suspend/Powersave)
@@ -829,8 +841,7 @@ impl RuntimeTask for SystemOrchestrator {
         ) && ctx.current_policy.as_deref() == Some("Suspend");
 
         let can_actuate = can_actuate
-            || (is_loosening_from_suspend
-                && self.actuation_allowed_bypass_wake(ctx, is_gaming));
+            || (is_loosening_from_suspend && self.actuation_allowed_bypass_wake(ctx, is_gaming));
 
         if can_actuate && self.pending_wake_nudge {
             self.adaptive_governor.nudge_on_screen_on();
@@ -841,7 +852,8 @@ impl RuntimeTask for SystemOrchestrator {
             // If game was just detected and confirmed, try pinning critical render thread
             if is_gaming && !was_gaming {
                 if let Some(pid) = self.gaming.confirmed_pid {
-                    self.runtime_tuner.pin_critical_render_thread(pid, "top-app");
+                    self.runtime_tuner
+                        .pin_critical_render_thread(pid, "top-app");
                 }
             }
         } else if needs_apply {
@@ -862,15 +874,24 @@ impl RuntimeTask for SystemOrchestrator {
 
         let cpu_gov_save = self.select_cpu_governor(&["powersave", "schedutil"]);
 
-
         let gpu_level = match final_policy {
-            PolicyState::Performance             => self.hardware.gpu_profile.min_power_level.unwrap_or(0),
-            PolicyState::Balanced if !is_gaming  => self.hardware.gpu_profile.max_power_level.unwrap_or(4).saturating_sub(1),
-            PolicyState::Balanced                => self.hardware.gpu_profile.min_power_level.unwrap_or(0),
-            PolicyState::Conservative            => self.hardware.gpu_profile.max_power_level.unwrap_or(4).saturating_sub(1),
-            PolicyState::Powersave               => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
-            PolicyState::EmergencyCool           => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
-            PolicyState::Suspend                 => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
+            PolicyState::Performance => self.hardware.gpu_profile.min_power_level.unwrap_or(0),
+            PolicyState::Balanced if !is_gaming => self
+                .hardware
+                .gpu_profile
+                .max_power_level
+                .unwrap_or(4)
+                .saturating_sub(1),
+            PolicyState::Balanced => self.hardware.gpu_profile.min_power_level.unwrap_or(0),
+            PolicyState::Conservative => self
+                .hardware
+                .gpu_profile
+                .max_power_level
+                .unwrap_or(4)
+                .saturating_sub(1),
+            PolicyState::Powersave => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
+            PolicyState::EmergencyCool => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
+            PolicyState::Suspend => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
         };
 
         // Grace period to avoid burst-apply stutter at game launch, tune threshold based on real-device testing.
@@ -879,7 +900,10 @@ impl RuntimeTask for SystemOrchestrator {
             .map(|t| t.elapsed().as_secs() >= 2)
             .unwrap_or(true);
 
-        if !disable_tweaks && needs_apply && (final_policy != PolicyState::Performance || game_grace_elapsed) {
+        if !disable_tweaks
+            && needs_apply
+            && (final_policy != PolicyState::Performance || game_grace_elapsed)
+        {
             if can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
 
@@ -888,133 +912,147 @@ impl RuntimeTask for SystemOrchestrator {
 
                 match final_policy {
                     PolicyState::Performance => {
-                    if !in_hot_gameexit {
-                        if let Some(gov) = &cpu_gov_perf {
-                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                        if !in_hot_gameexit {
+                            if let Some(gov) = &cpu_gov_perf {
+                                if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                    tracing::warn!("Failed to apply CPU governor: {}", e);
+                                } else {
+                                    self.last_applied_cpu_gov = Some(gov.clone());
+                                    tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                }
                             } else {
-                                self.last_applied_cpu_gov = Some(gov.clone());
-                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                tracing::warn!(
+                                    "No common supported CPU governor for Performance policy"
+                                );
                             }
                         } else {
-                            tracing::warn!("No common supported CPU governor for Performance policy");
+                            tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
                         }
-                    } else {
-                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
-                    }
 
-                    for cluster in &self.hardware.cpu_topology.clusters {
-                        if let Some(target) = GovernorManager::max_freq(&cluster.available_frequencies) {
-                            let max_freq_path = format!("{}/scaling_max_freq", cluster.policy_path);
-                            if crate::tuning::backend::TuningBackend::try_write_string(
-                                &max_freq_path, &target.to_string()
-                            ).is_ok() {
-                                tracing::debug!(target: "governors", "Applied scaling_max_freq: {} to cluster {} via {}", target, cluster.name, max_freq_path);
+                        for cluster in &self.hardware.cpu_topology.clusters {
+                            if let Some(target) =
+                                GovernorManager::max_freq(&cluster.available_frequencies)
+                            {
+                                let max_freq_path =
+                                    format!("{}/scaling_max_freq", cluster.policy_path);
+                                if crate::tuning::backend::TuningBackend::try_write_string(
+                                    &max_freq_path,
+                                    &target.to_string(),
+                                )
+                                .is_ok()
+                                {
+                                    tracing::debug!(target: "governors", "Applied scaling_max_freq: {} to cluster {} via {}", target, cluster.name, max_freq_path);
+                                }
                             }
                         }
-                    }
 
-                    if let Some(gov) = gpu_gov_perf {
-                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
-                            tracing::warn!("Failed to apply GPU governor: {}", e);
-                        } else {
-                            self.last_applied_gpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
-                        }
-                    }
-                    if !in_hot_gameexit {
-                        if let Err(e) = self.cpuset.apply_cpuset("performance") {
-                            tracing::warn!("Failed to apply cpuset: {}", e);
-                        }
-                    } else {
-                        tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
-                    }
-                }
-                PolicyState::Balanced => {
-                    if !in_hot_gameexit {
-                        if let Some(gov) = &cpu_gov_bal {
-                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                        if let Some(gov) = gpu_gov_perf {
+                            if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                                tracing::warn!("Failed to apply GPU governor: {}", e);
                             } else {
-                                self.last_applied_cpu_gov = Some(gov.clone());
-                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                self.last_applied_gpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
+                            }
+                        }
+                        if !in_hot_gameexit {
+                            if let Err(e) = self.cpuset.apply_cpuset("performance") {
+                                tracing::warn!("Failed to apply cpuset: {}", e);
                             }
                         } else {
-                            tracing::warn!("No common supported CPU governor for Balanced policy");
-                        }
-                    } else {
-                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
-                    }
-                    if let Some(gov) = gpu_gov_bal {
-                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
-                            tracing::warn!("Failed to apply GPU governor: {}", e);
-                        } else {
-                            self.last_applied_gpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
+                            tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
                         }
                     }
-                    if !in_hot_gameexit {
-                        if let Err(e) = self.cpuset.apply_cpuset("balanced") {
-                            tracing::warn!("Failed to apply cpuset: {}", e);
-                        }
-                    } else {
-                        tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
-                    }
-                }
-                PolicyState::Conservative => {
-                    if !in_hot_gameexit {
-                        if let Some(gov) = &cpu_gov_cons {
-                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                    PolicyState::Balanced => {
+                        if !in_hot_gameexit {
+                            if let Some(gov) = &cpu_gov_bal {
+                                if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                    tracing::warn!("Failed to apply CPU governor: {}", e);
+                                } else {
+                                    self.last_applied_cpu_gov = Some(gov.clone());
+                                    tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                }
                             } else {
-                                self.last_applied_cpu_gov = Some(gov.clone());
-                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                tracing::warn!(
+                                    "No common supported CPU governor for Balanced policy"
+                                );
                             }
                         } else {
-                            tracing::warn!("No common supported CPU governor for Conservative policy");
+                            tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
                         }
-                    } else {
-                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
-                    }
-                    if let Some(gov) = gpu_gov_bal {
-                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
-                            tracing::warn!("Failed to apply GPU governor: {}", e);
-                        } else {
-                            self.last_applied_gpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
-                        }
-                    }
-                    if !in_hot_gameexit {
-                        if let Err(e) = self.cpuset.apply_cpuset("balanced") {
-                            tracing::warn!("Failed to apply cpuset: {}", e);
-                        }
-                    } else {
-                        tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
-                    }
-                }
-                PolicyState::Powersave | PolicyState::EmergencyCool | PolicyState::Suspend => {
-                    if !in_hot_gameexit {
-                        if let Some(gov) = &cpu_gov_save {
-                            if let Err(e) = self.governors.apply_cpu_governor(gov) {
-                                tracing::warn!("Failed to apply CPU governor: {}", e);
+                        if let Some(gov) = gpu_gov_bal {
+                            if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                                tracing::warn!("Failed to apply GPU governor: {}", e);
                             } else {
-                                self.last_applied_cpu_gov = Some(gov.clone());
-                                tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                self.last_applied_gpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
+                            }
+                        }
+                        if !in_hot_gameexit {
+                            if let Err(e) = self.cpuset.apply_cpuset("balanced") {
+                                tracing::warn!("Failed to apply cpuset: {}", e);
                             }
                         } else {
-                            tracing::warn!("No common supported CPU governor for Powersave policy");
+                            tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
                         }
-                    } else {
-                        tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
                     }
-                    if let Some(gov) = gpu_gov_save {
-                        if let Err(e) = self.governors.apply_gpu_governor(&gov) {
-                            tracing::warn!("Failed to apply GPU governor: {}", e);
+                    PolicyState::Conservative => {
+                        if !in_hot_gameexit {
+                            if let Some(gov) = &cpu_gov_cons {
+                                if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                    tracing::warn!("Failed to apply CPU governor: {}", e);
+                                } else {
+                                    self.last_applied_cpu_gov = Some(gov.clone());
+                                    tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                }
+                            } else {
+                                tracing::warn!(
+                                    "No common supported CPU governor for Conservative policy"
+                                );
+                            }
                         } else {
-                            self.last_applied_gpu_gov = Some(gov.clone());
-                            tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
+                            tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
+                        }
+                        if let Some(gov) = gpu_gov_bal {
+                            if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                                tracing::warn!("Failed to apply GPU governor: {}", e);
+                            } else {
+                                self.last_applied_gpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
+                            }
+                        }
+                        if !in_hot_gameexit {
+                            if let Err(e) = self.cpuset.apply_cpuset("balanced") {
+                                tracing::warn!("Failed to apply cpuset: {}", e);
+                            }
+                        } else {
+                            tracing::debug!(target: "thermal", "Deferring cpuset rewrite: still in GameExit hot phase");
                         }
                     }
+                    PolicyState::Powersave | PolicyState::EmergencyCool | PolicyState::Suspend => {
+                        if !in_hot_gameexit {
+                            if let Some(gov) = &cpu_gov_save {
+                                if let Err(e) = self.governors.apply_cpu_governor(gov) {
+                                    tracing::warn!("Failed to apply CPU governor: {}", e);
+                                } else {
+                                    self.last_applied_cpu_gov = Some(gov.clone());
+                                    tracing::debug!(target: "thermal", "Applied CPU governor: {}", gov);
+                                }
+                            } else {
+                                tracing::warn!(
+                                    "No common supported CPU governor for Powersave policy"
+                                );
+                            }
+                        } else {
+                            tracing::debug!(target: "thermal", "Holding CPU governor across GameExit hot phase");
+                        }
+                        if let Some(gov) = gpu_gov_save {
+                            if let Err(e) = self.governors.apply_gpu_governor(&gov) {
+                                tracing::warn!("Failed to apply GPU governor: {}", e);
+                            } else {
+                                self.last_applied_gpu_gov = Some(gov.clone());
+                                tracing::debug!(target: "thermal", "GPU governor -> {}", gov);
+                            }
+                        }
                         if !in_hot_gameexit {
                             if let Err(e) = self.cpuset.apply_cpuset("powersave") {
                                 tracing::warn!("Failed to apply cpuset: {}", e);
@@ -1033,7 +1071,8 @@ impl RuntimeTask for SystemOrchestrator {
             && final_policy == PolicyState::Performance
         {
             if self.adaptive_governor.should_sample() {
-                self.background_frame_sampler.set_target_package(confirmed_pkg.clone());
+                self.background_frame_sampler
+                    .set_target_package(confirmed_pkg.clone());
                 let frame_stats = self.background_frame_sampler.latest_stats();
 
                 let current_stats = crate::monitor::load_sampler::read_cpu_stat();
@@ -1043,42 +1082,73 @@ impl RuntimeTask for SystemOrchestrator {
                     let mut count = 0;
                     for (idx, curr) in &current_stats {
                         if let Some(prev) = self.last_load_sample.get(idx) {
-                            total_util += crate::monitor::load_sampler::compute_utilization(prev, curr);
+                            total_util +=
+                                crate::monitor::load_sampler::compute_utilization(prev, curr);
                             count += 1;
                         }
                     }
-                    if count > 0 { total_util / count as f32 } else { 0.5 } // safe default only if no prior sample overlapped
+                    if count > 0 {
+                        total_util / count as f32
+                    } else {
+                        0.5
+                    } // safe default only if no prior sample overlapped
                 } else {
                     0.5 // first-ever sample this daemon run - no previous data to delta against yet
                 };
                 self.last_load_sample = current_stats;
 
-                let tier = self.adaptive_governor.decide_tier(frame_stats.as_ref(), utilization);
+                let tier = self
+                    .adaptive_governor
+                    .decide_tier(frame_stats.as_ref(), utilization);
 
                 if can_actuate {
                     self.last_actuation_at = Some(std::time::Instant::now());
                     for cluster in &self.hardware.cpu_topology.clusters {
                         let target = match tier {
-                        crate::scheduler::adaptive_governor::FrequencyTier::Max => crate::governors::GovernorManager::max_freq(&cluster.available_frequencies),
-                        crate::scheduler::adaptive_governor::FrequencyTier::High => {
-                            let min = crate::governors::GovernorManager::min_freq(&cluster.available_frequencies).unwrap_or(0);
-                            let max = crate::governors::GovernorManager::max_freq(&cluster.available_frequencies).unwrap_or(0);
-                            let midpoint = (min + max) / 2;
-                            // Snap to the closest value actually present in this cluster's real
-                            // frequency table, rather than trusting an arithmetic midpoint to be a
-                            // valid step.
-                            cluster.available_frequencies
-                                .iter()
-                                .copied()
-                                .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
-                        },
-                        crate::scheduler::adaptive_governor::FrequencyTier::Balanced => crate::governors::GovernorManager::mid_freq(&cluster.available_frequencies),
-                        crate::scheduler::adaptive_governor::FrequencyTier::Eco => crate::governors::GovernorManager::min_freq(&cluster.available_frequencies),
-                    };
+                            crate::scheduler::adaptive_governor::FrequencyTier::Max => {
+                                crate::governors::GovernorManager::max_freq(
+                                    &cluster.available_frequencies,
+                                )
+                            }
+                            crate::scheduler::adaptive_governor::FrequencyTier::High => {
+                                let min = crate::governors::GovernorManager::min_freq(
+                                    &cluster.available_frequencies,
+                                )
+                                .unwrap_or(0);
+                                let max = crate::governors::GovernorManager::max_freq(
+                                    &cluster.available_frequencies,
+                                )
+                                .unwrap_or(0);
+                                let midpoint = (min + max) / 2;
+                                // Snap to the closest value actually present in this cluster's real
+                                // frequency table, rather than trusting an arithmetic midpoint to be a
+                                // valid step.
+                                cluster
+                                    .available_frequencies
+                                    .iter()
+                                    .copied()
+                                    .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
+                            }
+                            crate::scheduler::adaptive_governor::FrequencyTier::Balanced => {
+                                crate::governors::GovernorManager::mid_freq(
+                                    &cluster.available_frequencies,
+                                )
+                            }
+                            crate::scheduler::adaptive_governor::FrequencyTier::Eco => {
+                                crate::governors::GovernorManager::min_freq(
+                                    &cluster.available_frequencies,
+                                )
+                            }
+                        };
 
                         if let Some(freq) = target {
                             let path = format!("{}/scaling_max_freq", cluster.policy_path);
-                            if crate::tuning::backend::TuningBackend::try_write_string(&path, &freq.to_string()).is_ok() {
+                            if crate::tuning::backend::TuningBackend::try_write_string(
+                                &path,
+                                &freq.to_string(),
+                            )
+                            .is_ok()
+                            {
                                 tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
                             }
                         }
@@ -1155,12 +1225,16 @@ impl RuntimeTask for SystemOrchestrator {
         if is_gaming {
             let stats = self.background_frame_sampler.latest_stats();
             let (jank_str, p90_str) = match stats {
-                Some(s) if s.p90_frame_ns > 0
+                Some(s)
+                    if s.p90_frame_ns > 0
                         && s.p90_frame_ns < 500_000_000  // 500 ms sanity cap
-                        && s.frame_count() >= 5 => (
-                    format!("{:.2}", s.jank_ratio() * 100.0),
-                    format!("{:.1}", s.p90_frame_ns as f64 / 1_000_000.0),
-                ),
+                        && s.frame_count() >= 5 =>
+                {
+                    (
+                        format!("{:.2}", s.jank_ratio() * 100.0),
+                        format!("{:.1}", s.p90_frame_ns as f64 / 1_000_000.0),
+                    )
+                }
                 _ => ("n/a".to_string(), "n/a".to_string()),
             };
             tracing::info!(target: "gaming",
@@ -1233,7 +1307,8 @@ impl RuntimeTask for SystemOrchestrator {
             voltage_now_uv: None,
             charge_counter_uah: None,
         };
-        self.charging.evaluate(&charging_inputs, &ctx.state_dir, &self.hardware);
+        self.charging
+            .evaluate(&charging_inputs, &ctx.state_dir, &self.hardware);
 
         // 10. Adaptive Sleep
         let clamped_trend = (trend_score * 50).clamp(-50, 50);
@@ -1269,7 +1344,13 @@ impl RuntimeTask for SystemOrchestrator {
         tracing::trace!(
             "adaptive sleep: base={}ms chosen={}ms trend={} sustained={} long_idle={} screen_off={} gaming={}",
             ctx.config.profiles.poll_interval.saturating_mul(1000),
-            ctx.sleep_ms, clamped_trend, sustained_hot_trend, long_idle, is_screen_off_now, is_gaming);
+            ctx.sleep_ms,
+            clamped_trend,
+            sustained_hot_trend,
+            long_idle,
+            is_screen_off_now,
+            is_gaming
+        );
 
         if !needs_apply {
             // no-op
@@ -1300,7 +1381,8 @@ impl RuntimeTask for SystemOrchestrator {
                 tick_interval_secs,
             );
 
-            let should_log = self.last_battery_log_time
+            let should_log = self
+                .last_battery_log_time
                 .map(|t| t.elapsed().as_secs() >= 30)
                 .unwrap_or(true);
 
@@ -1317,7 +1399,10 @@ impl RuntimeTask for SystemOrchestrator {
             }
 
             // also periodically log summary line, maybe every 10 min
-            let should_summary = self.last_battery_summary_time.map(|t| t.elapsed().as_secs() >= 600).unwrap_or(true);
+            let should_summary = self
+                .last_battery_summary_time
+                .map(|t| t.elapsed().as_secs() >= 600)
+                .unwrap_or(true);
             if should_summary {
                 tracing::info!(target: "battery", "summary: {}", self.battery_stats.summary_line());
                 self.last_battery_summary_time = Some(std::time::Instant::now());
@@ -1385,7 +1470,8 @@ impl RuntimeTask for SystemOrchestrator {
         });
 
         let policy_now = Self::policy_state_name(&final_policy).to_string();
-        let due_time = self.last_telemetry_write_at
+        let due_time = self
+            .last_telemetry_write_at
             .map(|t| t.elapsed().as_millis() >= 2000)
             .unwrap_or(true);
         let policy_changed_for_ui =

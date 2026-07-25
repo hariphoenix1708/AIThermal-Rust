@@ -24,5 +24,5 @@ pub mod cpuset;
 #[allow(dead_code)]
 pub mod display;
 pub mod gpu;
-pub mod thermal;
 pub mod screen_netlink;
+pub mod thermal;

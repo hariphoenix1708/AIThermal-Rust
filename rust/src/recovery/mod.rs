@@ -58,7 +58,8 @@ impl RecoveryManager {
 
         // Keep recovery active until we've been out of emergency for a while (gradual)
         if self.in_recovery {
-            let elapsed_secs = self.recovery_started_at
+            let elapsed_secs = self
+                .recovery_started_at
                 .map(|t| t.elapsed().as_secs())
                 .unwrap_or(u64::MAX);
 
@@ -103,7 +104,8 @@ mod tests {
         assert!(rm.check_recovery(&PolicyState::Performance, false, false));
 
         // Fast forward time to exit recovery
-        rm.recovery_started_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(46));
+        rm.recovery_started_at =
+            Some(std::time::Instant::now() - std::time::Duration::from_secs(46));
         assert!(!rm.check_recovery(&PolicyState::Performance, false, false));
         assert_eq!(rm.phase, RecoveryPhase::None);
 

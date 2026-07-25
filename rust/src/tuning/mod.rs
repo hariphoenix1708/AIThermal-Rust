@@ -61,8 +61,12 @@ impl RuntimeTuner {
 
     fn persist_active(&self) {
         let Some(dir) = &self.state_dir else { return };
-        let Ok(state) = self.original_state.lock() else { return };
-        if state.is_empty() { return; }
+        let Ok(state) = self.original_state.lock() else {
+            return;
+        };
+        if state.is_empty() {
+            return;
+        }
         let path = dir.join(TUNING_ACTIVE_FILE);
         let tmp = dir.join(format!("{}.tmp", TUNING_ACTIVE_FILE));
         if let Ok(json) = serde_json::to_string(&*state) {
@@ -73,7 +77,9 @@ impl RuntimeTuner {
 
     fn persist_locked(&self) {
         let Some(dir) = &self.state_dir else { return };
-        let Ok(nodes) = self.locked_sysfs_nodes.lock() else { return };
+        let Ok(nodes) = self.locked_sysfs_nodes.lock() else {
+            return;
+        };
         let path = dir.join(LOCKED_NODES_FILE);
         let tmp = dir.join(format!("{}.tmp", LOCKED_NODES_FILE));
         if let Ok(json) = serde_json::to_string(&*nodes) {
@@ -98,7 +104,9 @@ impl RuntimeTuner {
     /// (unclean exit), restore every saved (path, original_value) pair before
     /// the first tick. Called from `main.rs` immediately after Daemon::new.
     pub fn rehydrate_and_restore(state_dir: &str) {
-        if state_dir.is_empty() { return; }
+        if state_dir.is_empty() {
+            return;
+        }
         let base = PathBuf::from(state_dir);
         let active = base.join(TUNING_ACTIVE_FILE);
         if active.exists() {
@@ -109,7 +117,9 @@ impl RuntimeTuner {
                         map.len()
                     );
                     for (path, val) in map {
-                        if !std::path::Path::new(&path).exists() { continue; }
+                        if !std::path::Path::new(&path).exists() {
+                            continue;
+                        }
                         crate::tuning::backend::TuningBackend::write_string(&path, &val);
                     }
                 }
@@ -123,14 +133,14 @@ impl RuntimeTuner {
             if let Ok(content) = std::fs::read_to_string(&locked) {
                 if let Ok(list) = serde_json::from_str::<Vec<String>>(&content) {
                     for p in list {
-                        let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644));
+                        let _ =
+                            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644));
                     }
                 }
             }
             let _ = std::fs::remove_file(&locked);
         }
     }
-
 
     fn write_and_save(&self, path: &str, value: &str, save: bool) {
         let mut newly_saved = false;
@@ -171,7 +181,6 @@ impl RuntimeTuner {
         }
     }
 
-
     fn unsupported_block_device(dev: &str) -> bool {
         dev.starts_with("dm-") || dev.starts_with("loop") || dev.starts_with("zram")
     }
@@ -210,10 +219,12 @@ impl RuntimeTuner {
             let requested_cc = self.tcp_cc_gaming.trim();
             let should_write_cc = !requested_cc.is_empty()
                 && requested_cc != "kernel_default"
-                && self.hardware.network_profile
-                      .available_congestion_controls
-                      .iter()
-                      .any(|c| c == requested_cc);
+                && self
+                    .hardware
+                    .network_profile
+                    .available_congestion_controls
+                    .iter()
+                    .any(|c| c == requested_cc);
 
             if should_write_cc {
                 let old_cc = sysfs::read_string(path_congestion).ok().unwrap_or_default();
@@ -233,7 +244,6 @@ impl RuntimeTuner {
         Ok(())
     }
 
-
     pub fn restore_all(&self) {
         if let Ok(state) = self.original_state.lock() {
             for (path, val) in state.iter() {
@@ -242,7 +252,6 @@ impl RuntimeTuner {
         }
         self.clear_active();
     }
-
 
     pub fn apply_touch_display_tweaks(
         &self,
@@ -395,14 +404,24 @@ impl RuntimeTuner {
         );
 
         let cpu_limits_path = "/sys/class/thermal/thermal_message/cpu_limits";
-        if std::fs::OpenOptions::new().write(true).open(cpu_limits_path).is_ok() {
-            let cpu_count = self.hardware.cpu_topology.clusters
+        if std::fs::OpenOptions::new()
+            .write(true)
+            .open(cpu_limits_path)
+            .is_ok()
+        {
+            let cpu_count = self
+                .hardware
+                .cpu_topology
+                .clusters
                 .iter()
                 .flat_map(|c| c.cpus.iter())
                 .count();
             for cpu in 0..cpu_count {
                 let value = format!("cpu{} 2147483647", cpu); // i32::MAX as a no-limit sentinel
-                let _ = crate::tuning::backend::TuningBackend::try_write_string(cpu_limits_path, &value);
+                let _ = crate::tuning::backend::TuningBackend::try_write_string(
+                    cpu_limits_path,
+                    &value,
+                );
             }
             tracing::debug!(target: "tuning", "Applied unrestricted cpu_limits to {} cores via {}", cpu_count, cpu_limits_path);
         }
@@ -441,7 +460,11 @@ impl RuntimeTuner {
                 continue;
             }
 
-            if std::fs::OpenOptions::new().write(true).open(&cur_state).is_ok() {
+            if std::fs::OpenOptions::new()
+                .write(true)
+                .open(&cur_state)
+                .is_ok()
+            {
                 self.write_and_lock(&cur_state, "0");
             } else {
                 tracing::warn!("Cooling device {} not writable, skipping", cur_state);
@@ -450,7 +473,6 @@ impl RuntimeTuner {
                 }
             }
         }
-
 
         self.disable_migt_if_present();
     }
@@ -461,7 +483,10 @@ impl RuntimeTuner {
         }
 
         let migt_params: &[(&str, &str)] = &[
-            ("/sys/module/migt/parameters/migt_freq", "0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0"),
+            (
+                "/sys/module/migt/parameters/migt_freq",
+                "0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0",
+            ),
             ("/sys/module/migt/parameters/glk_disable", "1"),
             ("/sys/module/migt/parameters/mi_freq_enable", "0"),
             ("/sys/module/migt/parameters/force_stask_to_big", "0"),
@@ -500,7 +525,6 @@ impl RuntimeTuner {
         self.clear_locked();
         tracing::debug!(target: "tuning", "restore_stock_thermal: unlocked and cleared locked-node registry");
     }
-
 
     pub fn apply_universal_gpu_control(&self, policy: &str) {
         let is_perf = policy == "Performance" || policy == "performance";
@@ -593,13 +617,19 @@ impl RuntimeTuner {
     }
 
     pub fn pin_critical_render_thread(&self, game_pid: u32, target_cpu_range: &str) {
-        if self.hardware.cpuset_profile.root_path.is_empty() { return; }
+        if self.hardware.cpuset_profile.root_path.is_empty() {
+            return;
+        }
         let task_dir = format!("/proc/{}/task", game_pid);
-        let Ok(entries) = std::fs::read_dir(&task_dir) else { return };
+        let Ok(entries) = std::fs::read_dir(&task_dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let tid = entry.file_name();
             let comm_path = format!("{}/{}/comm", task_dir, tid.to_string_lossy());
-            let Ok(comm) = std::fs::read_to_string(&comm_path) else { continue };
+            let Ok(comm) = std::fs::read_to_string(&comm_path) else {
+                continue;
+            };
             let comm = comm.trim();
             if comm == "RenderThread" || comm == "GLThread" || comm.starts_with("hwuiTask") {
                 let tasks_path = Self::cpuset_tasks_file(&self.hardware, target_cpu_range);

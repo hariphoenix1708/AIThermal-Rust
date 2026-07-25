@@ -212,7 +212,9 @@ fn show_temps() {
         Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
             Err(_) => println!("State file present but unreadable"),
             Ok(json) => {
-                if json.get("ai_temp").is_none() && json.get("status").and_then(|s| s.as_str()) == Some("starting") {
+                if json.get("ai_temp").is_none()
+                    && json.get("status").and_then(|s| s.as_str()) == Some("starting")
+                {
                     println!("Daemon running, waiting for first tick to complete");
                 } else {
                     println!(
@@ -221,7 +223,7 @@ fn show_temps() {
                     );
                 }
             }
-        }
+        },
     }
 }
 
@@ -234,7 +236,9 @@ fn show_policy() {
         Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
             Err(_) => println!("State file present but unreadable"),
             Ok(json) => {
-                if json.get("policy").is_none() && json.get("status").and_then(|s| s.as_str()) == Some("starting") {
+                if json.get("policy").is_none()
+                    && json.get("status").and_then(|s| s.as_str()) == Some("starting")
+                {
                     println!("Daemon running, waiting for first tick to complete");
                 } else {
                     println!(
@@ -243,7 +247,7 @@ fn show_policy() {
                     );
                 }
             }
-        }
+        },
     }
 }
 
@@ -256,7 +260,9 @@ fn show_gaming() {
         Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
             Err(_) => println!("State file present but unreadable"),
             Ok(json) => {
-                if json.get("gaming").is_none() && json.get("status").and_then(|s| s.as_str()) == Some("starting") {
+                if json.get("gaming").is_none()
+                    && json.get("status").and_then(|s| s.as_str()) == Some("starting")
+                {
                     println!("Daemon running, waiting for first tick to complete");
                 } else {
                     println!(
@@ -265,7 +271,7 @@ fn show_gaming() {
                     );
                 }
             }
-        }
+        },
     }
 }
 

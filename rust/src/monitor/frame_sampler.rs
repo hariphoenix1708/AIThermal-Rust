@@ -1,7 +1,7 @@
 use std::process::Command;
-use std::time::{Instant};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 static LAST_PARSE_OK: AtomicBool = AtomicBool::new(true);
 
@@ -12,15 +12,17 @@ pub fn last_parse_ok() -> bool {
 #[derive(Debug, Clone, Default)]
 pub struct FrameStats {
     pub sample_count: usize,
-    pub janky_frames: usize,       // frames that missed their deadline
-    pub p90_frame_ns: u64,         // 90th percentile total frame duration
+    pub janky_frames: usize, // frames that missed their deadline
+    pub p90_frame_ns: u64,   // 90th percentile total frame duration
     pub worst_frame_ns: u64,
     pub sampled_at: Option<Instant>,
 }
 
 impl FrameStats {
     pub fn jank_ratio(&self) -> f32 {
-        if self.sample_count == 0 { return 0.0; }
+        if self.sample_count == 0 {
+            return 0.0;
+        }
         self.janky_frames as f32 / self.sample_count as f32
     }
 
@@ -65,7 +67,13 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
 
     for line in text.lines() {
         let line = line.trim();
-        if line.is_empty() || !line.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        if line.is_empty()
+            || !line
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        {
             continue; // skip headers/labels/blank lines
         }
         let fields: Vec<&str> = line.split(',').filter(|f| !f.is_empty()).collect();
@@ -81,11 +89,18 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
         // respectively, since framestats rows are always ordered chronologically
         // within each row's own timestamp fields regardless of exact column
         // count differences between versions.
-        let nums: Vec<u64> = fields.iter().filter_map(|f| f.trim().parse::<u64>().ok()).collect();
-        if nums.len() < 3 { continue; }
+        let nums: Vec<u64> = fields
+            .iter()
+            .filter_map(|f| f.trim().parse::<u64>().ok())
+            .collect();
+        if nums.len() < 3 {
+            continue;
+        }
         let intended_vsync = nums[1];
         let frame_completed = *nums.last().unwrap();
-        if frame_completed <= intended_vsync { continue; }
+        if frame_completed <= intended_vsync {
+            continue;
+        }
         durations.push(frame_completed - intended_vsync);
     }
 
@@ -147,7 +162,11 @@ impl BackgroundFrameSampler {
             }
         });
 
-        Self { latest, package, running }
+        Self {
+            latest,
+            package,
+            running,
+        }
     }
 
     /// Called from the main tick loop (cheap, non-blocking - just updates

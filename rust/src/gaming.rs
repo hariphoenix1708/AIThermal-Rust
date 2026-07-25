@@ -121,7 +121,9 @@ impl GameDetector {
             format!("/proc/{}/cpuset", pid),
         ];
         for p in &paths {
-            let Ok(content) = std::fs::read_to_string(p) else { continue };
+            let Ok(content) = std::fs::read_to_string(p) else {
+                continue;
+            };
             for line in content.lines() {
                 // Format is `<hier-id>:<controllers>:<path>`; we want
                 // the path segment to end with `/top-app`.
@@ -129,7 +131,8 @@ impl GameDetector {
                     let path = path.trim();
                     if path == "/top-app"
                         || path.ends_with("/top-app")
-                        || path.ends_with("/top-app/") {
+                        || path.ends_with("/top-app/")
+                    {
                         return Some(true);
                     }
                 }
@@ -146,7 +149,9 @@ impl GameDetector {
             "/sys/fs/cgroup/cpuset/top-app/cgroup.procs",
         ];
         for path in candidate_paths {
-            let Ok(content) = std::fs::read_to_string(path) else { continue };
+            let Ok(content) = std::fs::read_to_string(path) else {
+                continue;
+            };
             let mut checked_any = false;
             for pid_str in content.split_whitespace() {
                 let cmdline_path = format!("/proc/{}/cmdline", pid_str);
@@ -203,8 +208,7 @@ impl GameDetector {
 
                 match cgroup_result {
                     Some(false) => {
-                        self.cgroup_negative_streak =
-                            self.cgroup_negative_streak.saturating_add(1);
+                        self.cgroup_negative_streak = self.cgroup_negative_streak.saturating_add(1);
                         tracing::debug!(
                             target: "gaming",
                             "Package {} matched process scan but not found in top-app cgroup (streak {}/{}); keeping prior detection state",
@@ -229,7 +233,6 @@ impl GameDetector {
                 }
             }
         }
-
 
         if detected {
             self.is_gaming = true;
