@@ -132,8 +132,8 @@ fn main() -> Result<()> {
             }
         }
         "history" => {
-            let log_file = find_latest_log(Path::new(&log_dir), "thermalai.log")
-                .unwrap_or_else(|| Path::new(&log_dir).join("thermalai.log"));
+            let log_file = find_latest_log(Path::new(&log_dir), "thermalai_thermal.log")
+                .unwrap_or_else(|| Path::new(&log_dir).join("thermalai_thermal.log"));
             if let Ok(content) = fs::read_to_string(&log_file) {
                 println!("--- Recent Policy Transitions ---");
                 let mut count = 0;

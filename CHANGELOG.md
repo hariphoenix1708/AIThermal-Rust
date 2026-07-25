@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.2.2 (versionCode 322)
+### Fixed
+- Policy transitions are now logged exactly once, from the orchestrator on
+  the actuated policy change. Removed the duplicate engine-side log for
+  EmergencyCool/Suspend and the phantom transitions it produced.
+- The transition log now reports the real policy decision score instead of
+  the internal context value.
+- WebUI "Recent transitions" and `thermalair history` now read
+  thermalai_thermal.log, so the transition history is no longer empty.
+
 ## v3.2.1 (versionCode 321)
 ### Fixed
 - Idempotent sysfs writes are now consistent across all tuning paths.

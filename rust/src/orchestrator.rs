@@ -811,7 +811,7 @@ impl RuntimeTask for SystemOrchestrator {
             tracing::info!(target: "thermal",
                 "Policy transition {} -> {} (score={:.1})",
                 ctx.current_policy.as_deref().unwrap_or("None"),
-                policy_str, final_context);
+                policy_str, self.policy.last_score());
         }
 
         // If the previous transition tick could not actuate (wake defer,

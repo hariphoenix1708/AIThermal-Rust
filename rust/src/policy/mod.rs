@@ -17,6 +17,7 @@ pub struct PolicyEngine {
     pub(crate) powersave_arm_count: u8,
     startup_time: std::time::Instant,
     startup_grace_secs: u64,
+    last_total_score: f64,
 }
 
 impl PolicyEngine {
@@ -30,6 +31,7 @@ impl PolicyEngine {
             powersave_arm_count: 0,
             startup_time: std::time::Instant::now(),
             startup_grace_secs: 30, // Default 30s grace period for inputs to stabilize
+            last_total_score: 0.0,
         }
     }
 
@@ -157,7 +159,12 @@ impl PolicyEngine {
         &self.current_policy
     }
 
+    pub fn last_score(&self) -> f64 {
+        self.last_total_score
+    }
+
     fn apply_transition(&mut self, desired: PolicyState, total_score: f64) -> PolicyState {
+        self.last_total_score = total_score;
         // Immediate escalate for Emergency or Suspend
         if desired == PolicyState::EmergencyCool || desired == PolicyState::Suspend {
             if self.current_policy != desired {
