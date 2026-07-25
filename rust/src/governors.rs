@@ -140,7 +140,10 @@ impl GovernorManager {
             crate::tuning::backend::TuningBackend::write_string(path, level.to_string());
             tracing::debug!(target: "governor", "Applied GPU power level: {} via {}", level, path);
         } else {
-            tracing::debug!("Skipping GPU power level: no writable power-level path discovered");
+            static GPU_PWR_MISSING_WARN: std::sync::Once = std::sync::Once::new();
+            GPU_PWR_MISSING_WARN.call_once(|| {
+                tracing::trace!("Skipping GPU power level: no writable power-level path discovered");
+            });
         }
         Ok(())
     }

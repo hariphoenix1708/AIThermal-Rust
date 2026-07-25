@@ -172,7 +172,7 @@ async function loadZones() {
 async function loadPolicy() {
   const state = await readFile(`${STATE_DIR}/thermalai_state.json`);
   document.getElementById("policyRaw").textContent = state.trim() || "No state file.";
-  const log = await readFile(`${LOG_DIR}/thermalai.log`);
+  const log = await readFile(`${LOG_DIR}/thermalai_thermal.log`);
   const lines = log.split("\n").filter((l) =>
     /transition|Policy changed|Applying policy|Evaluating policy|Starting session/.test(l)
   ).slice(-15);
