@@ -1106,53 +1106,65 @@ impl RuntimeTask for SystemOrchestrator {
 
                 if can_actuate {
                     self.last_actuation_at = Some(std::time::Instant::now());
-                    for cluster in &self.hardware.cpu_topology.clusters {
-                        let target = match tier {
-                            crate::scheduler::adaptive_governor::FrequencyTier::Max => {
-                                crate::governors::GovernorManager::max_freq(
-                                    &cluster.available_frequencies,
-                                )
-                            }
-                            crate::scheduler::adaptive_governor::FrequencyTier::High => {
-                                let min = crate::governors::GovernorManager::min_freq(
-                                    &cluster.available_frequencies,
-                                )
-                                .unwrap_or(0);
-                                let max = crate::governors::GovernorManager::max_freq(
-                                    &cluster.available_frequencies,
-                                )
-                                .unwrap_or(0);
-                                let midpoint = (min + max) / 2;
-                                // Snap to the closest value actually present in this cluster's real
-                                // frequency table, rather than trusting an arithmetic midpoint to be a
-                                // valid step.
-                                cluster
-                                    .available_frequencies
-                                    .iter()
-                                    .copied()
-                                    .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
-                            }
-                            crate::scheduler::adaptive_governor::FrequencyTier::Balanced => {
-                                crate::governors::GovernorManager::mid_freq(
-                                    &cluster.available_frequencies,
-                                )
-                            }
-                            crate::scheduler::adaptive_governor::FrequencyTier::Eco => {
-                                crate::governors::GovernorManager::min_freq(
-                                    &cluster.available_frequencies,
-                                )
-                            }
-                        };
 
-                        if let Some(freq) = target {
-                            let path = format!("{}/scaling_max_freq", cluster.policy_path);
-                            if crate::tuning::backend::TuningBackend::try_write_string(
-                                &path,
-                                &freq.to_string(),
-                            )
-                            .is_ok()
-                            {
-                                tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+                    // R2: When policy is one of the P3-clamped states, apply_cluster_settings
+                    // owns scaling_max_freq. Do not fight it from adaptive_governor.
+                    let p3_owns_max_freq = matches!(
+                        policy_str,
+                        "Powersave" | "Conservative" | "EmergencyCool" | "Suspend"
+                    );
+                    if p3_owns_max_freq {
+                        // adaptive_governor still runs its tier/scoring logic for telemetry,
+                        // but must not write scaling_max_freq while P3 has clamp authority.
+                    } else {
+                        for cluster in &self.hardware.cpu_topology.clusters {
+                            let target = match tier {
+                                crate::scheduler::adaptive_governor::FrequencyTier::Max => {
+                                    crate::governors::GovernorManager::max_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                }
+                                crate::scheduler::adaptive_governor::FrequencyTier::High => {
+                                    let min = crate::governors::GovernorManager::min_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                    .unwrap_or(0);
+                                    let max = crate::governors::GovernorManager::max_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                    .unwrap_or(0);
+                                    let midpoint = (min + max) / 2;
+                                    // Snap to the closest value actually present in this cluster's real
+                                    // frequency table, rather than trusting an arithmetic midpoint to be a
+                                    // valid step.
+                                    cluster
+                                        .available_frequencies
+                                        .iter()
+                                        .copied()
+                                        .min_by_key(|&f| (f as i64 - midpoint as i64).abs())
+                                }
+                                crate::scheduler::adaptive_governor::FrequencyTier::Balanced => {
+                                    crate::governors::GovernorManager::mid_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                }
+                                crate::scheduler::adaptive_governor::FrequencyTier::Eco => {
+                                    crate::governors::GovernorManager::min_freq(
+                                        &cluster.available_frequencies,
+                                    )
+                                }
+                            };
+
+                            if let Some(freq) = target {
+                                let path = format!("{}/scaling_max_freq", cluster.policy_path);
+                                if crate::tuning::backend::TuningBackend::try_write_string(
+                                    &path,
+                                    &freq.to_string(),
+                                )
+                                .is_ok()
+                                {
+                                    tracing::debug!(target: "adaptive_governor", "Tier {:?}: applied {} to cluster {} via {}", tier, freq, cluster.name, path);
+                                }
                             }
                         }
                     }
@@ -1176,6 +1188,7 @@ impl RuntimeTask for SystemOrchestrator {
                         tracing::warn!("Failed to apply scheduler: {}", e);
                     }
                 }
+                self.runtime_tuner.apply_universal_cpu_tuning(policy_str);
                 self.runtime_tuner.apply_universal_gpu_control(policy_str);
             }
 

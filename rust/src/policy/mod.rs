@@ -142,8 +142,11 @@ impl PolicyEngine {
                 }
             }
         } else {
-            // Any non-Powersave decision clears the arm counter.
-            self.powersave_arm_count = 0;
+            // R5: preserve the arm counter across a placeholder-Conservative
+            // step. Only clear when the tentative itself is NOT Powersave.
+            if tentative != PolicyState::Powersave {
+                self.powersave_arm_count = 0;
+            }
             tentative
         };
 
@@ -158,7 +161,12 @@ impl PolicyEngine {
         // Immediate escalate for Emergency or Suspend
         if desired == PolicyState::EmergencyCool || desired == PolicyState::Suspend {
             if self.current_policy != desired {
+                let prev = self.current_policy.clone();
                 self.current_policy = desired.clone();
+                tracing::info!(target: "thermal",
+                    "Policy transition {:?} -> {:?} (score={:.1}, elapsed_since_last={}s)",
+                    prev, self.current_policy, total_score,
+                    self.last_change_at.elapsed().as_secs());
                 self.last_change_at = std::time::Instant::now();
             }
             return desired;
@@ -191,12 +199,6 @@ impl PolicyEngine {
                     "Policy transition {:?} -> {:?} (score={:.1}, elapsed_since_last={}s)",
                     prev, self.current_policy, total_score,
                     self.last_change_at.elapsed().as_secs());
-                tracing::info!(
-                    "Policy transition {:?} -> {:?} (score={:.1})",
-                    prev,
-                    self.current_policy,
-                    total_score
-                );
                 self.last_change_at = std::time::Instant::now();
             }
         }

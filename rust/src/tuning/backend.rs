@@ -107,13 +107,23 @@ impl TuningBackend {
         value: S,
     ) -> Result<(), BackendError> {
         let p = path.as_ref();
+        let val_str = value.as_ref();
         if is_poisoned(p) {
             return Err(BackendError::Poisoned(p.to_string_lossy().into_owned()));
         }
-        match sysfs::write_string(p, value.as_ref()) {
+
+        // R4: idempotent skip — do not rewrite a node that already holds
+        // the target value. Silent success (no trace, no failure counter).
+        if let Some(cur) = Self::read_current(p) {
+            if cur == val_str {
+                return Ok(());
+            }
+        }
+
+        match sysfs::write_string(p, val_str) {
             Ok(()) => {
                 record_success(p);
-                tracing::trace!(target: "thermal", "sysfs write ok: {} = {}", p.display(), value.as_ref());
+                tracing::trace!(target: "thermal", "sysfs write ok: {} = {}", p.display(), val_str);
                 Ok(())
             }
             Err(e) => {

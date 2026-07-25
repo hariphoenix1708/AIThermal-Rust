@@ -1,5 +1,24 @@
 # Changelog
 
+## v3.2.0 (versionCode 320)
+### Fixed
+- CPU tuning path: wire apply_universal_cpu_tuning into the orchestrator
+  actuation cycle so the P3 governor mapping and scaling_max_freq clamps
+  (Powersave 70%, Conservative 85%, EmergencyCool 55%) actually take
+  effect on transitions.
+- adaptive_governor no longer writes scaling_max_freq during
+  Powersave/Conservative/EmergencyCool/Suspend — P3 owns the clamp in
+  those states; no more competing writes.
+- Policy transition INFO log now fires for every X -> Suspend transition
+  (Balanced/Conservative/Powersave/Performance/EmergencyCool -> Suspend).
+- Removed the duplicate back-to-back "Policy transition" log emission.
+- Idempotent sysfs writes: try_write_string now skips when the node
+  already holds the target value. Kills repeated no-op writes to
+  vm.*, block/*/queue/scheduler, and cpuset nodes across ticks.
+- P5 Powersave-arm counter: preserve arm_count across the placeholder
+  Conservative step so a sustained two-tick tentative=Powersave actually
+  enters Powersave (previously reset by the else-branch on tick N).
+
 ## [v3.1.9] (319) - Stable
 
 Fixes user-visible 5-7 s stutters on Conservative -> Powersave transitions at moderate temperatures (v3.1.8 regression).
