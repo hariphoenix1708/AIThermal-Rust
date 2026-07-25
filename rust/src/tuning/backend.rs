@@ -187,7 +187,7 @@ pub trait StorageBackend {
 }
 
 pub trait CpusetBackend {
-    fn apply_cpuset(&self, mode: &str) -> Result<(), BackendError>;
+    fn apply_cpuset(&self, mode: &str, composite_c: i32, temp_hot: i32) -> Result<(), BackendError>;
 }
 
 pub trait VmBackend {

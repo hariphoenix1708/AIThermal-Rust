@@ -11,6 +11,9 @@ Fixes user-visible 5-7 s stutters on Conservative -> Powersave transitions at mo
 *   KGSL power-level detection now falls back to `default_pwrlevel` on Adreno 730/735/750 (SM8550/8635/8650) when neither `pwrlevel` nor `current_pwrlevel` are writable. Also records `thermal_pwrlevel` as a floor to avoid fighting the QCOM thermal HAL on HyperOS.
 *   Snapshot/restore path restores `default_pwrlevel` on shutdown for the same devices.
 *   No behavioural regression on kernels/ROMs without any of the new sysfs nodes - every read/write remains capability-gated with silent no-op on ENOENT/EPERM.
+*   Wake-from-Suspend fast path now covers Powersave destinations, not just Balanced/Performance/Conservative. Fixes ~11 s stutter when a screen wake lands directly in Powersave (repro: charging + composite ~46 C at wake).
+*   `default_pwrlevel` (Adreno 730/735/750) added to KGSL probe.
+*   "Skipping GPU power-level control" log downgraded and gated behind std::sync::Once (was printed twice per tick).
 
 
 ## [v3.1.8] (318) - Stable

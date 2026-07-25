@@ -64,6 +64,9 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
             report.push_str(&format!("Current Power Level: {}\n", val.trim()));
         }
     }
+    if let Some(t) = &profile.gpu_profile.thermal_pwrlevel_path {
+        report.push_str(&format!("Thermal Power Level Path: {}\n", t));
+    }
     report.push_str(&format!("KGSL: {}\n", profile.gpu_profile.is_kgsl));
     report.push_str(&format!(
         "Bus Split (kgsl): {}\n",
