@@ -44,9 +44,16 @@ pub fn probe_charging() -> ChargingProfile {
     let qcom_root = "/sys/class/qcom-battery";
     if Path::new(qcom_root).exists() {
         profile.qcom_battery_root = Some(qcom_root.to_string());
-        for name in ["restrict_chg", "restrict_cur", "input_suspend", "night_charging"] {
+        for name in [
+            "restrict_chg",
+            "restrict_cur",
+            "input_suspend",
+            "night_charging",
+        ] {
             let p = format!("{}/{}", qcom_root, name);
-            if !Path::new(&p).exists() { continue; }
+            if !Path::new(&p).exists() {
+                continue;
+            }
             let writable = match std::fs::read_to_string(&p) {
                 Ok(cur) => crate::sysfs::write_string(&p, cur.trim()).is_ok(),
                 Err(_) => false,
@@ -124,7 +131,9 @@ pub fn probe_charging() -> ChargingProfile {
         "/sys/class/power_supply/ac/input_current_limit",
     ];
     for node in ordered {
-        if !Path::new(node).exists() { continue; }
+        if !Path::new(node).exists() {
+            continue;
+        }
         // Try a probe write of the current value (read-then-write same value)
         // so we don’t perturb hardware but do verify EINVAL doesn’t fire.
         let probe_ok = match std::fs::read_to_string(node) {
@@ -133,7 +142,9 @@ pub fn probe_charging() -> ChargingProfile {
         };
         if probe_ok {
             profile.current_limit_nodes.push(node.to_string());
-            profile.capability_nodes.push(CapabilityNode::new(node, "charge_limit"));
+            profile
+                .capability_nodes
+                .push(CapabilityNode::new(node, "charge_limit"));
         } else {
             tracing::info!(
                 target: "charging",

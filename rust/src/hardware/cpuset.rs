@@ -7,9 +7,7 @@ pub fn probe_cpuset() -> CpusetProfile {
 
     // v1 first (fastest path on HyperOS + older AOSP)
     for base in ["/dev/cpuset", "/sys/fs/cgroup/cpuset"] {
-        if Path::new(base).join("tasks").exists()
-            || Path::new(base).join("top-app").exists()
-        {
+        if Path::new(base).join("tasks").exists() || Path::new(base).join("top-app").exists() {
             profile.root_path = base.to_string();
             profile.is_cgroup_v2 = false;
             profile.controller_ok = true;
@@ -55,19 +53,18 @@ pub fn probe_cpuset() -> CpusetProfile {
     // v2 unified hierarchy
     let v2_root = "/sys/fs/cgroup";
     if Path::new(&format!("{}/cgroup.controllers", v2_root)).exists() {
-        let controllers = std::fs::read_to_string(
-            format!("{}/cgroup.controllers", v2_root)
-        ).unwrap_or_default();
+        let controllers =
+            std::fs::read_to_string(format!("{}/cgroup.controllers", v2_root)).unwrap_or_default();
         if controllers.split_whitespace().any(|c| c == "cpuset") {
-            profile.root_path      = v2_root.to_string();
-            profile.is_cgroup_v2   = true;
-            profile.controller_ok  = true;
+            profile.root_path = v2_root.to_string();
+            profile.is_cgroup_v2 = true;
+            profile.controller_ok = true;
 
-            profile.top_app_path          = Some(format!("{}/top-app",           v2_root));
-            profile.foreground_path       = Some(format!("{}/foreground",        v2_root));
-            profile.background_path       = Some(format!("{}/background",        v2_root));
-            profile.system_background_path= Some(format!("{}/system-background", v2_root));
-            profile.restricted_path       = Some(format!("{}/restricted",        v2_root));
+            profile.top_app_path = Some(format!("{}/top-app", v2_root));
+            profile.foreground_path = Some(format!("{}/foreground", v2_root));
+            profile.background_path = Some(format!("{}/background", v2_root));
+            profile.system_background_path = Some(format!("{}/system-background", v2_root));
+            profile.restricted_path = Some(format!("{}/restricted", v2_root));
 
             // push nodes
             profile.cpuset_nodes.push(CapabilityNode::new(

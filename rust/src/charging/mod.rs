@@ -76,11 +76,11 @@ impl ChargingEngine {
     /// 300 cycles -> 0.97. 600 -> 0.93. 900 -> 0.89. >=1200 -> 0.85.
     fn cycle_taper_factor(cycle_count: u64) -> f32 {
         match cycle_count {
-            0..=200      => 1.00,
-            201..=400    => 0.97,
-            401..=700    => 0.93,
-            701..=1000   => 0.89,
-            _            => 0.85,
+            0..=200 => 1.00,
+            201..=400 => 0.97,
+            401..=700 => 0.93,
+            701..=1000 => 0.89,
+            _ => 0.85,
         }
     }
 
@@ -124,7 +124,9 @@ impl ChargingEngine {
     /// to thermalai_charging.log. Called once per session on the
     /// Disconnected -> Normal transition.
     fn dump_charger_diagnostics(&mut self) {
-        if self.voter_dump_done { return; }
+        if self.voter_dump_done {
+            return;
+        }
         self.voter_dump_done = true;
 
         let read_only_probes = [
@@ -160,26 +162,30 @@ impl ChargingEngine {
         // Desired state per mode.
         // (restrict_chg, restrict_cur_ua, input_suspend, night_charging)
         let (restrict, cur_ua, suspend, night) = match mode {
-            ChargeMode::MaxSpeed | ChargeMode::Urgent =>
-                (Some("0"), None,                              Some("0"), Some("0")),
+            ChargeMode::MaxSpeed | ChargeMode::Urgent => (Some("0"), None, Some("0"), Some("0")),
             ChargeMode::BatteryCare => {
                 // Cap current at target_ma; but never below 500 mA and
                 // never above 3000 mA in BatteryCare.
                 let cap_ma = target_ma.clamp(500, 3000);
                 // We leak the string via to_string() into a local; the
                 // helper below only borrows for the write() call.
-                (Some("1"), Some((cap_ma * 1000) as i64), Some("0"), Some("0"))
+                (
+                    Some("1"),
+                    Some((cap_ma * 1000) as i64),
+                    Some("0"),
+                    Some("0"),
+                )
             }
             ChargeMode::UnderLoad => {
                 // Screen-on gaming while plugged: keep restrict off so
                 // the phone can outrun the load, but tell HyperOS not
                 // to switch to night_charging.
-                (Some("0"), None,                              Some("0"), Some("0"))
+                (Some("0"), None, Some("0"), Some("0"))
             }
             ChargeMode::Adaptive => {
                 // Neutral: don't fight HyperOS, just make sure charge
                 // isn't accidentally suspended.
-                (None,      None,                              Some("0"), None)
+                (None, None, Some("0"), None)
             }
         };
 
@@ -196,9 +202,13 @@ impl ChargingEngine {
                 None
             };
 
-            let Some(want) = want else { continue; };
+            let Some(want) = want else {
+                continue;
+            };
             let current = std::fs::read_to_string(node).unwrap_or_default();
-            if current.trim() == want { continue; }
+            if current.trim() == want {
+                continue;
+            }
 
             match crate::sysfs::write_string(node, &want) {
                 Ok(()) => tracing::info!(target: "charging",
@@ -211,15 +221,24 @@ impl ChargingEngine {
 
     pub fn release_voters_on_shutdown(&self) {
         for node in &self.voter_nodes {
-            let default = if node.ends_with("/restrict_chg") { "0" }
-                else if node.ends_with("/input_suspend") { "0" }
-                else if node.ends_with("/night_charging") { "0" }
-                else { continue; };
+            let default = if node.ends_with("/restrict_chg") {
+                "0"
+            } else if node.ends_with("/input_suspend") {
+                "0"
+            } else if node.ends_with("/night_charging") {
+                "0"
+            } else {
+                continue;
+            };
             let _ = crate::sysfs::write_string(node, default);
         }
     }
 
-    fn check_overrides(inputs: &mut ChargingInputs, state_dir: &str, forced_mode: &mut Option<ChargeMode>) {
+    fn check_overrides(
+        inputs: &mut ChargingInputs,
+        state_dir: &str,
+        forced_mode: &mut Option<ChargeMode>,
+    ) {
         let override_path = format!("{}/charging_mode.json", state_dir);
         *forced_mode = None;
         if let Ok(content) = fs::read_to_string(&override_path) {
@@ -228,9 +247,7 @@ impl ChargingEngine {
                     .get("urgent")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let mode_str = json
-                    .get("mode")
-                    .and_then(|v| v.as_str());
+                let mode_str = json.get("mode").and_then(|v| v.as_str());
                 if let Some(m) = mode_str {
                     if m == "MaxSpeed" {
                         *forced_mode = Some(ChargeMode::MaxSpeed);
@@ -288,7 +305,11 @@ impl ChargingEngine {
         };
 
         if hot && matches!(chosen, ChargeMode::MaxSpeed | ChargeMode::Urgent) {
-            return if inputs.is_gaming { ChargeMode::UnderLoad } else { ChargeMode::Adaptive };
+            return if inputs.is_gaming {
+                ChargeMode::UnderLoad
+            } else {
+                ChargeMode::Adaptive
+            };
         }
         chosen
     }
@@ -433,7 +454,12 @@ impl ChargingEngine {
             ChargeState::Normal
         }
     }
-    pub fn evaluate(&mut self, raw_inputs: &ChargingInputs, state_dir: &str, hw_profile: &crate::hardware::HardwareProfile) -> i64 {
+    pub fn evaluate(
+        &mut self,
+        raw_inputs: &ChargingInputs,
+        state_dir: &str,
+        hw_profile: &crate::hardware::HardwareProfile,
+    ) -> i64 {
         let mut inputs = raw_inputs.clone();
         Self::check_overrides(&mut inputs, state_dir, &mut self.forced_mode);
 
@@ -484,12 +510,13 @@ impl ChargingEngine {
                     node, self.limit_nodes.len());
                 tracing::info!(
                     "Charge-limit control node: {} ({} candidates writable)",
-                    node, self.limit_nodes.len());
+                    node,
+                    self.limit_nodes.len()
+                );
             } else {
                 tracing::info!(target: "charging",
                     "Charge-limit control: NONE (device controls current itself)");
-                tracing::info!(
-                    "Charge-limit control: NONE (device controls current itself)");
+                tracing::info!("Charge-limit control: NONE (device controls current itself)");
             }
         }
 
@@ -544,7 +571,9 @@ impl ChargingEngine {
             ChargeState::Disconnected => 0,
         };
 
-        let live_cycles = hw_profile.charging_profile.cycle_count_path
+        let live_cycles = hw_profile
+            .charging_profile
+            .cycle_count_path
             .as_deref()
             .and_then(|p| std::fs::read_to_string(p).ok())
             .and_then(|s: String| s.trim().parse::<u64>().ok())
@@ -669,7 +698,13 @@ impl ChargingEngine {
         }
 
         tracing::info!(target: "charging", "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C", self.session_start_soc, final_soc, duration, self.session_peak_temp);
-        tracing::info!("Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C", self.session_start_soc, final_soc, duration, self.session_peak_temp);
+        tracing::info!(
+            "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C",
+            self.session_start_soc,
+            final_soc,
+            duration,
+            self.session_peak_temp
+        );
     }
 
     fn apply_limit(&mut self, ma: i64) -> bool {

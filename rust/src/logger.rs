@@ -23,8 +23,8 @@ pub fn is_sysfs_blacklisted(path: &str) -> bool {
 }
 
 use chrono::{FixedOffset, Utc};
-use tracing_subscriber::fmt::time::FormatTime;
 use std::fmt as std_fmt;
+use tracing_subscriber::fmt::time::FormatTime;
 
 /// Formats timestamps in India Standard Time (UTC+05:30) with
 /// millisecond precision. Used by every log stream so on-device
@@ -149,8 +149,7 @@ pub fn init_logger(
     // ---- Main log: high-signal lifecycle + warnings + errors, NEVER the
     //      per-tick domain firehose. RUST_LOG wins; else fall back to the
     //      `log_level` string from profiles.conf; else "info".
-    let main_env = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| level.to_lowercase());
+    let main_env = std::env::var("RUST_LOG").unwrap_or_else(|_| level.to_lowercase());
     let main_filter = EnvFilter::try_new(&main_env)
         .unwrap_or_else(|_| EnvFilter::new("info"))
         .add_directive("battery=off".parse().unwrap())
@@ -160,16 +159,15 @@ pub fn init_logger(
         .add_directive("wake=off".parse().unwrap());
 
     // ---- Verbose: everything, always.
-    let verbose_filter = EnvFilter::from_default_env()
-        .add_directive(LevelFilter::TRACE.into());
+    let verbose_filter = EnvFilter::from_default_env().add_directive(LevelFilter::TRACE.into());
 
     // ---- Domain writers: default OFF, admit only their own target at INFO+.
     //      Anchor with a leading module-off directive so untargeted
     //      thermalai_daemon::* events cannot leak in.
-    let battery_filter  = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,battery=info");
-    let thermal_filter  = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,thermal=info");
+    let battery_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,battery=info");
+    let thermal_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,thermal=info");
     let charging_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,charging=info");
-    let gaming_filter   = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,gaming=info");
+    let gaming_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,gaming=info");
 
     tracing_subscriber::registry()
         .with(

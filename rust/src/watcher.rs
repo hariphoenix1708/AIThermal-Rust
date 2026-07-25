@@ -1,8 +1,8 @@
 use notify::{Config, Event, EventKind, RecursiveMode, Watcher};
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::Arc;
 
 pub fn spawn_config_watcher(
     config_path: String,
