@@ -807,6 +807,13 @@ impl RuntimeTask for SystemOrchestrator {
             None => true,
         };
 
+        if policy_changed {
+            tracing::info!(target: "thermal",
+                "Policy transition {} -> {} (score={:.1})",
+                ctx.current_policy.as_deref().unwrap_or("None"),
+                policy_str, final_context);
+        }
+
         // If the previous transition tick could not actuate (wake defer,
         // actuation throttle, etc.) the policy label was still committed
         // to ctx.current_policy. Track what we ACTUALLY applied and

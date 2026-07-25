@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.2.1 (versionCode 321)
+### Fixed
+- Idempotent sysfs writes are now consistent across all tuning paths.
+  write_if_changed understands the kernel's bracketed scheduler format,
+  and write_and_save / restore_or_default no longer rewrite unchanged
+  values. Eliminates ~700 redundant queue/scheduler writes and ~100
+  redundant vm.swappiness writes per session (reduces actuation overhead
+  and log noise).
+- Policy transition logs now reflect the ACTUATED policy. Decisions that
+  the orchestrator overrides during post-game cooldown / thermal recovery
+  no longer emit phantom transition lines that contradict the tick state.
+
 ## v3.2.0 (versionCode 320)
 ### Fixed
 - CPU tuning path: wire apply_universal_cpu_tuning into the orchestrator

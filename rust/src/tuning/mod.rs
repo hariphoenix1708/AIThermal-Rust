@@ -24,8 +24,22 @@ pub struct RuntimeTuner {
 
 fn write_if_changed(path: &str, value: &str) -> bool {
     match std::fs::read_to_string(path) {
-        Ok(cur) if cur.trim() == value.trim() => false,
-        _ => {
+        Ok(cur) => {
+            // Normalize the kernel's bracketed active-list format used by
+            // nodes like queue/scheduler: "none [mq-deadline] kyber" -> the
+            // active token "mq-deadline". Falls back to trimmed compare.
+            let active = cur
+                .split_ascii_whitespace()
+                .find_map(|t| t.strip_prefix('[').and_then(|t| t.strip_suffix(']')))
+                .unwrap_or_else(|| cur.trim());
+            if active == value.trim() {
+                false
+            } else {
+                let _ = crate::tuning::backend::TuningBackend::try_write_string(path, value);
+                true
+            }
+        }
+        Err(_) => {
             let _ = crate::tuning::backend::TuningBackend::try_write_string(path, value);
             true
         }
@@ -154,7 +168,7 @@ impl RuntimeTuner {
                 }
             }
         }
-        crate::tuning::backend::TuningBackend::write_string(path, value);
+        let _ = crate::tuning::backend::TuningBackend::try_write_string(path, value);
         if newly_saved {
             self.persist_active();
         }
@@ -163,11 +177,11 @@ impl RuntimeTuner {
     fn restore_or_default(&self, path: &str, default: &str) {
         if let Ok(state) = self.original_state.lock() {
             if let Some(orig) = state.get(path) {
-                crate::tuning::backend::TuningBackend::write_string(path, orig);
+                let _ = crate::tuning::backend::TuningBackend::try_write_string(path, orig);
                 return;
             }
         }
-        crate::tuning::backend::TuningBackend::write_string(path, default);
+        let _ = crate::tuning::backend::TuningBackend::try_write_string(path, default);
     }
 
     fn write_and_lock(&self, path: &str, value: &str) {
