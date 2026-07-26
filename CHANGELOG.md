@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.2.3 (versionCode 323)
+### Fixed & Improved
+- Fixed duplicate "Policy transition" log line for Suspend/EmergencyCool escalations (engine + orchestrator both logged; orchestrator is now the single source).
+- (optional) WebUI: gauge gradient, top safe-area inset, larger small-button touch targets.
+
 ## v3.2.2 (versionCode 322)
 ### Fixed
 - Policy transitions are now logged exactly once, from the orchestrator on

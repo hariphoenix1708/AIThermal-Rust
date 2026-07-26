@@ -26,7 +26,7 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-.app { max-width: 720px; margin: 0 auto; padding: 16px 14px 40px; }
+.app { max-width: 720px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 14px 40px; }
 
 /* Topbar */
 .topbar { display: flex; align-items: center; justify-content: space-between; margin: 6px 4px 18px; }
@@ -101,7 +101,6 @@ body {
 .ring-bg { fill: none; stroke: var(--bg-elev-2); stroke-width: 10; }
 .ring-fg {
   fill: none; stroke: url(#g); stroke-width: 10; stroke-linecap: round;
-  stroke: var(--accent);
   stroke-dasharray: 326.7;
   stroke-dashoffset: 326.7;
   transition: stroke-dashoffset .6s ease, stroke .3s ease;
@@ -140,7 +139,7 @@ body {
 .btn {
   background: var(--bg-elev-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 10px;
-  padding: 10px 16px; font-weight: 600; font-size: 13px;
+  padding: 10px 16px; font-weight: 600; font-size: 13px; min-height: 36px;
   cursor: pointer; transition: transform .06s ease, background .2s ease, border-color .2s ease;
 }
 .btn:active { transform: scale(.97); }
@@ -151,7 +150,7 @@ body {
 }
 .btn.danger { color: var(--danger); border-color: rgba(255,84,112,.4); }
 .btn.ghost { background: transparent; }
-.btn.sm { padding: 6px 10px; font-size: 12px; }
+.btn.sm { padding: 8px 10px; font-size: 12px; }
 
 /* Code / log blocks */
 .code {
