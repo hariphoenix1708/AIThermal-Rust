@@ -43,6 +43,12 @@
             <div class="card-label">Battery temperature</div>
             <div class="gauge">
               <svg viewBox="0 0 120 120" class="ring">
+              <defs>
+                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#4ff0d6"/>
+                  <stop offset="1" stop-color="#ff7a3d"/>
+                </linearGradient>
+              </defs>
                 <circle cx="60" cy="60" r="52" class="ring-bg"/>
                 <circle cx="60" cy="60" r="52" class="ring-fg" id="tempRing"/>
               </svg>
