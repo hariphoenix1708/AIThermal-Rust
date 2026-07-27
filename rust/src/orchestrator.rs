@@ -741,10 +741,32 @@ impl RuntimeTask for SystemOrchestrator {
         if was_gaming && !is_gaming {
             tracing::info!(
                 target: "gaming",
-                "Game session ended: {} (peak {}C)",
+                "Game session ended: {} (peak {}C) - clearing active game boosts",
                 ctx.cooldown_source_pkg.as_deref().unwrap_or("unknown"),
                 ctx.game_session_peak_temp
             );
+
+            // Actively restore the normal usage profile to drop heat quickly
+            self.runtime_tuner.restore_all();
+
+            // Re-apply baseline policies for screen-on idle immediately
+            if let Err(e) = self.cpuset.apply_cpuset("balanced", adj_temp, ctx.config.profiles.temp_hot) {
+                tracing::warn!("Failed to apply cpuset during game exit restore: {}", e);
+            }
+            if let Some(gov) = self.select_cpu_governor(&["schedutil"]) {
+                if let Err(e) = self.governors.apply_cpu_governor(&gov) {
+                    tracing::warn!("Failed to apply CPU governor during game exit restore: {}", e);
+                } else {
+                    self.last_applied_cpu_gov = Some(gov);
+                }
+            }
+            if let Some(level) = self.hardware.gpu_profile.max_power_level {
+                let _ = self.governors.apply_gpu_power_level(level.saturating_sub(1));
+                self.last_applied_gpu_level = Some(level.saturating_sub(1));
+            }
+
+            self.last_applied_policy = None;
+
             let pkg = ctx.cooldown_source_pkg.clone().unwrap_or_default();
             let cd_sec = self
                 .game_profiles
@@ -1321,6 +1343,22 @@ impl RuntimeTask for SystemOrchestrator {
             })
         };
 
+        let voltage_now_uv = {
+            let path = format!("{}/voltage_now", self.hardware.battery_profile.path);
+            crate::sysfs::read_i64(&path).ok().or_else(|| {
+                let p2 = "/sys/class/power_supply/battery/voltage_now";
+                crate::sysfs::read_i64(p2).ok()
+            })
+        };
+
+        let charge_counter_uah = {
+            let path = format!("{}/charge_counter", self.hardware.battery_profile.path);
+            crate::sysfs::read_i64(&path).ok().or_else(|| {
+                let p2 = "/sys/class/power_supply/battery/charge_counter";
+                crate::sysfs::read_i64(p2).ok()
+            })
+        };
+
         let charging_inputs = crate::charging::ChargingInputs {
             battery_temp: bat_temp,
             charger_temp: c_temp,
@@ -1336,8 +1374,8 @@ impl RuntimeTask for SystemOrchestrator {
             seconds_since_plugged,
             charger_id: self.hardware.charging_profile.path.clone(),
             current_now_ua,
-            voltage_now_uv: None,
-            charge_counter_uah: None,
+            voltage_now_uv,
+            charge_counter_uah,
         };
         self.charging
             .evaluate(&charging_inputs, &ctx.state_dir, &self.hardware);

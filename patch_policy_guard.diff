@@ -1,0 +1,19 @@
+<<<<<<< SEARCH
+        let mut normal_use_guard = 0.0;
+        if !is_gaming && !is_screen_off {
+            if trend_score > 5 {
+                normal_use_guard += 10.0;
+            } else if trend_score > 15 {
+                normal_use_guard += 20.0;
+            }
+        }
+=======
+        let mut normal_use_guard = 0.0;
+        if !is_gaming && !is_screen_off {
+            if trend_score > 15 || composite_temp >= config.temp_warm {
+                normal_use_guard += 25.0; // Force score higher to push into Conservative
+            } else if trend_score > 5 {
+                normal_use_guard += 15.0; // Apply pressure to cool down
+            }
+        }
+>>>>>>> REPLACE

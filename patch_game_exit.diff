@@ -1,0 +1,51 @@
+<<<<<<< SEARCH
+        if was_gaming && !is_gaming {
+            tracing::info!(
+                target: "gaming",
+                "Game session ended: {} (peak {}C)",
+                ctx.cooldown_source_pkg.as_deref().unwrap_or("unknown"),
+                ctx.game_session_peak_temp
+            );
+            let pkg = ctx.cooldown_source_pkg.clone().unwrap_or_default();
+            let cd_sec = self
+                .game_profiles
+                .get_profile(&pkg)
+                .map(|p| p.cooldown_sec)
+                .unwrap_or(90);
+=======
+        if was_gaming && !is_gaming {
+            tracing::info!(
+                target: "gaming",
+                "Game session ended: {} (peak {}C) - clearing active game boosts",
+                ctx.cooldown_source_pkg.as_deref().unwrap_or("unknown"),
+                ctx.game_session_peak_temp
+            );
+
+            // Actively restore the normal usage profile to drop heat quickly
+            self.runtime_tuner.restore_all();
+
+            // Re-apply baseline policies for screen-on idle immediately
+            if let Err(e) = self.cpuset.apply_cpuset("balanced", adj_temp, ctx.config.profiles.temp_hot) {
+                tracing::warn!("Failed to apply cpuset during game exit restore: {}", e);
+            }
+            if let Some(gov) = self.select_cpu_governor(&["schedutil"]) {
+                if let Err(e) = self.governors.apply_cpu_governor(&gov) {
+                    tracing::warn!("Failed to apply CPU governor during game exit restore: {}", e);
+                } else {
+                    self.last_applied_cpu_gov = Some(gov);
+                }
+            }
+            if let Some(level) = self.hardware.gpu_profile.max_power_level {
+                let _ = self.governors.apply_gpu_power_level(level);
+                self.last_applied_gpu_level = Some(level);
+            }
+
+            self.last_applied_policy = None;
+
+            let pkg = ctx.cooldown_source_pkg.clone().unwrap_or_default();
+            let cd_sec = self
+                .game_profiles
+                .get_profile(&pkg)
+                .map(|p| p.cooldown_sec)
+                .unwrap_or(90);
+>>>>>>> REPLACE
