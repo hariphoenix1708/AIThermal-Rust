@@ -26,7 +26,7 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-.app { max-width: 720px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 14px 40px; }
+.app { max-width: 720px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 14px 40px; width: 100%; overflow-x: hidden; }
 
 /* Topbar */
 .topbar { display: flex; align-items: center; justify-content: space-between; margin: 6px 4px 18px; }
