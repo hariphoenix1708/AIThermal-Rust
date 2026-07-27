@@ -500,7 +500,6 @@ impl ChargingEngine {
             self.sample_count = 0;
             self.voter_dump_done = false;
             tracing::info!(target: "charging", "Charging session started at {}% SOC", soc);
-            tracing::info!("Charging session started at {}% SOC", soc);
 
             self.dump_charger_diagnostics();
 
@@ -508,15 +507,9 @@ impl ChargingEngine {
                 tracing::info!(target: "charging",
                     "Charge-limit control node: {} ({} candidates writable)",
                     node, self.limit_nodes.len());
-                tracing::info!(
-                    "Charge-limit control node: {} ({} candidates writable)",
-                    node,
-                    self.limit_nodes.len()
-                );
             } else {
                 tracing::info!(target: "charging",
                     "Charge-limit control: NONE (device controls current itself)");
-                tracing::info!("Charge-limit control: NONE (device controls current itself)");
             }
         }
 
@@ -698,13 +691,6 @@ impl ChargingEngine {
         }
 
         tracing::info!(target: "charging", "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C", self.session_start_soc, final_soc, duration, self.session_peak_temp);
-        tracing::info!(
-            "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C",
-            self.session_start_soc,
-            final_soc,
-            duration,
-            self.session_peak_temp
-        );
     }
 
     fn apply_limit(&mut self, ma: i64) -> bool {
@@ -742,12 +728,22 @@ impl ChargingEngine {
                 true
             }
             Err(e) => {
-                self.limit_write_failure_count = self.limit_write_failure_count.saturating_add(1);
+                let hard_reject = matches!(
+                    e,
+                    crate::sysfs::SysfsError::PermissionDenied(_) | crate::sysfs::SysfsError::NotFound(_)
+                );
+
+                if hard_reject {
+                    self.limit_write_failure_count = 5;
+                } else {
+                    self.limit_write_failure_count = self.limit_write_failure_count.saturating_add(1);
+                }
+
                 if self.limit_write_failure_count >= 5 {
                     self.limit_write_disabled = true;
                     if let Some(node) = self.limit_nodes.first() {
                         tracing::warn!(target: "charging",
-                            "Node {} rejected 5 writes in a row, disabling input_current_limit control for this session",
+                            "Node {} repeatedly rejected writes or is unusable, disabling input_current_limit control for this session",
                             node);
                         crate::logger::blacklist_sysfs_node(node);
                     }
@@ -757,16 +753,7 @@ impl ChargingEngine {
 
                 tracing::debug!(target: "charging", "Failed to apply charge limit {}mA: {}", rounded_ma, e);
                 if let Some(node) = self.limit_nodes.first() {
-                    match &e {
-                        crate::sysfs::SysfsError::PermissionDenied(_)
-                        | crate::sysfs::SysfsError::NotFound(_) => {
-                            tracing::warn!(target: "charging", "Node {} is unusable (blacklisting): {}", node, e);
-                            crate::logger::blacklist_sysfs_node(node);
-                        }
-                        _ => {
-                            tracing::warn!(target: "charging", "Node {} rejected value {}mA, will retry with next computed value: {}", node, rounded_ma, e);
-                        }
-                    }
+                    tracing::warn!(target: "charging", "Node {} rejected value {}mA, will retry with next computed value: {}", node, rounded_ma, e);
                 }
                 false
             }

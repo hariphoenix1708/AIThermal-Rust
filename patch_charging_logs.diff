@@ -1,0 +1,28 @@
+<<<<<<< SEARCH
+        if let Ok(json_str) = serde_json::to_string_pretty(&summary) {
+            if let Err(e) = fs::write(&temp_path, json_str) {
+                tracing::error!("Failed to write charging session state: {}", e);
+            }
+            let _ = fs::rename(&temp_path, &file_path);
+        }
+
+        tracing::info!(target: "charging", "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C", self.session_start_soc, final_soc, duration, self.session_peak_temp);
+        tracing::info!(
+            "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C",
+            self.session_start_soc,
+            final_soc,
+            duration,
+            self.session_peak_temp
+        );
+    }
+=======
+        if let Ok(json_str) = serde_json::to_string_pretty(&summary) {
+            if let Err(e) = fs::write(&temp_path, json_str) {
+                tracing::error!("Failed to write charging session state: {}", e);
+            }
+            let _ = fs::rename(&temp_path, &file_path);
+        }
+
+        tracing::info!(target: "charging", "Session ended. Started at {}%, Ended at {}%, Duration: {}s, Peak Temp: {}C", self.session_start_soc, final_soc, duration, self.session_peak_temp);
+    }
+>>>>>>> REPLACE

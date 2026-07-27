@@ -21,6 +21,7 @@ pub struct RuntimeTuner {
     state_dir: Option<PathBuf>,
     tcp_cc_gaming: String,
     touch_network_stack: bool,
+    unsupported_touch_nodes: std::sync::Mutex<std::collections::HashSet<String>>,
 }
 
 fn write_if_changed(path: &str, value: &str) -> bool {
@@ -58,6 +59,7 @@ impl RuntimeTuner {
             state_dir: None,
             tcp_cc_gaming: "kernel_default".to_string(),
             touch_network_stack: false,
+            unsupported_touch_nodes: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
     }
 
@@ -294,10 +296,20 @@ impl RuntimeTuner {
 
         for node in &self.hardware.display_profile.touch_nodes {
             let path = node.as_str();
+
+            if let Ok(unsupported) = self.unsupported_touch_nodes.lock() {
+                if unsupported.contains(path) {
+                    continue;
+                }
+            }
+
             let Some(attr) = std::path::Path::new(path)
                 .file_name()
                 .and_then(|n| n.to_str())
             else {
+                if let Ok(mut unsupported) = self.unsupported_touch_nodes.lock() {
+                    unsupported.insert(path.to_string());
+                }
                 tracing::debug!("Skipping malformed touch node path: {}", path);
                 continue;
             };
@@ -312,9 +324,16 @@ impl RuntimeTuner {
                     self.write_and_save(path, value, true);
                     tracing::debug!(target: "tuning", "Applied touch tuning {}: {} via {}", attr, value, path);
                 } else {
+                    if let Ok(mut unsupported) = self.unsupported_touch_nodes.lock() {
+                        unsupported.insert(path.to_string());
+                    }
                     tracing::debug!("Touch node exists but not writable: {}", path);
                 }
                 continue;
+            }
+
+            if let Ok(mut unsupported) = self.unsupported_touch_nodes.lock() {
+                unsupported.insert(path.to_string());
             }
 
             if matches!(attr, "touch_report_rate" | "report_rate") {
