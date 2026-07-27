@@ -164,7 +164,7 @@ body {
   color: #cfd6e6; white-space: pre-wrap; word-break: break-word;
   margin: 6px 0 0;
 }
-.code.scroll { max-height: 55vh; overflow: auto; white-space: pre; }
+.code.scroll { max-height: 55vh; overflow: auto; white-space: pre; -webkit-overflow-scrolling: touch; }
 
 /* Toast */
 .toast {
