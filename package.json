@@ -1,0 +1,10 @@
+{
+  "name": "aithermal-rust",
+  "version": "3.2.4",
+  "private": true,
+  "scripts": {
+    "dev": "bash -c 'PORT=$(echo \"$@\" | grep -oE \"[0-9]+$\" || echo 8080); python3 -m http.server --directory webroot $PORT' --",
+    "build": "echo 'Rust module - no web build needed'",
+    "build:dev": "echo 'Rust module - no web build needed'"
+  }
+}
