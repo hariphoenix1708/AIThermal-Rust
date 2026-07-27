@@ -76,11 +76,10 @@ pub fn probe_cpu() -> CpuTopology {
                 cluster.current_governor = cur_gov.trim().to_string();
             }
 
-            if let Ok(cur_freq) = fs::read_to_string(entry.path().join("scaling_cur_freq")) {
-                if let Ok(freq) = cur_freq.trim().parse() {
+            if let Ok(cur_freq) = fs::read_to_string(entry.path().join("scaling_cur_freq"))
+                && let Ok(freq) = cur_freq.trim().parse() {
                     cluster.current_frequency = freq;
                 }
-            }
 
             if let Ok(cpus) = fs::read_to_string(entry.path().join("affected_cpus")) {
                 for cpu_str in cpus.split_whitespace() {
@@ -106,18 +105,16 @@ pub fn probe_cpu() -> CpuTopology {
                 cluster.related_cpus = cluster.cpus.clone();
             }
 
-            if let Ok(max) = fs::read_to_string(entry.path().join("cpuinfo_max_freq")) {
-                if let Ok(max_val) = max.trim().parse() {
+            if let Ok(max) = fs::read_to_string(entry.path().join("cpuinfo_max_freq"))
+                && let Ok(max_val) = max.trim().parse() {
                     cluster.cpuinfo_max_freq = max_val;
                     cluster.max_freq = max_val;
                 }
-            }
-            if let Ok(min) = fs::read_to_string(entry.path().join("cpuinfo_min_freq")) {
-                if let Ok(min_val) = min.trim().parse() {
+            if let Ok(min) = fs::read_to_string(entry.path().join("cpuinfo_min_freq"))
+                && let Ok(min_val) = min.trim().parse() {
                     cluster.cpuinfo_min_freq = min_val;
                     cluster.min_freq = min_val;
                 }
-            }
 
             topo.clusters.push(cluster);
         }

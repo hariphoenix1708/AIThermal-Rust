@@ -71,8 +71,8 @@ pub fn probe_thermal() -> ThermalProfile {
                         profile.usbc_zone = Some(temp_path.clone());
                     }
                 }
-            } else if file_name.starts_with("cooling_device") {
-                if let Ok(type_name) = fs::read_to_string(path.join("type")) {
+            } else if file_name.starts_with("cooling_device")
+                && let Ok(type_name) = fs::read_to_string(path.join("type")) {
                     let type_name = type_name.trim().to_string();
                     let sysfs_path = path.to_string_lossy().to_string();
 
@@ -93,7 +93,6 @@ pub fn probe_thermal() -> ThermalProfile {
                         ),
                     });
                 }
-            }
         }
     }
     profile

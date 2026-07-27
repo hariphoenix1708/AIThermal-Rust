@@ -27,12 +27,11 @@ pub fn spawn_config_watcher(
         }
 
         for res in rx {
-            if let Ok(Event { kind, .. }) = res {
-                if matches!(kind, EventKind::Modify(_) | EventKind::Create(_)) {
+            if let Ok(Event { kind, .. }) = res
+                && matches!(kind, EventKind::Modify(_) | EventKind::Create(_)) {
                     tracing::info!("Config or game list file changed on disk, flagging for reload");
                     reload_flag.store(true, Ordering::SeqCst);
                 }
-            }
         }
     });
 }

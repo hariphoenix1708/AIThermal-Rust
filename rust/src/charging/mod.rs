@@ -171,7 +171,7 @@ impl ChargingEngine {
                 // helper below only borrows for the write() call.
                 (
                     Some("1"),
-                    Some((cap_ma * 1000) as i64),
+                    Some(cap_ma * 1000  ),
                     Some("0"),
                     Some("0"),
                 )
@@ -595,11 +595,10 @@ impl ChargingEngine {
             }
         }
 
-        if let Some(ceiling) = self.rejected_ceiling {
-            if target_ma >= ceiling {
+        if let Some(ceiling) = self.rejected_ceiling
+            && target_ma >= ceiling {
                 target_ma = self.last_known_good_ma.unwrap_or(target_ma).min(target_ma);
             }
-        }
 
         if final_target > self.learned_stable_current {
             self.learned_stable_current = self

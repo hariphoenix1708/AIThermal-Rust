@@ -27,7 +27,7 @@ impl FrameStats {
     }
 
     pub fn frame_count(&self) -> usize {
-        self.sample_count as usize
+        self.sample_count
     }
 }
 
@@ -105,6 +105,7 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
     }
 
     if durations.is_empty() {
+        tracing::warn!("framestats parse yielded 0 durations — dumpsys output format may not match expected layout on this Android build");
         return None;
     }
 
@@ -128,6 +129,12 @@ pub struct BackgroundFrameSampler {
     latest: Arc<Mutex<Option<FrameStats>>>,
     package: Arc<Mutex<Option<String>>>,
     running: Arc<AtomicBool>,
+}
+
+impl Default for BackgroundFrameSampler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BackgroundFrameSampler {

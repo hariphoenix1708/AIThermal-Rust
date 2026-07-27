@@ -17,11 +17,10 @@ fn write_if_absent_or_different(path: &str, value: &str) -> bool {
     if !Path::new(path).exists() {
         return false;
     }
-    if let Ok(cur) = std::fs::read_to_string(path) {
-        if cur.trim() == value.trim() {
+    if let Ok(cur) = std::fs::read_to_string(path)
+        && cur.trim() == value.trim() {
             return false;
         }
-    }
     TuningBackend::try_write_string(path, value).is_ok()
 }
 
@@ -52,14 +51,13 @@ pub fn apply_schedutil_tuning(hw: &HardwareProfile, is_perf_or_gaming: bool) {
         );
         // WALT-specific hispeed hint (Qualcomm kernels). Harmless no-op
         // where the file does not exist.
-        if is_perf_or_gaming {
-            if let Some(&hi) = cluster.available_frequencies.iter().max() {
+        if is_perf_or_gaming
+            && let Some(&hi) = cluster.available_frequencies.iter().max() {
                 write_if_absent_or_different(
                     &format!("{}/walt/hispeed_freq", base),
                     &hi.to_string(),
                 );
             }
-        }
     }
 }
 

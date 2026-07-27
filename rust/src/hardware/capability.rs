@@ -23,11 +23,10 @@ impl CapabilityNode {
             if let Ok(content) = std::fs::read_to_string(&available_path) {
                 supported_values = content.split_whitespace().map(|s| s.to_string()).collect();
             }
-        } else if std::path::Path::new(&path.replace("current", "available")).exists() {
-            if let Ok(content) = std::fs::read_to_string(&path.replace("current", "available")) {
+        } else if std::path::Path::new(&path.replace("current", "available")).exists()
+            && let Ok(content) = std::fs::read_to_string(path.replace("current", "available")) {
                 supported_values = content.split_whitespace().map(|s| s.to_string()).collect();
             }
-        }
 
         Self {
             path: path.to_string(),

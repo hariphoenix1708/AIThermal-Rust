@@ -73,13 +73,11 @@ pub fn probe_charging() -> ChargingProfile {
     // same voters under /sys/class/power_supply/battery/*
     for name in ["input_suspend", "night_charging"] {
         let p = format!("/sys/class/power_supply/battery/{}", name);
-        if Path::new(&p).exists() && !profile.voter_nodes.iter().any(|x| x.ends_with(name)) {
-            if let Ok(cur) = std::fs::read_to_string(&p) {
-                if crate::sysfs::write_string(&p, cur.trim()).is_ok() {
+        if Path::new(&p).exists() && !profile.voter_nodes.iter().any(|x| x.ends_with(name))
+            && let Ok(cur) = std::fs::read_to_string(&p)
+                && crate::sysfs::write_string(&p, cur.trim()).is_ok() {
                     profile.voter_nodes.push(p);
                 }
-            }
-        }
     }
 
     // AOSP paths (Android 14+): /sys/class/power_supply/battery/cycle_count
@@ -88,13 +86,12 @@ pub fn probe_charging() -> ChargingProfile {
         "/sys/class/power_supply/battery/cycle_count",
         "/sys/class/power_supply/bms/cycle_count",
     ] {
-        if let Ok(s) = std::fs::read_to_string(path) {
-            if let Ok(n) = s.trim().parse::<u64>() {
+        if let Ok(s) = std::fs::read_to_string(path)
+            && let Ok(n) = s.trim().parse::<u64>() {
                 profile.cycle_count = Some(n);
                 profile.cycle_count_path = Some(path.to_string());
                 break;
             }
-        }
     }
 
     // AOSP paths (Android 14+): /sys/class/power_supply/battery/cycle_count
@@ -103,13 +100,12 @@ pub fn probe_charging() -> ChargingProfile {
         "/sys/class/power_supply/battery/cycle_count",
         "/sys/class/power_supply/bms/cycle_count",
     ] {
-        if let Ok(s) = std::fs::read_to_string(path) {
-            if let Ok(n) = s.trim().parse::<u64>() {
+        if let Ok(s) = std::fs::read_to_string(path)
+            && let Ok(n) = s.trim().parse::<u64>() {
                 profile.cycle_count = Some(n);
                 profile.cycle_count_path = Some(path.to_string());
                 break;
             }
-        }
     }
 
     // Phase 1: keep only nodes that exist AND accept a probe write of a

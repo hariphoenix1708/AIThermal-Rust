@@ -196,8 +196,8 @@ impl GameDetector {
 
         let mut detected = pkg.is_some();
 
-        if detected {
-            if let Some(ref p) = pkg {
+        if detected
+            && let Some(ref p) = pkg {
                 // Fast path first: read /proc/<confirmed_pid>/cgroup when we
                 // already have a PID we trust. Only fall back to the full
                 // top-app/cgroup.procs walk when the fast read is missing.
@@ -232,7 +232,6 @@ impl GameDetector {
                     }
                 }
             }
-        }
 
         if detected {
             self.is_gaming = true;

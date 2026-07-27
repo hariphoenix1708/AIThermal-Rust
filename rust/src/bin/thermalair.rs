@@ -356,7 +356,7 @@ fn start_daemon() -> Result<()> {
 
     let mut spawned = false;
 
-    if let Some(root) = module_root.clone() {
+    if let Some(root) = module_root {
         let service_sh = root.join("service.sh");
         if service_sh.exists() {
             println!("Executing service.sh from module root...");

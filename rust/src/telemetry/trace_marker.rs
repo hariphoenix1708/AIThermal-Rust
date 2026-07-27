@@ -26,9 +26,8 @@ pub fn emit(enabled: bool, msg: &str) {
     if !enabled {
         return;
     }
-    if let Ok(mut guard) = get_handle().lock() {
-        if let Some(f) = guard.as_mut() {
+    if let Ok(mut guard) = get_handle().lock()
+        && let Some(f) = guard.as_mut() {
             let _ = writeln!(f, "{}", msg);
         }
-    }
 }

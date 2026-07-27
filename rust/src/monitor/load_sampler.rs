@@ -7,9 +7,9 @@ pub fn read_cpu_stat() -> std::collections::HashMap<usize, LoadSample> {
     let mut result = std::collections::HashMap::new();
     if let Ok(content) = std::fs::read_to_string("/proc/stat") {
         for line in content.lines() {
-            if let Some(rest) = line.strip_prefix("cpu") {
-                if let Some((idx_str, fields)) = rest.split_once(' ') {
-                    if let Ok(idx) = idx_str.trim().parse::<usize>() {
+            if let Some(rest) = line.strip_prefix("cpu")
+                && let Some((idx_str, fields)) = rest.split_once(' ')
+                    && let Ok(idx) = idx_str.trim().parse::<usize>() {
                         let nums: Vec<u64> = fields
                             .split_whitespace()
                             .filter_map(|n| n.parse().ok())
@@ -20,8 +20,6 @@ pub fn read_cpu_stat() -> std::collections::HashMap<usize, LoadSample> {
                             result.insert(idx, LoadSample { idle, total });
                         }
                     }
-                }
-            }
         }
     }
     result
