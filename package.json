@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "bash -c 'PORT=$(echo \"$@\" | grep -oE \"[0-9]+$\" || echo 8080); python3 -m http.server --directory webroot $PORT' --",
-    "build": "echo 'Rust module - no web build needed'",
-    "build:dev": "echo 'Rust module - no web build needed'"
+    "build": "mkdir -p dist && cp -r webroot/* dist/ 2>/dev/null || true",
+    "build:dev": "mkdir -p dist && cp -r webroot/* dist/ 2>/dev/null || true",
+    "dist-check": "test -f dist/index.html",
+    "typecheck": "echo 'Rust module - no TS typecheck'",
+    "lint": "echo 'Rust module - no lint'"
   }
 }
