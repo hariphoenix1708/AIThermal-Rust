@@ -1197,6 +1197,15 @@ impl RuntimeTask for SystemOrchestrator {
                 }
                 self.runtime_tuner.apply_universal_cpu_tuning(policy_str);
                 self.runtime_tuner.apply_universal_gpu_control(policy_str);
+
+                // v3.2.4: advanced tuning pass — schedutil rate limits,
+                // CFS/WALT responsiveness, deep-idle enable, zRAM algo,
+                // F2FS gc_urgent, msm_performance powerhints. Every write
+                // is capability-probed and idempotent, so no-op on kernels
+                // that don't expose the knob.
+                if ctx.config.profiles.advanced_tuning_enabled {
+                    crate::tuning::advanced::apply_all(&self.hardware, policy_str);
+                }
             }
 
             // Stock thermal enable/disable based on gaming/perf

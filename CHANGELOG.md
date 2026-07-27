@@ -1,5 +1,38 @@
 # Changelog
 
+## v3.2.4 (versionCode 324)
+### Added
+- Advanced tuning pass (`advanced_tuning_enabled = true`), applied once per
+  policy transition after the existing tuner. Every write is
+  capability-probed and idempotent — safe on non-QCOM / non-Peridot devices.
+  - **Schedutil rate limits**: `up_rate_limit_us` = 500 µs (Performance) /
+    2000 µs (Balanced), `down_rate_limit_us` = 20 ms. Faster ramp-up
+    without idle-oscillation.
+  - **WALT hispeed**: `walt/hispeed_freq` pinned to cluster max on
+    Performance for lower input latency on Qualcomm kernels.
+  - **CFS/WALT scheduler**: `sched_latency_ns`, `sched_min_granularity_ns`,
+    `sched_wakeup_granularity_ns`, `sched_migration_cost_ns`, and
+    `sched_energy_aware` follow the Pixel-style responsive preset on
+    Performance and revert to energy-aware defaults otherwise.
+  - **cpuidle**: enables every C-state on every CPU (some vendors ship
+    with cluster power-collapse disabled — measurably worse standby).
+  - **zRAM**: switches `zram0/comp_algorithm` to `lz4` while gaming for
+    lower page-fault latency; standby keeps the vendor default.
+  - **F2FS**: `gc_urgent` = 0 during gaming (no GC storms mid-frame),
+    `gc_urgent` = 1 idle, `ipu_policy` = 2, `min_hot_blocks` = 16.
+  - **msm_performance powerhints**: `touchboost` and `cpus_online`
+    pin — prevents cpu0/1 hotplug hitches after standby.
+- SELinux (`sepolicy.rule`): Android 17 compatibility — explicit `lseek`
+  on sysfs / procfs / power-supply / debugfs-tracing / cpu-devices file
+  classes, and write access to `sysfs_devices_system_cpu` for the cpuidle
+  and schedutil paths.
+
+### Notes
+- The pass is a superset — every knob has a safe no-op fallback if the
+  node is absent or the write is rejected. Disable via
+  `advanced_tuning_enabled = false` in `profiles.conf` if any regression
+  is observed on a new kernel.
+
 ## v3.2.3 (versionCode 323)
 ### Fixed & Improved
 - Fixed duplicate "Policy transition" log line for Suspend/EmergencyCool escalations (engine + orchestrator both logged; orchestrator is now the single source).

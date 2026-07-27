@@ -1,3 +1,4 @@
+pub mod advanced;
 pub mod backend;
 use crate::hardware::HardwareProfile;
 use crate::sysfs;

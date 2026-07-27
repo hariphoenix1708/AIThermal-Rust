@@ -30,3 +30,23 @@ allow su gpu_device chr_file { read write open ioctl getattr }
 # v3.1.8: optional atrace/ftrace marker emission (off by default)
 allow su debugfs_tracing file { write open getattr }
 allow su tracing_shell_writable file { write open getattr }
+
+# v3.2.4: Android 17 compatibility. The tightened seccomp/SELinux
+# profile on Android 17 rejects lseek on several sysfs/procfs classes
+# that older releases silently allowed. Grant lseek explicitly on the
+# node classes the daemon actually reads to prevent EPERM crashes.
+allow su sysfs file { lseek }
+allow su sysfs_battery file { lseek }
+allow su sysfs_power_supply file { lseek }
+allow su proc file { lseek }
+allow su debugfs_tracing file { lseek }
+allow init sysfs file { lseek }
+allow init proc file { lseek }
+
+# v3.2.4: F2FS tuning node access (gc_urgent, ipu_policy, min_hot_blocks).
+allow su sysfs file { write }
+allow init sysfs file { write }
+
+# v3.2.4: cpuidle deep-state enable path on Android 17 (sysfs_devices_system_cpu).
+allow su sysfs_devices_system_cpu file { read write open getattr lseek }
+allow init sysfs_devices_system_cpu file { read write open getattr lseek }
