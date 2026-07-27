@@ -23,26 +23,22 @@ impl Default for SensorManager {
 
 impl SensorManager {
     pub fn read_ambient_temp_c(&mut self) -> i32 {
-        if let Some(path) = &self.ambient_sensor_path {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                if let Ok(val) = content.trim().parse::<i32>() {
+        if let Some(path) = &self.ambient_sensor_path
+            && let Ok(content) = std::fs::read_to_string(path)
+                && let Ok(val) = content.trim().parse::<i32>() {
                     return val / 1000;
                 }
-            }
-        }
 
         // Scan for ambient
         if let Ok(entries) = std::fs::read_dir("/sys/bus/iio/devices") {
             for entry in entries.flatten() {
                 let path = entry.path().join("in_temp_input");
-                if path.exists() {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(val) = content.trim().parse::<i32>() {
+                if path.exists()
+                    && let Ok(content) = std::fs::read_to_string(&path)
+                        && let Ok(val) = content.trim().parse::<i32>() {
                             self.ambient_sensor_path = Some(path.to_string_lossy().to_string());
                             return val / 1000;
                         }
-                    }
-                }
             }
         }
 

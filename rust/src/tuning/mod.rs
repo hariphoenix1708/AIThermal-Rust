@@ -127,8 +127,8 @@ impl RuntimeTuner {
         let base = PathBuf::from(state_dir);
         let active = base.join(TUNING_ACTIVE_FILE);
         if active.exists() {
-            if let Ok(content) = std::fs::read_to_string(&active) {
-                if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&content) {
+            if let Ok(content) = std::fs::read_to_string(&active)
+                && let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&content) {
                     tracing::warn!(
                         "Found stale tuning_active.json ({} entries) from previous run — restoring originals",
                         map.len()
@@ -140,37 +140,33 @@ impl RuntimeTuner {
                         crate::tuning::backend::TuningBackend::write_string(&path, &val);
                     }
                 }
-            }
             let _ = std::fs::remove_file(&active);
         }
 
         // D11: unlock any 0o444 nodes left behind by write_and_lock.
         let locked = base.join(LOCKED_NODES_FILE);
         if locked.exists() {
-            if let Ok(content) = std::fs::read_to_string(&locked) {
-                if let Ok(list) = serde_json::from_str::<Vec<String>>(&content) {
+            if let Ok(content) = std::fs::read_to_string(&locked)
+                && let Ok(list) = serde_json::from_str::<Vec<String>>(&content) {
                     for p in list {
                         let _ =
                             std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644));
                     }
                 }
-            }
             let _ = std::fs::remove_file(&locked);
         }
     }
 
     fn write_and_save(&self, path: &str, value: &str, save: bool) {
         let mut newly_saved = false;
-        if save {
-            if let Ok(mut state) = self.original_state.lock() {
-                if !state.contains_key(path)
+        if save
+            && let Ok(mut state) = self.original_state.lock()
+                && !state.contains_key(path)
                     && let Ok(orig_val) = sysfs::read_string(path)
                 {
                     state.insert(path.to_string(), orig_val);
                     newly_saved = true;
                 }
-            }
-        }
         let _ = crate::tuning::backend::TuningBackend::try_write_string(path, value);
         if newly_saved {
             self.persist_active();
@@ -178,12 +174,11 @@ impl RuntimeTuner {
     }
 
     fn restore_or_default(&self, path: &str, default: &str) {
-        if let Ok(state) = self.original_state.lock() {
-            if let Some(orig) = state.get(path) {
+        if let Ok(state) = self.original_state.lock()
+            && let Some(orig) = state.get(path) {
                 let _ = crate::tuning::backend::TuningBackend::try_write_string(path, orig);
                 return;
             }
-        }
         let _ = crate::tuning::backend::TuningBackend::try_write_string(path, default);
     }
 
@@ -251,12 +246,11 @@ impl RuntimeTuner {
             }
         } else {
             self.restore_or_default(path_keepalive, "7200");
-            if let Ok(state) = self.original_state.lock() {
-                if state.contains_key(path_congestion) {
+            if let Ok(state) = self.original_state.lock()
+                && state.contains_key(path_congestion) {
                     drop(state);
                     self.restore_or_default(path_congestion, "cubic");
                 }
-            }
         }
         Ok(())
     }
@@ -297,11 +291,10 @@ impl RuntimeTuner {
         for node in &self.hardware.display_profile.touch_nodes {
             let path = node.as_str();
 
-            if let Ok(unsupported) = self.unsupported_touch_nodes.lock() {
-                if unsupported.contains(path) {
+            if let Ok(unsupported) = self.unsupported_touch_nodes.lock()
+                && unsupported.contains(path) {
                     continue;
                 }
-            }
 
             let Some(attr) = std::path::Path::new(path)
                 .file_name()
@@ -604,16 +597,14 @@ impl RuntimeTuner {
             }
             max_level
         } else if let Some(current) = self.hardware.gpu_profile.current_power_level {
-            if let Ok(last) = self.last_gpu_boost.lock() {
-                if let Some(t) = *last {
-                    if t.elapsed().as_secs() < 5 {
+            if let Ok(last) = self.last_gpu_boost.lock()
+                && let Some(t) = *last
+                    && t.elapsed().as_secs() < 5 {
                         tracing::debug!(
                             "Skipping GPU power-level restore: holding boosted level for 5s debounce"
                         );
                         return;
                     }
-                }
-            }
             current
         } else {
             tracing::debug!(
@@ -751,14 +742,13 @@ impl RuntimeTuner {
                 cluster.name
             );
             if let Some(pct) = max_pct {
-                if let Ok(s) = std::fs::read_to_string(&cpuinfo_max_path) {
-                    if let Ok(fmax) = s.trim().parse::<u64>() {
+                if let Ok(s) = std::fs::read_to_string(&cpuinfo_max_path)
+                    && let Ok(fmax) = s.trim().parse::<u64>() {
                         let target = fmax.saturating_mul(pct as u64) / 100;
                         let snapped = self.snap_to_available_freq(&cluster.name, target)
                             .unwrap_or(target);
                         self.write_and_save(&scaling_max_path, &snapped.to_string(), true);
                     }
-                }
             } else {
                 // Restore to Fmax when leaving a clamped state.
                 if let Ok(s) = std::fs::read_to_string(&cpuinfo_max_path) {

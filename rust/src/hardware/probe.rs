@@ -56,8 +56,8 @@ impl HardwareProbe {
         // Probe Qualcomm bus_dcvs for Candidate 4
         for component in ["DDR", "LLCC", "L3"] {
             let base = format!("/sys/devices/system/cpu/bus_dcvs/{}", component);
-            if std::path::Path::new(&base).exists() {
-                if let Ok(entries) = std::fs::read_dir(&base) {
+            if std::path::Path::new(&base).exists()
+                && let Ok(entries) = std::fs::read_dir(&base) {
                     for entry in entries.flatten() {
                         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                             let path = entry.path();
@@ -102,7 +102,6 @@ impl HardwareProbe {
                         }
                     }
                 }
-            }
         }
 
         // Compatibility Summary

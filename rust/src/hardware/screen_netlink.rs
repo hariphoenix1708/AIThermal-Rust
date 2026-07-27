@@ -54,8 +54,7 @@ fn watch_uevent_for_screen_state(
 
         for part in payload.split(|&b| b == 0) {
             if let Ok(s) = std::str::from_utf8(part) {
-                if s.starts_with("SUBSYSTEM=") {
-                    let sub = &s["SUBSYSTEM=".len()..];
+                if let Some(sub) = s.strip_prefix("SUBSYSTEM=") {
                     if sub == "power" {
                         is_power_subsystem = true;
                     } else if sub == "backlight" {

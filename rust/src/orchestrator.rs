@@ -60,11 +60,10 @@ pub struct SystemOrchestrator {
 
 impl SystemOrchestrator {
     fn actuation_allowed(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
-        if let Some(defer) = self.wake_defer_until {
-            if std::time::Instant::now() < defer {
+        if let Some(defer) = self.wake_defer_until
+            && std::time::Instant::now() < defer {
                 return false;
             }
-        }
         let base_ms = ctx.config.profiles.min_actuation_interval_ms;
         if base_ms == 0 {
             return true;
@@ -642,7 +641,13 @@ impl RuntimeTask for SystemOrchestrator {
             .read_thermal_source(self.hardware.thermal_profile.skin_zone.as_ref())
             .unwrap_or(bat_temp); // Fallback to bat
 
-        let gpu_load = crate::hardware::display::gpu_load_percent().unwrap_or(50);
+        let gpu_load = crate::hardware::display::gpu_load_percent().unwrap_or({
+            // No fake substitute. When GPU load truly can't be read, fall back
+            // to CPU utilization-derived estimate if it was computed (we don't have it at this exact spot so 0),
+            // or 0 if unavailable — never a fabricated "typical"
+            // value that can drive false policy transitions.
+            0
+        });
         let comp_temp =
             ThermalEngine::composite_temp(cpu_temp, gpu_temp, bat_temp, skin_temp, gpu_load);
 
@@ -877,12 +882,11 @@ impl RuntimeTask for SystemOrchestrator {
 
         if !disable_tweaks {
             // If game was just detected and confirmed, try pinning critical render thread
-            if is_gaming && !was_gaming {
-                if let Some(pid) = self.gaming.confirmed_pid {
+            if is_gaming && !was_gaming
+                && let Some(pid) = self.gaming.confirmed_pid {
                     self.runtime_tuner
                         .pin_critical_render_thread(pid, "top-app");
                 }
-            }
         } else if needs_apply {
             tracing::info!(target: "tuning", "Tweaks disabled by config, skipping actuation for policy: {}", policy_str);
         }
@@ -935,8 +939,7 @@ impl RuntimeTask for SystemOrchestrator {
         if !disable_tweaks
             && needs_apply
             && (final_policy != PolicyState::Performance || game_grace_elapsed)
-        {
-            if can_actuate {
+            && can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
 
                 let _ = self.governors.apply_gpu_power_level(gpu_level);
@@ -969,7 +972,7 @@ impl RuntimeTask for SystemOrchestrator {
                                     format!("{}/scaling_max_freq", cluster.policy_path);
                                 if crate::tuning::backend::TuningBackend::try_write_string(
                                     &max_freq_path,
-                                    &target.to_string(),
+                                    target.to_string(),
                                 )
                                 .is_ok()
                                 {
@@ -1095,14 +1098,12 @@ impl RuntimeTask for SystemOrchestrator {
                     }
                 }
             }
-        }
 
         if ctx.config.profiles.adaptive_governor_enabled
             && is_gaming
             && !ctx.recovery_mode
             && final_policy == PolicyState::Performance
-        {
-            if self.adaptive_governor.should_sample() {
+            && self.adaptive_governor.should_sample() {
                 self.background_frame_sampler
                     .set_target_package(confirmed_pkg.clone());
                 let frame_stats = self.background_frame_sampler.latest_stats();
@@ -1188,7 +1189,7 @@ impl RuntimeTask for SystemOrchestrator {
                                 let path = format!("{}/scaling_max_freq", cluster.policy_path);
                                 if crate::tuning::backend::TuningBackend::try_write_string(
                                     &path,
-                                    &freq.to_string(),
+                                    freq.to_string(),
                                 )
                                 .is_ok()
                                 {
@@ -1199,7 +1200,6 @@ impl RuntimeTask for SystemOrchestrator {
                     }
                 }
             }
-        }
 
         // Runtime Tuner application on policy transitions
         if !disable_tweaks && needs_apply {
@@ -1212,11 +1212,10 @@ impl RuntimeTask for SystemOrchestrator {
                     tracing::warn!("Failed to apply touch display tweaks: {}", e);
                 }
                 self.runtime_tuner.apply_vm_params(policy_str);
-                if !in_hot_gameexit {
-                    if let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
+                if !in_hot_gameexit
+                    && let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
                         tracing::warn!("Failed to apply scheduler: {}", e);
                     }
-                }
                 self.runtime_tuner.apply_universal_cpu_tuning(policy_str);
                 self.runtime_tuner.apply_universal_gpu_control(policy_str);
 
@@ -1254,11 +1253,10 @@ impl RuntimeTask for SystemOrchestrator {
                 if let Err(e) = self.runtime_tuner.drop_cache(true) {
                     tracing::warn!("Failed to drop cache: {}", e);
                 }
-            } else if policy_str == "Powersave" && mem_pressure > 40.0 {
-                if let Err(e) = self.runtime_tuner.drop_cache(false) {
+            } else if policy_str == "Powersave" && mem_pressure > 40.0
+                && let Err(e) = self.runtime_tuner.drop_cache(false) {
                     tracing::warn!("Failed to drop cache: {}", e);
                 }
-            }
         }
 
         if can_actuate && needs_apply {
@@ -1386,7 +1384,7 @@ impl RuntimeTask for SystemOrchestrator {
 
         let long_idle = is_screen_off_now
             && !is_gaming
-            && !ctx.plugged_in_at.is_some()
+            && ctx.plugged_in_at.is_none()
             && ctx
                 .screen_off_since
                 .map(|t| t.elapsed().as_secs() > 30)
