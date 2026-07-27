@@ -1,0 +1,10 @@
+{
+  "name": "aithermal-rust",
+  "version": "3.2.4",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 8080 --directory webroot",
+    "build": "echo 'Rust module - no web build needed'",
+    "build:dev": "echo 'Rust module - no web build needed'"
+  }
+}
