@@ -72,6 +72,13 @@ pub struct ProfilesConfig {
 
     #[serde(default = "default_false")]
     pub trace_markers_enabled: bool,
+
+    // v3.2.4: master switch for the advanced tuning pass (schedutil rate
+    // limits, CFS/WALT responsiveness, cpuidle deep states, zRAM algo,
+    // F2FS gc_urgent, msm_performance powerhints). All individual writes
+    // are capability-probed and idempotent — safe on non-QCOM devices.
+    #[serde(default = "default_true")]
+    pub advanced_tuning_enabled: bool,
 }
 
 fn default_false() -> bool {
@@ -181,6 +188,7 @@ impl Default for ProfilesConfig {
             safe_mode_after_crashes: default_safe_mode_after_crashes(),
             watchdog_stall_threshold: default_watchdog_stall_threshold(),
             trace_markers_enabled: default_false(),
+            advanced_tuning_enabled: default_true(),
         }
     }
 }
