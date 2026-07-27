@@ -1,8 +1,0 @@
-Fix normal-usage heating path and cleanup verbose logs
-
-- orchestration: actively restore normal usage profile upon game exit
-- orchestration: parse voltage and charge counter for proper telemetry
-- policy: introduce normal-usage thermal guard to rein in heating
-- tuning: track and skip unsupported touch nodes to reduce log spam
-- charging: immediately blacklist limit node on hard reject (EACCES/ENOENT)
-- cleanup: remove duplicate unstructured log emissions
