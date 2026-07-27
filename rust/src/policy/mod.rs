@@ -83,6 +83,15 @@ impl PolicyEngine {
             0.0
         };
 
+        let mut normal_use_guard = 0.0;
+        if !is_gaming && !is_screen_off {
+            if trend_score > 15 || composite_temp >= config.temp_warm {
+                normal_use_guard += 25.0; // Force score higher to push into Conservative
+            } else if trend_score > 5 {
+                normal_use_guard += 15.0; // Apply pressure to cool down
+            }
+        }
+
         // Total evaluation score
         let total_score = s_temp
             + s_pred
@@ -91,7 +100,8 @@ impl PolicyEngine {
             + context_weight
             + game_modifier
             + comfort_weight
-            + psi_dampener;
+            + psi_dampener
+            + normal_use_guard;
 
         // Threshold evaluation (recalibrated based on the new total_score ranges)
         // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
