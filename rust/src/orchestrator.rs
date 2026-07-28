@@ -59,20 +59,15 @@ pub struct SystemOrchestrator {
 }
 
 impl SystemOrchestrator {
-    fn actuation_allowed(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
-        if let Some(defer) = self.wake_defer_until
-            && std::time::Instant::now() < defer {
-                return false;
-            }
-        let base_ms = ctx.config.profiles.min_actuation_interval_ms;
+    fn check_throttle_limit(&self, base_ms: u64, is_gaming: bool) -> bool {
         if base_ms == 0 {
             return true;
         }
-        // While a game is running, hold the floor at 8 s. Burst-
+        // While a game is running, hold the floor at 3s. Burst-
         // rewriting governors mid-frame is worse than a slightly
-        // stale policy.
+        // stale policy, but 8s was too coarse to respond to thermal swings.
         let min_ms = if is_gaming {
-            base_ms.max(8_000)
+            base_ms.max(3_000)
         } else {
             base_ms
         };
@@ -82,21 +77,17 @@ impl SystemOrchestrator {
         }
     }
 
+    fn actuation_allowed(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
+        if let Some(defer) = self.wake_defer_until
+            && std::time::Instant::now() < defer {
+                return false;
+            }
+        self.check_throttle_limit(ctx.config.profiles.min_actuation_interval_ms, is_gaming)
+    }
+
     fn actuation_allowed_bypass_wake(&self, ctx: &RuntimeContext, is_gaming: bool) -> bool {
         // Same throttle as actuation_allowed but ignores wake_defer_until.
-        let base_ms = ctx.config.profiles.min_actuation_interval_ms;
-        if base_ms == 0 {
-            return true;
-        }
-        let min_ms = if is_gaming {
-            base_ms.max(8_000)
-        } else {
-            base_ms
-        };
-        match self.last_actuation_at {
-            None => true,
-            Some(t) => t.elapsed().as_millis() as u64 >= min_ms,
-        }
+        self.check_throttle_limit(ctx.config.profiles.min_actuation_interval_ms, is_gaming)
     }
     fn get_context_score(
         wifi_active: bool,
