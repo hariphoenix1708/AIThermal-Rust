@@ -22,53 +22,34 @@ pub fn is_screen_off() -> bool {
     false
 }
 
-#[allow(clippy::collapsible_if)]
 pub fn gpu_load_percent() -> Option<u32> {
-    // 1. Check direct percentage if available
-    if let Ok(content) = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage") {
-        let trimmed = content.trim();
-        if let Ok(v) = trimmed.parse::<u32>() {
+    // 1. Direct percentage (works on some Adreno/governor combos)
+    if let Ok(content) = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage")
+        && let Ok(v) = content.trim().parse::<u32>() {
             return Some(v.min(100));
         }
-    }
 
-    // 2. Check gpubusy pair (busy_time total_time)
+    // 2. gpubusy pair
     if let Ok(content) = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/gpubusy") {
-        let trimmed = content.trim();
-        let parts: Vec<&str> = trimmed.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(busy), Ok(total)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
-                if total > 0 {
-                    let pct = ((busy as f64 / total as f64) * 100.0).round() as u32;
-                    return Some(pct.min(100));
+        let parts: Vec<&str> = content.split_whitespace().collect();
+        if parts.len() >= 2
+            && let (Ok(busy), Ok(total)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>())
+                && total > 0 {
+                    return Some(((busy as f64 / total as f64) * 100.0).round().min(100.0) as u32);
                 }
-            }
-        }
     }
 
-    // 3. Devfreq fallback (requires reading busy_time and total_time separately)
-    if let Ok(entries) = glob::glob("/sys/class/devfreq/*") {
-        for e in entries.flatten() {
-            let busy_path = e.join("busy_time");
-            let total_path = e.join("total_time");
-
-            if let (Ok(busy_content), Ok(total_content)) = (
-                fs::read_to_string(&busy_path),
-                fs::read_to_string(&total_path),
-            ) {
-                if let (Ok(busy), Ok(total)) = (
-                    busy_content.trim().parse::<u64>(),
-                    total_content.trim().parse::<u64>(),
-                ) {
-                    if total > 0 {
-                        let pct = ((busy as f64 / total as f64) * 100.0).round() as u32;
-                        return Some(pct.min(100));
-                    }
-                }
+    // 3. kgsl-3d0 devfreq busy_time/total_time DIRECTLY
+    //    (confirmed working on peridot/SM8635 — same path gaming.rs uses)
+    let busy = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/devfreq/busy_time").ok();
+    let total = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/devfreq/total_time").ok();
+    if let (Some(b), Some(t)) = (busy, total)
+        && let (Ok(b), Ok(t)) = (b.trim().parse::<u64>(), t.trim().parse::<u64>())
+            && t > 0 {
+                return Some(((b as f64 / t as f64) * 100.0).round().min(100.0) as u32);
             }
-        }
-    }
 
+    // No fallback to a fake value — return None honestly.
     None
 }
 #[allow(clippy::collapsible_if)]

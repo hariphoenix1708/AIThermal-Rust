@@ -23,6 +23,12 @@ pub struct BatteryStatsTracker {
     awake_secs: u64,
 }
 
+impl Default for BatteryStatsTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BatteryStatsTracker {
     pub fn new() -> Self {
         Self {

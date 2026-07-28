@@ -114,11 +114,10 @@ impl TuningBackend {
 
         // R4: idempotent skip — do not rewrite a node that already holds
         // the target value. Silent success (no trace, no failure counter).
-        if let Some(cur) = Self::read_current(p) {
-            if cur == val_str {
+        if let Some(cur) = Self::read_current(p)
+            && cur == val_str {
                 return Ok(());
             }
-        }
 
         match sysfs::write_string(p, val_str) {
             Ok(()) => {
@@ -151,11 +150,10 @@ impl TuningBackend {
         }
 
         // Idempotent skip: if the node already holds the target, no write.
-        if let Some(cur) = Self::read_current(&node.path) {
-            if cur == val_str {
+        if let Some(cur) = Self::read_current(&node.path)
+            && cur == val_str {
                 return Ok(());
             }
-        }
 
         let path = Path::new(&node.path);
         if is_poisoned(path) {
