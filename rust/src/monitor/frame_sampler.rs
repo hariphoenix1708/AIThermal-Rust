@@ -80,28 +80,22 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
         if fields.len() < 14 {
             continue; // not a data row in the expected format
         }
-        // fields[1] = INTENDED_VSYNC, fields[13] (or last) = FRAME_COMPLETED in
-        // most Android versions' framestats layout - VERIFY against a real
-        // captured sample from this device/Android version before trusting
-        // fixed column indices, since Android has changed this format across
-        // versions. A safer, version-tolerant approach: parse the first and
-        // last numeric fields on the line as intended_vsync and frame_completed
-        // respectively, since framestats rows are always ordered chronologically
-        // within each row's own timestamp fields regardless of exact column
-        // count differences between versions.
-        let nums: Vec<u64> = fields
-            .iter()
-            .filter_map(|f| f.trim().parse::<u64>().ok())
-            .collect();
-        if nums.len() < 3 {
-            continue;
+        // Column indices confirmed against 5 live dumpsys gfxinfo
+        // framestats captures from this device (com.activision.callofduty.shooter).
+        // IntendedVsync and FrameCompleted confirmed via the PROFILEDATA
+        // header row itself, not inferred/guessed.
+        const INTENDED_VSYNC_COL: usize = 2;
+        const FRAME_COMPLETED_COL: usize = 17;
+        if fields.len() <= FRAME_COMPLETED_COL {
+            continue; // row too short for this layout, skip safely
         }
-        let intended_vsync = nums[1];
-        let frame_completed = *nums.last().unwrap();
-        if frame_completed <= intended_vsync {
-            continue;
-        }
-        durations.push(frame_completed - intended_vsync);
+        let intended_vsync = fields[INTENDED_VSYNC_COL].trim().parse::<u64>().ok();
+        let frame_completed = fields[FRAME_COMPLETED_COL].trim().parse::<u64>().ok();
+
+        let (Some(iv), Some(fc)) = (intended_vsync, frame_completed) else { continue; };
+        if fc <= iv { continue; }
+
+        durations.push(fc - iv);
     }
 
     if durations.is_empty() {
