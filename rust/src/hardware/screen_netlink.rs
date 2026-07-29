@@ -103,7 +103,7 @@ fn watch_uevent_for_screen_state(
                 }
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_default()
                     .as_secs();
                 last_update.store(now, Ordering::SeqCst);
             }
@@ -112,7 +112,7 @@ fn watch_uevent_for_screen_state(
         if is_power_subsystem || is_backlight_subsystem {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs();
             last_update.store(now, Ordering::SeqCst);
         }

@@ -60,7 +60,9 @@ pub fn matches(profile: &HardwareProfile) -> bool {
 
     if device == "peridot"
         || device.contains("poco f6")
+        || device.contains("redmi turbo 3")
         || profile.device_identity.contains("24069PC21G")
+        || profile.device_identity.contains("24069RA21C")
     {
         score += 2;
     }

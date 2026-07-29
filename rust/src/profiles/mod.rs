@@ -134,16 +134,6 @@ impl GameProfileManager {
         self.save()
     }
 
-    pub fn load_game_profile(&mut self, package: &str) -> GameProfile {
-        self.profiles
-            .get(package)
-            .cloned()
-            .unwrap_or_else(|| GameProfile {
-                package: package.to_string(),
-                ..Default::default()
-            })
-    }
-
     pub fn get_profile(&self, package: &str) -> Option<&GameProfile> {
         self.profiles.get(package)
     }

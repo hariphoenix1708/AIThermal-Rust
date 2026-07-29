@@ -210,6 +210,3 @@ pub trait DisplayBackend {
     fn read_brightness(&self) -> i32;
 }
 
-pub trait TouchBackend {
-    fn apply_touch_tweaks(&self, gaming: bool) -> Result<(), BackendError>;
-}
