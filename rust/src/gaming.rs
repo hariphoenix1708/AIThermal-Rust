@@ -352,3 +352,51 @@ impl GameDetector {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_foreground_priority() {
+        let mut gd = GameDetector::new(vec![], 45, 3, 1, 5);
+
+        // Not gaming, screen on
+        assert_eq!(gd.foreground_priority(false, false), 10);
+        // Not gaming, screen off
+        assert_eq!(gd.foreground_priority(false, true), 0);
+
+        // Gaming, not hot, screen on
+        gd.is_gaming = true;
+        assert_eq!(gd.foreground_priority(false, false), 70); // 50 + 20
+        // Gaming, not hot, screen off
+        assert_eq!(gd.foreground_priority(false, true), 50);
+
+        // Gaming, hot, screen on
+        assert_eq!(gd.foreground_priority(true, false), 100); // 50 + 30 + 20
+        // Gaming, hot, screen off
+        assert_eq!(gd.foreground_priority(true, true), 80); // 50 + 30
+    }
+
+    #[test]
+    fn test_detect_frame_stutter() {
+        let mut gd = GameDetector::new(vec![], 45, 3, 1, 5);
+
+        // Not gaming -> no stutter
+        assert_eq!(gd.detect_frame_stutter(Some(Instant::now())), false);
+
+        gd.is_gaming = true;
+        gd.confirmed_package = Some("com.roblox.client".to_string());
+
+        // No session start time -> false
+        assert_eq!(gd.detect_frame_stutter(None), false);
+
+        // Session just started -> false (grace period)
+        assert_eq!(gd.detect_frame_stutter(Some(Instant::now())), false);
+
+        // detect_frame_stutter depends on sysfs reads of kgsl busy_time.
+        // It returns false if sysfs reads fail. Thus in test env without sysfs, it returns false.
+        let old_session = Instant::now().checked_sub(Duration::from_secs(60));
+        assert_eq!(gd.detect_frame_stutter(old_session), false);
+    }
+}

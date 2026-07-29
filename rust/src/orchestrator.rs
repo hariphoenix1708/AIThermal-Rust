@@ -59,6 +59,57 @@ pub struct SystemOrchestrator {
 }
 
 impl SystemOrchestrator {
+    fn calculate_adaptive_sleep(
+        &mut self,
+        ctx: &mut RuntimeContext,
+        trend_score: i32,
+        is_screen_off_now: bool,
+        is_gaming: bool,
+    ) -> (u64, bool) {
+        let clamped_trend = (trend_score * 50).clamp(-50, 50);
+        ctx.trend_score = clamped_trend;
+
+        let long_idle = is_screen_off_now
+            && !is_gaming
+            && ctx.plugged_in_at.is_none()
+            && ctx
+                .screen_off_since
+                .map(|t| t.elapsed().as_secs() > 30)
+                .unwrap_or(false)
+            && clamped_trend <= 0; // only back off further if not actively heating
+
+        // Require BOTH a real heating trend AND two consecutive hot-trending
+        // ticks before we run at high frequency; this stops the daemon from
+        // spinning at 4 Hz on ordinary micro-fluctuations.
+        let hot_trend_now = clamped_trend > 30;
+        let sustained_hot_trend = hot_trend_now && ctx.prev_hot_trend;
+        ctx.prev_hot_trend = hot_trend_now;
+
+        let sleep_ms = if sustained_hot_trend {
+            750
+        } else if clamped_trend > 15 {
+            1500
+        } else if long_idle {
+            30_000
+        } else if is_screen_off_now && !is_gaming && (-2..=2).contains(&clamped_trend) {
+            ctx.config.profiles.poll_interval.saturating_mul(4000)
+        } else {
+            ctx.config.profiles.poll_interval.saturating_mul(1000)
+        };
+        tracing::trace!(
+            "adaptive sleep: base={}ms chosen={}ms trend={} sustained={} long_idle={} screen_off={} gaming={}",
+            ctx.config.profiles.poll_interval.saturating_mul(1000),
+            sleep_ms,
+            clamped_trend,
+            sustained_hot_trend,
+            long_idle,
+            is_screen_off_now,
+            is_gaming
+        );
+
+        (sleep_ms, long_idle)
+    }
+
     fn check_throttle_limit(&self, base_ms: u64, is_gaming: bool) -> bool {
         if base_ms == 0 {
             return true;
@@ -1380,46 +1431,8 @@ impl RuntimeTask for SystemOrchestrator {
             .evaluate(&charging_inputs, &ctx.state_dir, &self.hardware);
 
         // 10. Adaptive Sleep
-        let clamped_trend = (trend_score * 50).clamp(-50, 50);
-        ctx.trend_score = clamped_trend;
-
-        let long_idle = is_screen_off_now
-            && !is_gaming
-            && ctx.plugged_in_at.is_none()
-            && ctx
-                .screen_off_since
-                .map(|t| t.elapsed().as_secs() > 30)
-                .unwrap_or(false)
-            && clamped_trend <= 0; // only back off further if not actively heating
-
-        // Require BOTH a real heating trend AND two consecutive hot-trending
-        // ticks before we run at high frequency; this stops the daemon from
-        // spinning at 4 Hz on ordinary micro-fluctuations.
-        let hot_trend_now = clamped_trend > 30;
-        let sustained_hot_trend = hot_trend_now && ctx.prev_hot_trend;
-        ctx.prev_hot_trend = hot_trend_now;
-
-        ctx.sleep_ms = if sustained_hot_trend {
-            750
-        } else if clamped_trend > 15 {
-            1500
-        } else if long_idle {
-            30_000
-        } else if is_screen_off_now && !is_gaming && (-2..=2).contains(&clamped_trend) {
-            ctx.config.profiles.poll_interval.saturating_mul(4000)
-        } else {
-            ctx.config.profiles.poll_interval.saturating_mul(1000)
-        };
-        tracing::trace!(
-            "adaptive sleep: base={}ms chosen={}ms trend={} sustained={} long_idle={} screen_off={} gaming={}",
-            ctx.config.profiles.poll_interval.saturating_mul(1000),
-            ctx.sleep_ms,
-            clamped_trend,
-            sustained_hot_trend,
-            long_idle,
-            is_screen_off_now,
-            is_gaming
-        );
+        let (sleep_ms, long_idle) = self.calculate_adaptive_sleep(ctx, trend_score, is_screen_off_now, is_gaming);
+        ctx.sleep_ms = sleep_ms;
 
         if !needs_apply {
             // no-op
