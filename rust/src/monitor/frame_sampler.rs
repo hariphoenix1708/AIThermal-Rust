@@ -180,6 +180,10 @@ impl BackgroundFrameSampler {
 
     /// Called from the main tick loop (cheap, non-blocking - just reads
     /// whatever the background thread most recently produced, if anything).
+    /// Note: Because the background thread parses on a fixed 1.5s cadence,
+    /// multiple sequential reads from different parts of the orchestrator
+    /// during the same tick may see different snapshots (or different cache ages)
+    /// if the background thread writes an update in between them. This is expected.
     pub fn latest_stats(&self) -> Option<FrameStats> {
         self.latest.lock().ok().and_then(|s| s.clone())
     }
