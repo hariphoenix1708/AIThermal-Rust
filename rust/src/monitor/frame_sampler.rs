@@ -80,14 +80,17 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
         if fields.len() < 14 {
             continue; // not a data row in the expected format
         }
-        // verified fixed indices for this device's Android build:
-        // column 1 = INTENDED_VSYNC
-        // column 13 = FRAME_COMPLETED
-        if fields.len() <= 13 {
+        // Column indices confirmed against 5 live dumpsys gfxinfo
+        // framestats captures from this device (com.activision.callofduty.shooter).
+        // IntendedVsync and FrameCompleted confirmed via the PROFILEDATA
+        // header row itself, not inferred/guessed.
+        const INTENDED_VSYNC_COL: usize = 2;
+        const FRAME_COMPLETED_COL: usize = 17;
+        if fields.len() <= FRAME_COMPLETED_COL {
             continue; // row too short for this layout, skip safely
         }
-        let intended_vsync = fields[1].trim().parse::<u64>().ok();
-        let frame_completed = fields[13].trim().parse::<u64>().ok();
+        let intended_vsync = fields[INTENDED_VSYNC_COL].trim().parse::<u64>().ok();
+        let frame_completed = fields[FRAME_COMPLETED_COL].trim().parse::<u64>().ok();
 
         let (Some(iv), Some(fc)) = (intended_vsync, frame_completed) else { continue; };
         if fc <= iv { continue; }
