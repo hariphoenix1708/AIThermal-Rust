@@ -18,9 +18,11 @@ pub struct GameDetector {
     latch_duration: Duration,
     last_proc_scan: Option<Instant>,
     proc_scan_interval: Duration,
+    game_poll_interval: Duration,
+    pkg_cache_ttl: Duration,
     cached_package: Option<String>,
     cached_pid: Option<u32>,
-    last_scan_pids: HashMap<u32, Option<String>>,
+    last_scan_pids: HashMap<u32, (Option<String>, Instant)>,
     daemon_started_at: Instant,
     cgroup_negative_streak: u32,
 }
@@ -90,7 +92,7 @@ impl GameDetector {
         has_stutter
     }
 
-    pub fn new(known_games: Vec<String>, latch_sec: u64, proc_scan_interval_sec: u64) -> Self {
+    pub fn new(known_games: Vec<String>, latch_sec: u64, proc_scan_interval_sec: u64, game_poll_interval_sec: u64, pkg_cache_ttl_sec: u64) -> Self {
         Self {
             known_games,
             is_gaming: false,
@@ -100,6 +102,8 @@ impl GameDetector {
             latch_duration: Duration::from_secs(latch_sec),
             last_proc_scan: None,
             proc_scan_interval: Duration::from_secs(proc_scan_interval_sec),
+            game_poll_interval: Duration::from_secs(game_poll_interval_sec),
+            pkg_cache_ttl: Duration::from_secs(pkg_cache_ttl_sec),
             cached_package: None,
             cached_pid: None,
             last_scan_pids: HashMap::new(),
@@ -176,8 +180,9 @@ impl GameDetector {
         }
 
         let mut perform_scan = false;
+        let interval = if self.is_gaming { self.game_poll_interval } else { self.proc_scan_interval };
         if let Some(last_scan) = self.last_proc_scan {
-            if last_scan.elapsed() >= self.proc_scan_interval {
+            if last_scan.elapsed() >= interval {
                 perform_scan = true;
             }
         } else {
@@ -274,15 +279,17 @@ impl GameDetector {
                                 if let Ok(content) = fs::read_to_string(&oom_path) {
                                     if content.trim() == "0" {
                                         // Fast path check: was it already scanned and found to be NOT a game?
-                                        if let Some(cached_pkg) = self.last_scan_pids.get(&pid) {
-                                            current_pids.insert(pid, cached_pkg.clone());
-                                            if cached_pkg.is_none() {
-                                                continue; // Known non-game, skip expensive cmdline read
-                                            }
-                                            if cached_pkg.is_some() {
-                                                detected_game = cached_pkg.clone();
-                                                detected_pid = Some(pid);
-                                                break;
+                                        if let Some((cached_pkg, cached_time)) = self.last_scan_pids.get(&pid) {
+                                            if cached_time.elapsed() < self.pkg_cache_ttl {
+                                                current_pids.insert(pid, (cached_pkg.clone(), *cached_time));
+                                                if cached_pkg.is_none() {
+                                                    continue; // Known non-game, skip expensive cmdline read
+                                                }
+                                                if cached_pkg.is_some() {
+                                                    detected_game = cached_pkg.clone();
+                                                    detected_pid = Some(pid);
+                                                    break;
+                                                }
                                             }
                                         }
 
@@ -322,11 +329,11 @@ impl GameDetector {
                                         }
 
                                         if exact_match {
-                                            current_pids.insert(pid, Some(pkg_name.clone()));
+                                            current_pids.insert(pid, (Some(pkg_name.clone()), Instant::now()));
                                             detected_game = Some(pkg_name);
                                             detected_pid = Some(pid);
                                         } else {
-                                            current_pids.insert(pid, None);
+                                            current_pids.insert(pid, (None, Instant::now()));
                                         }
                                     }
                                 }

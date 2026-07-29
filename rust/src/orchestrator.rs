@@ -180,6 +180,8 @@ impl SystemOrchestrator {
             ctx.config.games.packages.clone(),
             ctx.config.profiles.game_latch_sec,
             ctx.config.profiles.proc_scan_interval,
+            ctx.config.profiles.game_poll_interval,
+            ctx.config.profiles.pkg_cache_ttl,
         );
 
         let thermal = ThermalEngine::new(ctx.config.profiles.temp_history_size);
@@ -190,7 +192,7 @@ impl SystemOrchestrator {
         let prediction = PredictionEngine::new(ctx.config.profiles.prediction_window, 3); // 3 steps ahead
 
         let charging = ChargingEngine::new(&hardware);
-        let watchdog = Watchdog::new(ctx.config.profiles.poll_interval);
+        let watchdog = Watchdog::with_threshold(ctx.config.profiles.poll_interval, ctx.config.profiles.watchdog_stall_threshold);
         let recovery = RecoveryManager::new();
         let calibration = CalibrationManager::new(&ctx.state_dir);
         let snapshot = SnapshotManager::new(&ctx.state_dir, hardware.clone());
@@ -449,8 +451,8 @@ impl SystemOrchestrator {
             governors: GovernorManager::new(),
             cpuset: CpusetManager::new(),
             charging: ChargingEngine::new(&hardware),
-            gaming: GameDetector::new(Vec::new(), 0, 1),
-            watchdog: Watchdog::new(ctx.config.profiles.poll_interval),
+            gaming: GameDetector::new(Vec::new(), 0, 1, 1, 1),
+            watchdog: Watchdog::with_threshold(ctx.config.profiles.poll_interval, ctx.config.profiles.watchdog_stall_threshold),
             recovery: RecoveryManager::new(),
             calibration: CalibrationManager::new(""),
             snapshot: SnapshotManager::new("", hardware.clone()),
