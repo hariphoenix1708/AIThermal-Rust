@@ -139,10 +139,11 @@ fn main() -> Result<()> {
                 let mut count = 0;
                 for line in content.lines().rev() {
                     if line.contains("transition")
-                        || line.contains("Policy changed")
-                        || line.contains("Applying policy")
-                        || line.contains("Evaluating policy")
-                        || line.contains("Starting session")
+                        || line.contains("Recovery ->")
+                        || line.contains("Recovery cleared")
+                        || line.contains("Game detected")
+                        || line.contains("Game session ended")
+                        || line.contains("Charging session started")
                     {
                         println!("{}", line);
                         count += 1;

@@ -214,6 +214,11 @@ impl RuntimeTuner {
             return Ok(());
         }
 
+        // Only apply network congestion controls if a network interface is active.
+        if !self.check_network_quality() {
+            return Ok(());
+        }
+
         let is_perf = policy == "Performance" || policy == "performance";
 
         let path_keepalive = "/proc/sys/net/ipv4/tcp_keepalive_time";
@@ -626,11 +631,6 @@ impl RuntimeTuner {
         tracing::debug!(target: "tuning", "Applied GPU power level: {} (mode: {}) via {}", target, if is_game { "boost" } else { "restore" }, gpu);
     }
 
-    pub fn discover_cpu_topology(&self) {
-        tracing::info!("Discovering CPU topology dynamically through hardware profile...");
-        //
-    }
-
     pub fn cpuset_tasks_file(hw: &crate::hardware::HardwareProfile, subgroup: &str) -> String {
         let base = &hw.cpuset_profile.root_path;
         if hw.cpuset_profile.is_cgroup_v2 {
@@ -789,9 +789,3 @@ impl crate::tuning::backend::NetworkBackend for RuntimeTuner {
     }
 }
 
-impl crate::tuning::backend::TouchBackend for RuntimeTuner {
-    fn apply_touch_tweaks(&self, gaming: bool) -> Result<(), crate::tuning::backend::BackendError> {
-        let policy = if gaming { "gaming" } else { "balanced" };
-        self.apply_touch_display_tweaks(policy)
-    }
-}
