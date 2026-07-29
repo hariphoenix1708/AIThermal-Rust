@@ -8,6 +8,7 @@ use std::path::Path;
 
 /// Structures representing `profiles.conf` (TOML format)
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ProfilesConfig {
     #[serde(default = "default_temp_cool")]
     pub temp_cool: i32,
@@ -21,6 +22,8 @@ pub struct ProfilesConfig {
     pub temp_critical: i32,
     #[serde(default = "default_poll_interval")]
     pub poll_interval: u64,
+    #[serde(default = "default_game_poll_interval")]
+    pub game_poll_interval: u64,
     #[serde(default = "default_temp_history_size")]
     pub temp_history_size: usize,
     #[serde(default = "default_prediction_window")]
@@ -31,10 +34,8 @@ pub struct ProfilesConfig {
     pub log_level: String,
     #[serde(default = "default_gpu_gaming_threshold")]
     pub gpu_gaming_threshold: i32,
-    #[serde(default = "default_log_rotate_mb")]
-    pub log_rotate_mb: u64,
-    #[serde(default = "default_log_retain_count")]
-    pub log_retain_count: u32,
+    #[serde(default = "default_pkg_cache_ttl")]
+    pub pkg_cache_ttl: u64,
     #[serde(default = "default_proc_scan_interval")]
     pub proc_scan_interval: u64,
     #[serde(default = "default_game_latch_sec")]
@@ -137,11 +138,11 @@ fn default_gpu_gaming_threshold() -> i32 {
     20
 }
 
-fn default_log_rotate_mb() -> u64 {
-    5
-}
-fn default_log_retain_count() -> u32 {
+fn default_game_poll_interval() -> u64 {
     1
+}
+fn default_pkg_cache_ttl() -> u64 {
+    5
 }
 fn default_proc_scan_interval() -> u64 {
     3
@@ -174,8 +175,8 @@ impl Default for ProfilesConfig {
             policy_debounce_sec: default_policy_debounce_sec(),
             log_level: default_log_level(),
             gpu_gaming_threshold: default_gpu_gaming_threshold(),
-            log_rotate_mb: default_log_rotate_mb(),
-            log_retain_count: default_log_retain_count(),
+            game_poll_interval: default_game_poll_interval(),
+            pkg_cache_ttl: default_pkg_cache_ttl(),
             proc_scan_interval: default_proc_scan_interval(),
             game_latch_sec: default_game_latch_sec(),
             gaming_score_boost: default_gaming_score_boost(),
@@ -219,11 +220,11 @@ impl ProfilesConfig {
         if self.policy_debounce_sec == 0 {
             return Err("policy_debounce_sec == 0");
         }
-        if self.log_rotate_mb == 0 {
-            return Err("log_rotate_mb == 0");
+        if self.game_poll_interval == 0 {
+            return Err("game_poll_interval == 0");
         }
-        if self.log_retain_count == 0 {
-            return Err("log_retain_count == 0");
+        if self.pkg_cache_ttl == 0 {
+            return Err("pkg_cache_ttl == 0");
         }
         if self.proc_scan_interval == 0 {
             return Err("proc_scan_interval == 0");

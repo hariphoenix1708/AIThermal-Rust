@@ -108,8 +108,6 @@ impl std::io::Write for HourlyTruncatingWriter {
 pub fn init_logger(
     level: &str,
     log_dir: &str,
-    _rotate_mb: u64,
-    _retain_count: u32,
 ) -> Result<LoggerGuards> {
     let _ = fs::create_dir_all(log_dir);
 

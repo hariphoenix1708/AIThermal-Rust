@@ -56,8 +56,6 @@ fn main() -> Result<()> {
     let _logger_guards = logger::init_logger(
         &config.profiles.log_level,
         &log_dir,
-        config.profiles.log_rotate_mb,
-        config.profiles.log_retain_count,
     )?;
 
     for warning in warnings.iter() {
