@@ -1280,6 +1280,14 @@ impl RuntimeTask for SystemOrchestrator {
                         format!("{:.1}", s.p90_frame_ns as f64 / 1_000_000.0),
                     )
                 }
+                Some(s) if s.frame_count() < 5 => {
+                    // Diagnostic: Parse succeeded, but not enough frames captured
+                    // yet in this 1.5s window to be statistically meaningful.
+                    (
+                        format!("insufficient_samples({})", s.frame_count()),
+                        "n/a".to_string(),
+                    )
+                }
                 _ => ("n/a".to_string(), "n/a".to_string()),
             };
             tracing::info!(target: "gaming",
