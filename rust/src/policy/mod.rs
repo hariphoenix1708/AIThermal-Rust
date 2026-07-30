@@ -18,6 +18,7 @@ pub struct PolicyEngine {
     startup_time: std::time::Instant,
     startup_grace_secs: u64,
     last_total_score: f64,
+    trend_history: std::collections::VecDeque<i32>,
 }
 
 impl PolicyEngine {
@@ -32,6 +33,7 @@ impl PolicyEngine {
             startup_time: std::time::Instant::now(),
             startup_grace_secs: 30, // Default 30s grace period for inputs to stabilize
             last_total_score: 0.0,
+            trend_history: std::collections::VecDeque::with_capacity(3),
         }
     }
 
@@ -52,6 +54,13 @@ impl PolicyEngine {
         io_pressure: f32,
         config: &ProfilesConfig,
     ) -> PolicyState {
+        // Smooth trend_score over the last 3 ticks to damp out single-tick derivative noise
+        self.trend_history.push_back(trend_score);
+        if self.trend_history.len() > 3 {
+            self.trend_history.pop_front();
+        }
+        let smoothed_trend = (self.trend_history.iter().sum::<i32>() as f64 / self.trend_history.len() as f64).round() as i32;
+
         //
         let s_temp = (composite_temp as f64 - config.temp_cool as f64).max(0.0) * 2.0;
         let s_pred = (predicted_temp as f64 - config.temp_cool as f64).max(0.0) * 1.5;
@@ -62,7 +71,7 @@ impl PolicyEngine {
         };
 
         // Trend score is scaled: > 0 means heating rapidly, < 0 means cooling
-        let s_trend = (trend_score as f64).clamp(-10.0, 10.0) * 2.5;
+        let s_trend = (smoothed_trend as f64).clamp(-10.0, 10.0) * 2.5;
 
         // PSI dampener: if the system is thermally warm but NOT under
         // CPU or IO pressure, subtract from the score so we don't
@@ -85,9 +94,9 @@ impl PolicyEngine {
 
         let mut normal_use_guard = 0.0;
         if !is_gaming && !is_screen_off {
-            if trend_score > 15 || composite_temp >= config.temp_warm {
+            if smoothed_trend > 15 || composite_temp >= config.temp_warm {
                 normal_use_guard += 25.0; // Force score higher to push into Conservative
-            } else if trend_score > 5 {
+            } else if smoothed_trend > 5 {
                 normal_use_guard += 15.0; // Apply pressure to cool down
             }
         }
@@ -197,11 +206,14 @@ impl PolicyEngine {
             let desired_rank = policy_rank(&desired);
             let current_rank = policy_rank(&self.current_policy);
 
-            let allowed = if desired_rank >= current_rank {
-                true // always allow becoming MORE conservative immediately (safety)
-            } else {
+            let allowed = if desired_rank > current_rank {
+                // Becoming MORE conservative - require a smaller margin to avoid flap on noise, but react fast
+                total_score > threshold_for_rank(desired_rank) + (HYSTERESIS_MARGIN / 2.0)
+            } else if desired_rank < current_rank {
                 // Becoming LESS conservative - require clearing the margin.
                 total_score < threshold_for_rank(current_rank) - HYSTERESIS_MARGIN
+            } else {
+                true
             };
 
             if allowed {
