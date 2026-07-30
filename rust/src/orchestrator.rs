@@ -1143,13 +1143,22 @@ impl RuntimeTask for SystemOrchestrator {
                 }
             }
 
+        // Update the background sampler's target package unconditionally based on game state,
+        // so it always has the correct package to sample regardless of policy tier or throttle.
+        if is_gaming {
+            self.background_frame_sampler.set_target_package(confirmed_pkg.clone());
+        } else {
+            self.background_frame_sampler.set_target_package(None);
+        }
+
+        let should_sample = self.adaptive_governor.should_sample();
+        tracing::debug!(target: "gaming", "Adaptive gating check: pkg={:?} policy={:?} should_sample={}", confirmed_pkg, final_policy, should_sample);
         if ctx.config.profiles.adaptive_governor_enabled
             && is_gaming
             && !ctx.recovery_mode
             && final_policy == PolicyState::Performance
-            && self.adaptive_governor.should_sample() {
-                self.background_frame_sampler
-                    .set_target_package(confirmed_pkg.clone());
+            && should_sample {
+                tracing::debug!(target: "gaming", "Adaptive gating check passed: reading latest stats");
                 let frame_stats = self.background_frame_sampler.latest_stats();
 
                 let current_stats = crate::monitor::load_sampler::read_cpu_stat();
@@ -1321,6 +1330,10 @@ impl RuntimeTask for SystemOrchestrator {
         if is_gaming {
             let stats = self.background_frame_sampler.latest_stats();
             let (jank_str, p90_str) = match stats {
+                Some(s) if s.captured_at.map_or(false, |t| t.elapsed() > std::time::Duration::from_secs(5)) => {
+                    // Stale stats safety net: older than 5 seconds means the sampler is frozen/failing
+                    ("n/a".to_string(), "n/a".to_string())
+                }
                 Some(s)
                     if s.p90_frame_ns > 0
                         && s.p90_frame_ns < 500_000_000  // 500 ms sanity cap
