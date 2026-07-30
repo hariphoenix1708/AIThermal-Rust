@@ -46,7 +46,7 @@ impl RecoveryManager {
         }
 
         // If we hit emergency cool, we enter thermal recovery
-        if *current_policy == PolicyState::EmergencyCool {
+        if *current_policy == PolicyState::EmergencyCool && self.phase != RecoveryPhase::Thermal {
             self.in_recovery = true;
             self.phase = RecoveryPhase::Thermal;
             tracing::info!(target: "thermal", "Recovery -> {:?}", self.phase);

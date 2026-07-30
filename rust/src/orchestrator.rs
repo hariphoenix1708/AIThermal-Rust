@@ -855,15 +855,20 @@ impl RuntimeTask for SystemOrchestrator {
         ctx.cooldown_active = is_cooldown && !is_gaming;
 
         // 7. Recovery overrides & Final Policy Computation
-        ctx.recovery_mode = self
-            .recovery
-            .check_recovery(&desired_policy, was_gaming, is_gaming);
-
-        let final_policy = if ctx.cooldown_active || ctx.recovery_mode {
+        // First compute what the actual applied policy would be without recovery mode itself
+        let mut final_policy = if ctx.cooldown_active {
             PolicyState::Conservative
         } else {
             desired_policy
         };
+
+        ctx.recovery_mode = self
+            .recovery
+            .check_recovery(&final_policy, was_gaming, is_gaming);
+
+        if ctx.recovery_mode {
+            final_policy = PolicyState::Conservative;
+        }
 
         // NOTE: no explicit unpin — tids die with the process and
         // cpuset entries are cleaned up by the kernel. Writing to
