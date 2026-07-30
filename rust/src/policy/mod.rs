@@ -277,7 +277,7 @@ mod tests {
     }
 }
 
-fn policy_rank(policy: &PolicyState) -> u8 {
+pub fn policy_rank(policy: &PolicyState) -> u8 {
     match policy {
         PolicyState::Performance => 0,
         PolicyState::Balanced => 1,

@@ -866,6 +866,18 @@ impl RuntimeTask for SystemOrchestrator {
             desired_policy
         };
 
+        let interactive_normal_use = !is_gaming
+            && !is_screen_off_now
+            && comp_temp < ctx.config.profiles.temp_warm;
+
+        let final_policy = if interactive_normal_use
+            && crate::policy::policy_rank(&final_policy) > crate::policy::policy_rank(&PolicyState::Balanced)
+        {
+            PolicyState::Balanced
+        } else {
+            final_policy
+        };
+
         // NOTE: no explicit unpin — tids die with the process and
         // cpuset entries are cleaned up by the kernel. Writing to
         // cpuset here would migrate SystemUI tasks and stall the

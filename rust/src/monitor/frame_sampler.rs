@@ -37,21 +37,128 @@ impl FrameStats {
 // a safe, conservative default starting point.
 const DEFAULT_FRAME_BUDGET_NS: u64 = 16_666_667;
 
-pub fn sample_frame_stats(package: &str) -> Option<FrameStats> {
+fn compute_stats_from_durations(mut durations: Vec<u64>, frame_budget_ns: u64) -> Option<FrameStats> {
+    if durations.is_empty() {
+        return None;
+    }
+
+    durations.sort_unstable();
+    let sample_count = durations.len();
+    let janky_frames = durations.iter().filter(|&&d| d > frame_budget_ns).count();
+    let p90_idx = ((sample_count as f32) * 0.9) as usize;
+    let p90_frame_ns = durations[p90_idx.min(sample_count - 1)];
+    let worst_frame_ns = *durations.last().unwrap();
+
+    Some(FrameStats {
+        sample_count,
+        janky_frames,
+        p90_frame_ns,
+        worst_frame_ns,
+        captured_at: Some(Instant::now()),
+    })
+}
+
+fn parse_latency_output(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
+    let mut durations: Vec<u64> = Vec::new();
+    let mut lines = text.lines();
+
+    // First line is usually refresh period, skip or use
+    lines.next()?;
+
+    for line in lines {
+        let fields: Vec<&str> = line.trim().split_whitespace().collect();
+        if fields.len() >= 3 {
+            // INTENDED_VSYNC (col 0), VSYNC (col 1), FRAME_COMPLETED (col 2)
+            if let (Ok(iv), Ok(fc)) = (fields[0].parse::<u64>(), fields[2].parse::<u64>()) {
+                if fc > iv && iv > 0 && fc < u64::MAX {
+                    durations.push(fc - iv);
+                }
+            }
+        }
+    }
+
+    compute_stats_from_durations(durations, frame_budget_ns)
+}
+
+fn try_gfxinfo_latency(package: &str) -> Option<FrameStats> {
     let output = Command::new("dumpsys")
         .arg("gfxinfo")
         .arg(package)
-        .arg("framestats")
+        .arg("--latency")
         .output()
         .ok()?;
 
     if !output.status.success() {
-        LAST_PARSE_OK.store(false, Ordering::Relaxed);
         return None;
     }
 
     let text = String::from_utf8_lossy(&output.stdout);
-    let result = parse_framestats(&text, DEFAULT_FRAME_BUDGET_NS);
+    parse_latency_output(&text, DEFAULT_FRAME_BUDGET_NS)
+}
+
+fn try_surfaceflinger_latency(package: &str) -> Option<FrameStats> {
+    let output = Command::new("dumpsys")
+        .arg("SurfaceFlinger")
+        .arg("--latency")
+        .arg(format!("SurfaceView[{}]", package))
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    parse_latency_output(&text, DEFAULT_FRAME_BUDGET_NS)
+}
+
+fn try_surfaceflinger_latency_fallback(package: &str) -> Option<FrameStats> {
+    let output = Command::new("dumpsys")
+        .arg("SurfaceFlinger")
+        .arg("--latency")
+        .arg(package)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    parse_latency_output(&text, DEFAULT_FRAME_BUDGET_NS)
+}
+
+pub fn sample_frame_stats(package: &str) -> Option<FrameStats> {
+    let result = (|| {
+        // Try #1: FrameTimeline / gfxinfo latency
+        if let Some(stats) = try_gfxinfo_latency(package) {
+            return Some(stats);
+        }
+
+        // Try #2: SurfaceFlinger latency SurfaceView (usually where game renders)
+        if let Some(stats) = try_surfaceflinger_latency(package) {
+            return Some(stats);
+        }
+
+        // Try #3: SurfaceFlinger latency base package
+        if let Some(stats) = try_surfaceflinger_latency_fallback(package) {
+            return Some(stats);
+        }
+
+        // Try #4: Existing framestats parser (gfxinfo)
+        let output = Command::new("dumpsys")
+            .arg("gfxinfo")
+            .arg(package)
+            .arg("framestats")
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            return parse_framestats(&text, DEFAULT_FRAME_BUDGET_NS);
+        }
+
+        None
+    })();
+
     LAST_PARSE_OK.store(result.is_some(), Ordering::Relaxed);
     result
 }
