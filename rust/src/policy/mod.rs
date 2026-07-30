@@ -33,7 +33,7 @@ impl PolicyEngine {
             startup_time: std::time::Instant::now(),
             startup_grace_secs: 30, // Default 30s grace period for inputs to stabilize
             last_total_score: 0.0,
-            trend_history: std::collections::VecDeque::with_capacity(3),
+            trend_history: std::collections::VecDeque::with_capacity(5),
         }
     }
 
@@ -54,9 +54,9 @@ impl PolicyEngine {
         io_pressure: f32,
         config: &ProfilesConfig,
     ) -> PolicyState {
-        // Smooth trend_score over the last 3 ticks to damp out single-tick derivative noise
+        // Smooth trend_score over the last 5 ticks to damp out single-tick derivative noise
         self.trend_history.push_back(trend_score);
-        if self.trend_history.len() > 3 {
+        if self.trend_history.len() > 5 {
             self.trend_history.pop_front();
         }
         let smoothed_trend = (self.trend_history.iter().sum::<i32>() as f64 / self.trend_history.len() as f64).round() as i32;
@@ -94,9 +94,9 @@ impl PolicyEngine {
 
         let mut normal_use_guard = 0.0;
         if !is_gaming && !is_screen_off {
-            if smoothed_trend > 15 || composite_temp >= config.temp_warm {
+            if smoothed_trend > 18 || composite_temp >= config.temp_warm {
                 normal_use_guard += 25.0; // Force score higher to push into Conservative
-            } else if smoothed_trend > 5 {
+            } else if smoothed_trend > 9 {
                 normal_use_guard += 15.0; // Apply pressure to cool down
             }
         }
@@ -111,6 +111,12 @@ impl PolicyEngine {
             + comfort_weight
             + psi_dampener
             + normal_use_guard;
+
+        tracing::debug!(
+            target: "thermal",
+            "Policy score components: s_temp={:.1} s_pred={:.1} s_trend={:.1} s_game={:.1} normal_use_guard={:.1} psi_dampener={:.1} context_weight={:.1} comfort_weight={:.1} game_modifier={:.1} total_score={:.1}",
+            s_temp, s_pred, s_trend, s_game, normal_use_guard, psi_dampener, context_weight, comfort_weight, game_modifier, total_score
+        );
 
         // Threshold evaluation (recalibrated based on the new total_score ranges)
         // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
