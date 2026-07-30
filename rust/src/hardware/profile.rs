@@ -179,8 +179,6 @@ pub struct GpuProfile {
     pub current_frequency: u64,
     pub freq_node: CapabilityNode,
     pub available_frequencies: Vec<u64>,
-    pub busy_time: Option<u64>,
-    pub total_time: Option<u64>,
     pub power_level_path: Option<String>,
     pub current_power_level: Option<u32>,
     pub min_power_level: Option<u32>,

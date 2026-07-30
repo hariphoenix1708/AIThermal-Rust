@@ -84,10 +84,6 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
         "Freq: {} (Avail: {:?})\n",
         profile.gpu_profile.current_frequency, profile.gpu_profile.available_frequencies
     ));
-    report.push_str(&format!(
-        "Busy/Total: {:?}/{:?}\n",
-        profile.gpu_profile.busy_time, profile.gpu_profile.total_time
-    ));
     report.push_str(&format!("Max Freq: {}\n\n", profile.gpu_profile.max_freq));
 
     report.push_str("--- Thermal ---\n");
