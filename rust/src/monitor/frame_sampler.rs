@@ -15,7 +15,7 @@ pub struct FrameStats {
     pub janky_frames: usize, // frames that missed their deadline
     pub p90_frame_ns: u64,   // 90th percentile total frame duration
     pub worst_frame_ns: u64,
-    pub sampled_at: Option<Instant>,
+    pub captured_at: Option<Instant>,
 }
 
 impl FrameStats {
@@ -115,7 +115,7 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
         janky_frames,
         p90_frame_ns,
         worst_frame_ns,
-        sampled_at: Some(Instant::now()),
+        captured_at: Some(Instant::now()),
     })
 }
 
