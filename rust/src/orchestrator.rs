@@ -866,13 +866,25 @@ impl RuntimeTask for SystemOrchestrator {
             desired_policy
         };
 
-        let interactive_normal_use = !is_gaming
+        let interactive_ui_smoothness_guard = !is_gaming
             && !is_screen_off_now
-            && comp_temp < ctx.config.profiles.temp_warm;
+            && final_policy == PolicyState::Conservative
+            && comp_temp < ctx.config.profiles.temp_hot
+            && predicted_temp < ctx.config.profiles.temp_hot
+            && bat_temp_c < 46
+            && skin_temp < 46
+            && trend_score < 10;
 
-        let final_policy = if interactive_normal_use
-            && crate::policy::policy_rank(&final_policy) > crate::policy::policy_rank(&PolicyState::Balanced)
-        {
+        let final_policy = if interactive_ui_smoothness_guard {
+            tracing::debug!(
+                target: "thermal",
+                "Holding Balanced for interactive UI smoothness: comp={}C pred={}C bat={}C skin={}C trend={}",
+                comp_temp,
+                predicted_temp,
+                bat_temp_c,
+                skin_temp,
+                trend_score
+            );
             PolicyState::Balanced
         } else {
             final_policy
@@ -1200,7 +1212,7 @@ impl RuntimeTask for SystemOrchestrator {
                     .adaptive_governor
                     .decide_tier(frame_stats.as_ref(), utilization);
 
-                if can_actuate {
+                if can_actuate && !needs_apply {
                     self.last_actuation_at = Some(std::time::Instant::now());
 
                     // R2: When policy is one of the P3-clamped states, apply_cluster_settings

@@ -571,9 +571,11 @@ impl RuntimeTuner {
             }
             if self.hardware.gpu_profile.has_force_clk_on {
                 let force_clk = format!("{}/force_clk_on", self.hardware.gpu_profile.path);
-                if write_if_changed(&force_clk, "1") {
-                    tracing::debug!(target: "tuning", "Applied GPU force_clk_on: 1 via {}", force_clk);
-                }
+                tracing::debug!(
+                    target: "tuning",
+                    "Skipping GPU force_clk_on: {} exists but is not a portable KGSL performance control",
+                    force_clk
+                );
             }
         }
 
@@ -788,4 +790,3 @@ impl crate::tuning::backend::NetworkBackend for RuntimeTuner {
         self.apply_network_tweaks(algo)
     }
 }
-

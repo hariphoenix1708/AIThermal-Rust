@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.5 (versionCode 325)
+### Fixed
+- Reduced AOSP Android 17 UI stutter by holding Balanced during normal screen-on interaction unless temperatures or trends require real thermal tightening.
+- Prevented adaptive frequency tier writes from running on the same tick as policy-transition CPU tuning, removing repeated `scaling_max_freq` tug-of-war during scrolling/gameplay.
+- Stopped writing KGSL `force_clk_on`, which current Peridot AOSP logs show is rejected by the kernel and then poisoned as unsupported.
+
 ## v3.2.4 (versionCode 324)
 ### Added
 - Advanced tuning pass (`advanced_tuning_enabled = true`), applied once per

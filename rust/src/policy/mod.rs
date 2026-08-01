@@ -94,10 +94,10 @@ impl PolicyEngine {
 
         let mut normal_use_guard = 0.0;
         if !is_gaming && !is_screen_off {
-            if smoothed_trend > 18 || composite_temp >= config.temp_warm {
-                normal_use_guard += 25.0; // Force score higher to push into Conservative
-            } else if smoothed_trend > 9 {
-                normal_use_guard += 15.0; // Apply pressure to cool down
+            if composite_temp >= config.temp_hot - 2 || smoothed_trend > 18 {
+                normal_use_guard += 12.0; // Apply measured pressure only for real heat or sustained ramp.
+            } else if composite_temp >= config.temp_warm && smoothed_trend > 9 {
+                normal_use_guard += 6.0; // Warm-but-rising: nudge, don't cliff the UI.
             }
         }
 
@@ -274,6 +274,30 @@ mod tests {
         // Rise to warm
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
         let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config);
+    }
+
+    #[test]
+    fn warm_stable_interactive_use_stays_balanced() {
+        let mut engine = PolicyEngine::new(1, 2);
+        engine.startup_grace_secs = 0;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let config = ProfilesConfig::default();
+
+        let policy = engine.evaluate(
+            config.temp_warm,
+            config.temp_warm,
+            0,
+            false,
+            false,
+            5.0,
+            0.0,
+            10.0,
+            20.0,
+            0.0,
+            &config,
+        );
+
+        assert_eq!(policy, PolicyState::Balanced);
     }
 }
 
