@@ -304,7 +304,7 @@ impl SystemOrchestrator {
     }
 
     fn compute_game_modifier(
-        &self,
+        &mut self,
         pkg: Option<&str>,
         ctx: &crate::runtime_context::RuntimeContext,
     ) -> f64 {
@@ -1212,7 +1212,7 @@ impl RuntimeTask for SystemOrchestrator {
                     .adaptive_governor
                     .decide_tier(frame_stats.as_ref(), utilization);
 
-                if can_actuate && !needs_apply {
+                if can_actuate {
                     self.last_actuation_at = Some(std::time::Instant::now());
 
                     // R2: When policy is one of the P3-clamped states, apply_cluster_settings
