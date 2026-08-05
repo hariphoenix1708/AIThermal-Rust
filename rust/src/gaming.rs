@@ -25,6 +25,7 @@ pub struct GameDetector {
     last_scan_pids: HashMap<u32, (Option<String>, Instant)>,
     daemon_started_at: Instant,
     cgroup_negative_streak: u32,
+    stutter_streak: u32,
 }
 
 impl GameDetector {
@@ -47,16 +48,19 @@ impl GameDetector {
         priority
     }
 
-    pub fn detect_frame_stutter(&self, session_started_at: Option<Instant>) -> bool {
+    pub fn detect_frame_stutter(&mut self, session_started_at: Option<Instant>) -> bool {
         if !self.is_gaming {
+            self.stutter_streak = 0;
             return false;
         }
 
         if let Some(start) = session_started_at {
             if start.elapsed() < Duration::from_secs(60) {
+                self.stutter_streak = 0;
                 return false;
             }
         } else {
+            self.stutter_streak = 0;
             return false;
         }
 
@@ -89,7 +93,13 @@ impl GameDetector {
             }
         }
 
-        has_stutter
+        if has_stutter {
+            self.stutter_streak = self.stutter_streak.saturating_add(1);
+        } else {
+            self.stutter_streak = 0;
+        }
+
+        self.stutter_streak >= 3
     }
 
     pub fn new(known_games: Vec<String>, latch_sec: u64, proc_scan_interval_sec: u64, game_poll_interval_sec: u64, pkg_cache_ttl_sec: u64) -> Self {
@@ -109,6 +119,7 @@ impl GameDetector {
             last_scan_pids: HashMap::new(),
             daemon_started_at: Instant::now(),
             cgroup_negative_streak: 0,
+            stutter_streak: 0,
         }
     }
 
