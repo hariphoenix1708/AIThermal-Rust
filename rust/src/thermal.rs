@@ -74,7 +74,7 @@ impl ThermalEngine {
             return false;
         }
         if let (Some(&last), Some(&first)) = (self.history.back(), self.history.front()) {
-            last < first
+            (first - last) >= 2
         } else {
             false
         }
@@ -97,7 +97,15 @@ mod tests {
 
         engine.update(38); // This pushes out 40
         assert_eq!(engine.history.len(), 3); // [42, 44, 38]
-        assert!(engine.is_cooling()); // 38 < 42
+        assert!(engine.is_cooling()); // 42 - 38 = 4 >= 2 -> true
+
+        // Noisy but flat case
+        let mut engine2 = ThermalEngine::new(3);
+        engine2.update(52);
+        engine2.update(53);
+        engine2.update(51); // 52 - 51 = 1 >= 2 -> false
+        assert_eq!(engine2.history.len(), 3); // [52, 53, 51]
+        assert!(!engine2.is_cooling());
 
         // EMA check
         let smoothed = engine.get_smoothed_temp();
