@@ -30,6 +30,8 @@ pub struct ProfilesConfig {
     pub prediction_window: usize,
     #[serde(default = "default_policy_debounce_sec")]
     pub policy_debounce_sec: u64,
+    #[serde(default = "default_policy_debounce_gaming_sec")]
+    pub policy_debounce_gaming_sec: u64,
     #[serde(default = "default_log_level")]
     pub log_level: String,
     #[serde(default = "default_gpu_gaming_threshold")]
@@ -131,6 +133,9 @@ fn default_prediction_window() -> usize {
 fn default_policy_debounce_sec() -> u64 {
     10
 }
+fn default_policy_debounce_gaming_sec() -> u64 {
+    15
+}
 fn default_log_level() -> String {
     "INFO".to_string()
 }
@@ -173,6 +178,7 @@ impl Default for ProfilesConfig {
             temp_history_size: default_temp_history_size(),
             prediction_window: default_prediction_window(),
             policy_debounce_sec: default_policy_debounce_sec(),
+            policy_debounce_gaming_sec: default_policy_debounce_gaming_sec(),
             log_level: default_log_level(),
             gpu_gaming_threshold: default_gpu_gaming_threshold(),
             game_poll_interval: default_game_poll_interval(),
@@ -219,6 +225,9 @@ impl ProfilesConfig {
         }
         if self.policy_debounce_sec == 0 {
             return Err("policy_debounce_sec == 0");
+        }
+        if self.policy_debounce_gaming_sec == 0 {
+            return Err("policy_debounce_gaming_sec == 0");
         }
         if self.game_poll_interval == 0 {
             return Err("game_poll_interval == 0");
