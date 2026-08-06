@@ -54,6 +54,12 @@ impl PolicyEngine {
         io_pressure: f32,
         config: &ProfilesConfig,
     ) -> PolicyState {
+        self.debounce = if is_gaming {
+            std::time::Duration::from_secs(config.policy_debounce_gaming_sec)
+        } else {
+            std::time::Duration::from_secs(config.policy_debounce_sec)
+        };
+
         // Smooth trend_score over the last 5 ticks to damp out single-tick derivative noise
         self.trend_history.push_back(trend_score);
         if self.trend_history.len() > 5 {
