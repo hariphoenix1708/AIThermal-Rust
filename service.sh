@@ -80,7 +80,7 @@ setprop ctl.stop mi_thermald 2>/dev/null
 # Stop other Xiaomi/HyperOS performance daemons that can compete with our
 # own governor/cpuset/GPU tuning by silently overwriting the same sysfs
 # nodes moments after we write them.
-for svc in vendor.perfservice miuibooster perfd; do
+for svc in vendor.perfservice miuibooster perfd com.xiaomi.joyose com.xiaomi.gameboosterglobal; do
     if pgrep -f "$svc" > /dev/null 2>&1; then
         log_startup "requesting $svc stop"
         killall "$svc" 2>/dev/null
