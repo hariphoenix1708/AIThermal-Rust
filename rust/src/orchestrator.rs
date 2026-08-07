@@ -56,6 +56,7 @@ pub struct SystemOrchestrator {
     last_telemetry_write_at: Option<std::time::Instant>,
     last_telemetry_policy: Option<String>,
     last_applied_policy: Option<String>,
+    last_policy_change_at: Option<std::time::Instant>,
 }
 
 impl SystemOrchestrator {
@@ -300,6 +301,7 @@ impl SystemOrchestrator {
             last_telemetry_write_at: None,
             last_telemetry_policy: None,
             last_applied_policy: None,
+            last_policy_change_at: None,
         }
     }
 
@@ -527,6 +529,7 @@ impl SystemOrchestrator {
             last_telemetry_write_at: None,
             last_telemetry_policy: None,
             last_applied_policy: None,
+            last_policy_change_at: None,
         }
     }
 
@@ -866,6 +869,17 @@ impl RuntimeTask for SystemOrchestrator {
             desired_policy
         };
 
+        let debounce_sec = if is_gaming {
+            ctx.config.profiles.policy_debounce_gaming_sec
+        } else {
+            ctx.config.profiles.policy_debounce_sec
+        };
+
+        let ui_guard_debounce_met = self
+            .last_policy_change_at
+            .map(|t| t.elapsed().as_secs() >= debounce_sec)
+            .unwrap_or(true);
+
         let interactive_ui_smoothness_guard = !is_gaming
             && !is_screen_off_now
             && final_policy == PolicyState::Conservative
@@ -873,7 +887,8 @@ impl RuntimeTask for SystemOrchestrator {
             && predicted_temp < ctx.config.profiles.temp_hot
             && bat_temp_c < 46
             && skin_temp < 46
-            && trend_score < 10;
+            && trend_score < 10
+            && ui_guard_debounce_met;
 
         let final_policy = if interactive_ui_smoothness_guard {
             tracing::debug!(
@@ -908,6 +923,7 @@ impl RuntimeTask for SystemOrchestrator {
                 "Policy transition {} -> {} (score={:.1})",
                 ctx.current_policy.as_deref().unwrap_or("None"),
                 policy_str, self.policy.last_score());
+            self.last_policy_change_at = Some(std::time::Instant::now());
         }
 
         // If the previous transition tick could not actuate (wake defer,
