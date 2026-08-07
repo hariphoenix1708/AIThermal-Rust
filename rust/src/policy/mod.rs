@@ -13,6 +13,7 @@ pub enum PolicyState {
 pub struct PolicyEngine {
     pub current_policy: PolicyState,
     pub debounce: std::time::Duration,
+    pub active_debounce: std::time::Duration,
     pub last_change_at: std::time::Instant,
     pub(crate) powersave_arm_count: u8,
     startup_time: std::time::Instant,
@@ -28,6 +29,7 @@ impl PolicyEngine {
         Self {
             current_policy: PolicyState::Balanced,
             debounce,
+            active_debounce: debounce,
             last_change_at: std::time::Instant::now(),
             powersave_arm_count: 0,
             startup_time: std::time::Instant::now(),
@@ -201,6 +203,7 @@ impl PolicyEngine {
             if self.current_policy != desired {
                 self.current_policy = desired.clone();
                 self.last_change_at = std::time::Instant::now();
+                self.active_debounce = self.debounce;
             }
             return desired;
         }
@@ -212,7 +215,7 @@ impl PolicyEngine {
         }
 
         // Apply debounce for normal transitions to prevent rapid flapping
-        if desired != self.current_policy && self.last_change_at.elapsed() >= self.debounce {
+        if desired != self.current_policy && self.last_change_at.elapsed() >= self.active_debounce {
             const HYSTERESIS_MARGIN: f64 = 8.0;
 
             let desired_rank = policy_rank(&desired);
@@ -231,6 +234,7 @@ impl PolicyEngine {
             if allowed {
                 self.current_policy = desired.clone();
                 self.last_change_at = std::time::Instant::now();
+                self.active_debounce = self.debounce;
             }
         }
 
