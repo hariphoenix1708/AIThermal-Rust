@@ -99,6 +99,20 @@ fi
 log_startup "starting daemon path=$DAEMON module=$MODDIR log_dir=$LOG_DIR state_dir=$STATE_DIR"
 "$DAEMON" >/dev/null 2>&1 &
 
+# Periodic Joyose suppression -- boot-time kill alone is confirmed
+# insufficient; Joyose is bound to Android's service framework and
+# can be re-invoked by Security Center/Game Turbo UI independent of
+# the boot-time kill (confirmed via live probe: same PID persisted
+# across a 9+ minute window untouched).
+(
+    while true; do
+        sleep 300
+        if pgrep -f com.xiaomi.joyose > /dev/null 2>&1; then
+            killall com.xiaomi.joyose 2>/dev/null
+        fi
+    done
+) &
+
 for _ in 1 2 3 4 5 6 7 8 9 10
 do
     if [ -f "$PID_FILE" ]
