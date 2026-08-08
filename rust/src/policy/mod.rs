@@ -55,6 +55,8 @@ impl PolicyEngine {
         cpu_pressure: f32,
         io_pressure: f32,
         config: &ProfilesConfig,
+        bat_temp_c: i32,
+        skin_temp: i32,
     ) -> PolicyState {
         self.debounce = if is_gaming {
             std::time::Duration::from_secs(config.policy_debounce_gaming_sec)
@@ -101,16 +103,23 @@ impl PolicyEngine {
         };
 
         let mut normal_use_guard = 0.0;
+        let mut interactive_ui_smoothness_guard = false;
         if !is_gaming && !is_screen_off {
             if composite_temp >= config.temp_hot - 2 || smoothed_trend > 18 {
                 normal_use_guard += 12.0; // Apply measured pressure only for real heat or sustained ramp.
             } else if composite_temp >= config.temp_warm && smoothed_trend > 9 {
                 normal_use_guard += 6.0; // Warm-but-rising: nudge, don't cliff the UI.
             }
+
+            interactive_ui_smoothness_guard = composite_temp < config.temp_hot
+                && predicted_temp < config.temp_hot
+                && bat_temp_c < 46
+                && skin_temp < 46
+                && trend_score < 10;
         }
 
         // Total evaluation score
-        let total_score = s_temp
+        let mut total_score = s_temp
             + s_pred
             + s_game
             + s_trend
@@ -119,6 +128,13 @@ impl PolicyEngine {
             + comfort_weight
             + psi_dampener
             + normal_use_guard;
+
+        if interactive_ui_smoothness_guard && total_score > 40.0 && total_score <= 65.0 {
+            // Cap the score to the upper bound of Balanced (40.0) if the UI guard is active.
+            // This prevents the engine from deciding Conservative in mild conditions.
+            // (If total_score > 65.0, it's Powersave territory, let it through).
+            total_score = 40.0;
+        }
 
         tracing::debug!(
             target: "thermal",
@@ -258,32 +274,32 @@ mod tests {
         // With temps at 30, they are likely cool, giving 0 for s_temp and s_pred.
         // We pass -10.0 for context_weight to drop the score below -5.0.
         assert_eq!(
-            engine.evaluate(30, 30, 0, false, true, -10.0, 0.0, 0.0, 0.0, 0.0, &config),
+            engine.evaluate(30, 30, 0, false, true, -10.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30),
             PolicyState::Suspend
         );
 
         // Emergency cool overrides immediately (high temp)
         assert_eq!(
-            engine.evaluate(80, 80, 2, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config),
+            engine.evaluate(80, 80, 2, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config, 40, 40),
             PolicyState::EmergencyCool
         );
 
         // Drop to cool should debounce
         assert_eq!(
-            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config),
+            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30),
             PolicyState::EmergencyCool // still emergency because time elapsed is < 10
         );
 
         // Fast forward time
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
         assert_eq!(
-            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config),
+            engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30),
             PolicyState::Balanced
         );
 
         // Rise to warm
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
-        let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config);
+        let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config, 35, 35);
     }
 
     #[test]
@@ -305,6 +321,8 @@ mod tests {
             20.0,
             0.0,
             &config,
+            35,
+            35,
         );
 
         assert_eq!(policy, PolicyState::Balanced);

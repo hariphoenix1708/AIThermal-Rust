@@ -786,6 +786,8 @@ impl RuntimeTask for SystemOrchestrator {
             cpu_pressure,
             io_pressure,
             &ctx.config.profiles,
+            bat_temp_c,
+            skin_temp,
         );
 
         // 6. Recovery overrides
@@ -867,42 +869,6 @@ impl RuntimeTask for SystemOrchestrator {
             PolicyState::Conservative
         } else {
             desired_policy
-        };
-
-        let debounce_sec = if is_gaming {
-            ctx.config.profiles.policy_debounce_gaming_sec
-        } else {
-            ctx.config.profiles.policy_debounce_sec
-        };
-
-        let ui_guard_debounce_met = self
-            .last_policy_change_at
-            .map(|t| t.elapsed().as_secs() >= debounce_sec)
-            .unwrap_or(true);
-
-        let interactive_ui_smoothness_guard = !is_gaming
-            && !is_screen_off_now
-            && final_policy == PolicyState::Conservative
-            && comp_temp < ctx.config.profiles.temp_hot
-            && predicted_temp < ctx.config.profiles.temp_hot
-            && bat_temp_c < 46
-            && skin_temp < 46
-            && trend_score < 10
-            && ui_guard_debounce_met;
-
-        let final_policy = if interactive_ui_smoothness_guard {
-            tracing::debug!(
-                target: "thermal",
-                "Holding Balanced for interactive UI smoothness: comp={}C pred={}C bat={}C skin={}C trend={}",
-                comp_temp,
-                predicted_temp,
-                bat_temp_c,
-                skin_temp,
-                trend_score
-            );
-            PolicyState::Balanced
-        } else {
-            final_policy
         };
 
         // NOTE: no explicit unpin — tids die with the process and
