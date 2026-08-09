@@ -115,7 +115,7 @@ impl PolicyEngine {
                 && predicted_temp < config.temp_hot
                 && bat_temp_c < 46
                 && skin_temp < 46
-                && trend_score < 10;
+                && smoothed_trend < 10;
         }
 
         // Total evaluation score
@@ -138,8 +138,8 @@ impl PolicyEngine {
 
         tracing::debug!(
             target: "thermal",
-            "Policy score components: s_temp={:.1} s_pred={:.1} s_trend={:.1} s_game={:.1} normal_use_guard={:.1} psi_dampener={:.1} context_weight={:.1} comfort_weight={:.1} game_modifier={:.1} total_score={:.1}",
-            s_temp, s_pred, s_trend, s_game, normal_use_guard, psi_dampener, context_weight, comfort_weight, game_modifier, total_score
+            "Policy score components: s_temp={:.1} s_pred={:.1} s_trend={:.1} s_game={:.1} normal_use_guard={:.1} psi_dampener={:.1} context_weight={:.1} comfort_weight={:.1} game_modifier={:.1} total_score={:.1} raw_trend={} smoothed_trend={}",
+            s_temp, s_pred, s_trend, s_game, normal_use_guard, psi_dampener, context_weight, comfort_weight, game_modifier, total_score, trend_score, smoothed_trend
         );
 
         // Threshold evaluation (recalibrated based on the new total_score ranges)
