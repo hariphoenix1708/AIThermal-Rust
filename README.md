@@ -66,7 +66,7 @@ Reference audits from Uperf Game Turbo and Encore are folded in only where they 
 - `/scripts/`: *[Legacy]* Shell reference material strictly preserved for logic parity checking.
 
 ### Runtime State Directory Layout
-By default, the active runtime writes JSON files safely via atomic renames inside `THERMALAI_STATE_DIR` (default: `/data/local/tmp/thermalai_state`):
+By default, the active runtime writes JSON files safely via atomic renames inside `THERMALAI_STATE_DIR` (default: `/data/local/tmp/AIThermal/state`):
 - `calibration.json`: Persists learned thermal behaviors, offset clamps (-6 to +6), and `slow_cooler` flags across reboots.
 - `charging_session.json`: Written atomically post-charge summarizing durations, max temperatures, and average loads.
 - `thermalai_state.json`: Live telemetry dump continuously reflecting the tick-by-tick daemon memory.
@@ -137,13 +137,14 @@ The `thermalair` executable allows granular read/write access to the daemon grac
 - `thermalair calibrate`: Dump the actively persisted `calibration.json` offsets.
 
 ## Logging & Troubleshooting
-Logs are generated locally under `THERMALAI_LOG_DIR` (default: `/data/local/tmp/`).
+Logs are generated locally under `THERMALAI_LOG_DIR` (default: `/data/local/tmp/AIThermal`).
 - `thermalai.log`: Standard info-level lifecycle and policy transitions.
 - `thermalai_startup.log`: Launcher contract, resolved paths, stale PID cleanup, and daemon validation.
 - `thermalai_verbose.log`: Granular trace-level tick telemetry.
 - `thermalai_battery.log`: Detailed battery/power statistics (temperature, drain rate, screen-on/off/deep-sleep).
+- `thermalai_ui.log`: System process, animation, frame-rate, and UI responsiveness monitor.
 
-Runtime logs are truncated in place every 2 hours to keep `/data/local/tmp` bounded without moving log paths away from the Android-side diagnostics workflow.
+Runtime logs are truncated in place every 2 hours to keep `/data/local/tmp/AIThermal` bounded without moving log paths away from the Android-side diagnostics workflow.
 
 **Known Limitations**:
 - `/proc/config.gz` parsing handles disabled PSI bounds cleanly but depends on kernel visibility.

@@ -712,7 +712,7 @@ impl RuntimeTuner {
         let (gov, max_pct): (&str, Option<u32>) = match policy {
             "Performance" | "performance" | "Gaming" | "gaming" =>
                 ("performance", None),
-            "Balanced"                       => ("schedutil", None),
+            "Balanced"                       => ("walt", None),
             "Conservative"                   => ("schedutil", Some(85)),
             // Post-game / thermal recovery: gentler clamp than Conservative so
             // the exit animation isn't starved while the SoC cools down.

@@ -1,6 +1,6 @@
 [package]
 name = "thermalai-daemon"
-version = "3.2.11"
+version = "3.2.12"
 edition = "2024"
 
 [dependencies]

@@ -1,5 +1,30 @@
 # Changelog
 
+## v3.2.12 (versionCode 332)
+### Changed
+- Logs now live under `/data/local/tmp/AIThermal` instead of `/data/local/tmp`:
+  every daemon/CLI/tool default (`main.rs`, `thermalair`, `thermalai-detect`,
+  `service.sh`, `customize.sh`, `uninstall.sh`, the panic-hook state path and
+  the pid/lock files) resolves to the new directory, with state in
+  `/data/local/tmp/AIThermal/state`. Installer and README paths updated.
+- New `thermalai_ui.log` stream: a dedicated system-process / animation /
+  frame-rate / UI monitor samples every 5 s while the screen is on and logs a
+  compact single line — current policy, display refresh rate (dumpsys display,
+  cached 30 s), top focused window, animation scales (window/transition/animator),
+  per-process CPU share for surfaceflinger / system_server / SystemUI / launchers /
+  joyose / perfd / mi_thermald / the daemon itself (pidof + /proc stat deltas),
+  per-policy CPU governor + current frequency, and a `dumpsys gfxinfo` summary
+  (total frames, janky frames + %, 50th/90th percentile, missed vsync, slow UI
+  thread). Anomalies emit a `WARN` line (jank > 10%, p90 > 16.7 ms, slow UI
+  thread, or an animation scale of 0.0).
+- Balanced (screen-on normal usage) now prefers the stock `walt` CPU governor
+  with `schedutil` as fallback instead of forcing `schedutil`. On the peridot
+  (SM8635) WALT kernel, `walt` carries the vendor's input-boost / load-tracking
+  tuned for the 120 Hz UI; generic `schedutil` under-ramps bursty UI workloads
+  and shows up as missed frame deadlines. The clamped policies still use
+  `schedutil`/`powersave`, and `walt` remains the Performance governor first
+  choice — this only restores the vendor tuning for everyday screen-on usage.
+
 ## v3.2.11 (versionCode 331)
 ### Fixed
 - Eliminated the UI stutter right after every screen wake. The Suspend policy

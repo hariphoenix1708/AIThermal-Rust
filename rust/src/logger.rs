@@ -54,6 +54,7 @@ pub struct LoggerGuards {
     pub _thermal: WorkerGuard,
     pub _charging: WorkerGuard,
     pub _gaming: WorkerGuard,
+    pub _ui: WorkerGuard,
 }
 
 const LOG_TRUNCATE_INTERVAL_SECS: u64 = 2 * 60 * 60;
@@ -135,6 +136,10 @@ pub fn init_logger(
     let gaming_appender = HourlyTruncatingWriter::new(&gaming_path)?;
     let (gaming_writer, gaming_guard) = tracing_appender::non_blocking(gaming_appender);
 
+    let ui_path = std::path::Path::new(log_dir).join("thermalai_ui.log");
+    let ui_appender = HourlyTruncatingWriter::new(&ui_path)?;
+    let (ui_writer, ui_guard) = tracing_appender::non_blocking(ui_appender);
+
     let format = fmt::format()
         .with_level(true)
         .with_target(false)
@@ -154,6 +159,7 @@ pub fn init_logger(
         .add_directive("thermal=off".parse().unwrap())
         .add_directive("charging=off".parse().unwrap())
         .add_directive("gaming=off".parse().unwrap())
+        .add_directive("ui=off".parse().unwrap())
         .add_directive("wake=off".parse().unwrap());
 
     // ---- Verbose: everything, always.
@@ -166,6 +172,7 @@ pub fn init_logger(
     let thermal_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,thermal=info");
     let charging_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,charging=info");
     let gaming_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,gaming=info");
+    let ui_filter = EnvFilter::new("off,thermalai_daemon=off,lifecycle=off,ui=info");
 
     tracing_subscriber::registry()
         .with(
@@ -200,9 +207,15 @@ pub fn init_logger(
         )
         .with(
             fmt::layer()
-                .event_format(format)
+                .event_format(format.clone())
                 .with_writer(gaming_writer)
                 .with_filter(gaming_filter),
+        )
+        .with(
+            fmt::layer()
+                .event_format(format)
+                .with_writer(ui_writer)
+                .with_filter(ui_filter),
         )
         .init();
 
@@ -213,5 +226,6 @@ pub fn init_logger(
         _thermal: thermal_guard,
         _charging: charging_guard,
         _gaming: gaming_guard,
+        _ui: ui_guard,
     })
 }

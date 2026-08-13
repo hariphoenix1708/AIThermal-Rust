@@ -2,8 +2,8 @@
 # ThermalAI Magisk/KernelSU Late-Start Boot Script
 
 MODDIR=${0%/*}
-LOG_DIR="${THERMALAI_LOG_DIR:-/data/local/tmp}"
-STATE_DIR="${THERMALAI_STATE_DIR:-/data/local/tmp/thermalai_state}"
+LOG_DIR="${THERMALAI_LOG_DIR:-/data/local/tmp/AIThermal}"
+STATE_DIR="${THERMALAI_STATE_DIR:-/data/local/tmp/AIThermal/state}"
 PID_FILE="$LOG_DIR/thermalai.pid"
 STARTUP_LOG="$LOG_DIR/thermalai_startup.log"
 BIN_DIR="$MODDIR/system/bin"

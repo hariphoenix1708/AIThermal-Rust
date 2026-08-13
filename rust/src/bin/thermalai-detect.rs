@@ -6,7 +6,7 @@ use thermalai_daemon::hardware;
 
 fn main() -> Result<()> {
     let state_dir = env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string());
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
 
     if !Path::new(&state_dir).exists() {
         std::fs::create_dir_all(&state_dir)?;

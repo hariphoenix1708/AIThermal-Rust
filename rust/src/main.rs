@@ -18,7 +18,7 @@ fn main() -> Result<()> {
         // of avoiding a stuck sysfs state that would otherwise persist
         // until the next clean daemon restart.
         let state_dir = std::env::var("THERMALAI_STATE_DIR")
-            .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string());
+            .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
         if let Ok(hw) = thermalai_daemon::cache::load_profile(&state_dir) {
             let snapshot = thermalai_daemon::snapshot::SnapshotManager::new(&state_dir, hw);
             snapshot.restore_snapshot();
@@ -43,9 +43,9 @@ fn main() -> Result<()> {
     let profiles_path = format!("{}/profiles.conf", config_dir);
     let games_path = format!("{}/game_list.conf", config_dir);
 
-    let log_dir = env::var("THERMALAI_LOG_DIR").unwrap_or_else(|_| "/data/local/tmp".to_string());
+    let log_dir = env::var("THERMALAI_LOG_DIR").unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
     let state_dir = env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string());
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
 
     std::fs::create_dir_all(&state_dir)?;
 
@@ -165,6 +165,7 @@ fn main() -> Result<()> {
     tracing::info!(target: "lifecycle", "Daemon initialized successfully.");
 
     daemon.register_task(Box::new(orchestrator));
+    daemon.register_task(Box::new(monitor::ui_monitor::UiMonitor::default()));
 
     let start_result = daemon.start();
     let _ = std::fs::remove_file(&crash_marker);

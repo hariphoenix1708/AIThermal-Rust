@@ -44,8 +44,8 @@ fn main() -> Result<()> {
         resolved_module_dir = Some(apatch_path);
     }
 
-    let default_state = "/data/local/tmp/thermalai_state".to_string();
-    let default_log = "/data/local/tmp".to_string();
+    let default_state = "/data/local/tmp/AIThermal/state".to_string();
+    let default_log = "/data/local/tmp/AIThermal".to_string();
 
     let state_dir = env::var("THERMALAI_STATE_DIR").unwrap_or(default_state);
     let log_dir = env::var("THERMALAI_LOG_DIR").unwrap_or(default_log);
@@ -206,7 +206,7 @@ fn main() -> Result<()> {
 
 fn show_temps() {
     let state_file = std::env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string())
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string())
         + "/thermalai_state.json";
     match std::fs::read_to_string(&state_file) {
         Err(_) => println!("Daemon not running (no state file found)"),
@@ -230,7 +230,7 @@ fn show_temps() {
 
 fn show_policy() {
     let state_file = std::env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string())
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string())
         + "/thermalai_state.json";
     match std::fs::read_to_string(&state_file) {
         Err(_) => println!("Daemon not running (no state file found)"),
@@ -254,7 +254,7 @@ fn show_policy() {
 
 fn show_gaming() {
     let state_file = std::env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string())
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string())
         + "/thermalai_state.json";
     match std::fs::read_to_string(&state_file) {
         Err(_) => println!("Daemon not running (no state file found)"),
@@ -278,7 +278,7 @@ fn show_gaming() {
 
 fn set_charging_mode(mode: Option<&str>) {
     let state_dir = std::env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string());
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
     let override_file = format!("{}/charging_mode.json", state_dir);
     let tmp_file = format!("{}/charging_mode.json.tmp", state_dir);
     match mode {
@@ -333,9 +333,9 @@ fn start_daemon() -> Result<()> {
     }
 
     let log_dir =
-        std::env::var("THERMALAI_LOG_DIR").unwrap_or_else(|_| "/data/local/tmp".to_string());
+        std::env::var("THERMALAI_LOG_DIR").unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
     let state_dir = std::env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/thermalai_state".to_string());
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
     let pid_file = Path::new(&log_dir).join("thermalai.pid");
 
     if let Ok(pid_str) = std::fs::read_to_string(&pid_file)

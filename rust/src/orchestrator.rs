@@ -1008,7 +1008,12 @@ impl RuntimeTask for SystemOrchestrator {
         let gpu_gov_save =
             self.select_gpu_governor(&["powersave", "msm-adreno-tz", "simple_ondemand"]);
         let cpu_gov_perf = self.select_cpu_governor(&["walt", "performance", "schedutil"]);
-        let cpu_gov_bal = self.select_cpu_governor(&["schedutil", "walt"]);
+        // Balanced is the screen-on normal-usage governor. Stock on the
+        // peridot (SM8635) WALT kernel is `walt`, whose input-boost and
+        // load-tracking are tuned for the 120Hz UI; generic schedutil
+        // under-ramps bursty UI workloads and shows as missed frame
+        // deadlines. Prefer the stock governor, fall back to schedutil.
+        let cpu_gov_bal = self.select_cpu_governor(&["walt", "schedutil"]);
 
         // Cooldown governor is always schedutil (never conservative)
         // to keep scrolling responsive after game exit.

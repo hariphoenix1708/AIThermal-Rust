@@ -3,8 +3,8 @@
 
 MODDIR="${0%/*}"
 
-LOG_DIR="${THERMALAI_LOG_DIR:-/data/local/tmp}"
-STATE_DIR="${THERMALAI_STATE_DIR:-/data/local/tmp/thermalai_state}"
+LOG_DIR="${THERMALAI_LOG_DIR:-/data/local/tmp/AIThermal}"
+STATE_DIR="${THERMALAI_STATE_DIR:-/data/local/tmp/AIThermal/state}"
 
 PID_FILE="$LOG_DIR/thermalai.pid"
 PID_LOCK_FILE="$LOG_DIR/thermalai.pid.lock"
@@ -52,7 +52,8 @@ for f in thermalai.log \
          thermalai_battery.log \
          thermalai_thermal.log \
          thermalai_charging.log \
-         thermalai_gaming.log; do
+         thermalai_gaming.log \
+         thermalai_ui.log; do
     rm -f "$LOG_DIR/$f"
     # Log rotation may leave .1 / .gz siblings; sweep them too.
     rm -f "$LOG_DIR/${f}.1" "$LOG_DIR/${f}.gz" "$LOG_DIR/${f}.1.gz"
