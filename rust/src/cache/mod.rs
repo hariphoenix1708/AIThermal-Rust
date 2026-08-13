@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const HARDWARE_PROFILE_SCHEMA_VERSION: u32 = 4;
+pub const HARDWARE_PROFILE_SCHEMA_VERSION: u32 = 5;
 
 pub fn save_profile(profile: &HardwareProfile, state_dir: &str) -> Result<()> {
     fs::create_dir_all(state_dir).context("Failed to create state dir")?;
@@ -53,6 +53,9 @@ fn validate_profile_cache(profile: &HardwareProfile) -> Result<()> {
     }
     if profile.metadata.product_device != current.product_device {
         anyhow::bail!("Hardware profile cache invalidated: product device mismatch");
+    }
+    if profile.metadata.product_board != current.product_board {
+        anyhow::bail!("Hardware profile cache invalidated: product board mismatch");
     }
     if profile.metadata.boot_hardware != current.boot_hardware {
         anyhow::bail!("Hardware profile cache invalidated: boot hardware mismatch");
@@ -165,6 +168,7 @@ pub fn build_cache_metadata() -> CacheMetadata {
             Err(_) => 0,
         },
         product_device: get_any_property(&["ro.product.device"], "Unknown"),
+        product_board: get_any_property(&["ro.product.board"], "Unknown"),
         boot_hardware: get_any_property(&["ro.boot.hardware"], "Unknown"),
         device_identity: get_any_property(&["ro.product.model", "ro.product.device"], "Unknown"),
         board_platform: get_any_property(&["ro.board.platform"], "Unknown"),

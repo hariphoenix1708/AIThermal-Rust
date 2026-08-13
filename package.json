@@ -1,6 +1,6 @@
 {
   "name": "aithermal-rust",
-  "version": "3.2.4",
+  "version": "3.2.6",
   "private": true,
   "scripts": {
     "dev": "bash -c 'PORT=$(echo \"$@\" | grep -oE \"[0-9]+$\" || echo 8080); python3 -m http.server --directory webroot $PORT' --",

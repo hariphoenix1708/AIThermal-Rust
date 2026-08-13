@@ -9,6 +9,8 @@ pub fn write_human_report(profile: &HardwareProfile, state_dir: &str) -> Result<
 
     report.push_str("=== thermalai_rust Hardware Report ===\n\n");
     report.push_str(&format!("Device Identity: {}\n", profile.device_identity));
+    report.push_str(&format!("Product Device: {}\n", profile.product_device));
+    report.push_str(&format!("Product Board: {}\n", profile.product_board));
     report.push_str(&format!("SoC Platform: {}\n", profile.soc_info));
     report.push_str(&format!(
         "MIGT (MI Game Turbo) module present: {}\n",

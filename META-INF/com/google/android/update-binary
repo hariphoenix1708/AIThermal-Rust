@@ -13,8 +13,25 @@ ui_print "-----------------------------------------"
 ui_print ""
 
 DEVICE=$(getprop ro.product.device)
+BOARD=$(getprop ro.product.board)
 SOC=$(getprop ro.board.platform)
-if [ "$DEVICE" != "peridot" ] || [ "$SOC" != "pineapple" ]
+
+# Peridot family recognition. The POCO F6 / Redmi Turbo 3 (SM8635) can
+# report ro.board.platform as "pineapple" on HyperOS or "sun" on other
+# builds, and ro.product.device/board as "peridot". Accept every alias so
+# the banner does not spam warnings on the exact device it targets.
+is_peridot=false
+case "$DEVICE" in
+    *peridot*|*poco*f6*|*redmi*turbo*3*|*24069pc21g*|*24069ra21c*) is_peridot=true ;;
+esac
+case "$BOARD" in
+    *peridot*) is_peridot=true ;;
+esac
+case "$SOC" in
+    pineapple|sun) is_peridot=true ;;
+esac
+
+if [ "$is_peridot" != "true" ]
 then
     ui_print "  [!] WARNING: Peridot optimizations are optional and runtime-gated"
     ui_print "  [!] Your device: $DEVICE / $SOC"

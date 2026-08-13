@@ -51,6 +51,12 @@ async function readJson(path) {
   try { return JSON.parse(s); } catch { return null; }
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 /* ------------------------------------------------------------------ */
 /* Tabs                                                               */
 /* ------------------------------------------------------------------ */
@@ -161,7 +167,7 @@ async function loadZones() {
     const [type, raw] = l.split("|");
     const c = Math.round(Number(raw) / (Math.abs(Number(raw)) > 1000 ? 1000 : 1));
     const cls = c >= 55 ? "hot" : c >= 45 ? "warm" : "";
-    return `<div class="zone"><div class="zone-name">${type || "?"}</div><div class="zone-temp ${cls}">${c}°C</div></div>`;
+    return `<div class="zone"><div class="zone-name">${escapeHtml(type || "?")}</div><div class="zone-temp ${cls}">${c}°C</div></div>`;
   }).join("");
   zones.innerHTML = rows;
 }

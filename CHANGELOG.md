@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.2.6 (versionCode 326)
+### Fixed
+- Hardened peridot (POCO F6 / Redmi Turbo 3, SM8635) detection against the
+  HyperOS platform-quirk where `ro.board.platform` reports `pineapple`
+  instead of the nominal `sun` for the 8s Gen 3. `ro.product.board`
+  (`peridot`) is now probed and used as a first-class device corroborator,
+  and the matcher accepts every known alias without false-positive on
+  genuine SM8650 (`pineapple`) devices.
+- Hardware cache schema bumped to v5 to carry the new `product_board`
+  identity field; the cache now invalidates if `ro.product.board` changes
+  (e.g. ROM swap), matching the existing fingerprint/device/board-platform
+  validation.
+- Installer (`update-binary`) peridot-family banner no longer warns on the
+  target device when HyperOS reports `ro.board.platform=sun` instead of
+  `pineapple`; the check now accepts `peridot`/model-ID device names and
+  both platform aliases.
+- Periodic Joyose suppressor spawned by `service.sh` now records its PID
+  and self-exits when the module directory is removed; `uninstall.sh`
+  kills it explicitly so no background loop survives module removal until
+  reboot.
+- KernelSU WebUI thermal-zone list escapes zone-type strings before
+  rendering (prevents HTML injection from root-controlled sysfs data).
+- Version metadata synced: `package.json` was still on 3.2.4; now 3.2.6
+  to match `module.prop` / `Cargo.toml`.
+- `thermalai-detect` CSV and `hardware_report.txt` now include
+  `ro.product.device` and `ro.product.board` for easier diagnostics.
+
 ## v3.2.5 (versionCode 325)
 ### Fixed
 - Reduced AOSP Android 17 UI stutter by holding Balanced during normal screen-on interaction unless temperatures or trends require real thermal tightening.

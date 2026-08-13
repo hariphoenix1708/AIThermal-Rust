@@ -54,20 +54,39 @@ pub fn matches(profile: &HardwareProfile) -> bool {
     let mut score = 0;
 
     let device = profile.product_device.to_lowercase();
+    let board = profile.product_board.to_lowercase();
+    let identity = profile.device_identity.to_lowercase();
     let platform = profile.board_platform.to_lowercase();
     let boot_hw = profile.boot_hardware.to_lowercase();
     let soc = profile.soc_info.to_lowercase();
 
+    // Corroborating device-identity signals. The board property
+    // (ro.product.board = "peridot") and the model IDs are treated as
+    // first-class corroborators alongside ro.product.device.
     if device == "peridot"
-        || device.contains("poco f6")
-        || device.contains("redmi turbo 3")
-        || profile.device_identity.contains("24069PC21G")
-        || profile.device_identity.contains("24069RA21C")
+        || device.contains("peridot")
+        || board == "peridot"
+        || board.contains("peridot")
+        || identity.contains("peridot")
+        || identity.contains("poco f6")
+        || identity.contains("redmi turbo 3")
+        || identity.contains("24069pc21g")
+        || identity.contains("24069ra21c")
     {
         score += 2;
     }
 
-    if platform == "sun" || soc.contains("sm8635") || boot_hw == "sun" || soc.contains("pineapple")
+    // Corroborating platform/SoC signals. The 8s Gen 3 is nominally
+    // platform "sun", but HyperOS on the POCO F6 reports
+    // ro.board.platform = "pineapple" (confirmed on-device). The
+    // `soc.contains("pineapple")` branch is the existing fallback for
+    // ROMs that omit ro.soc.model/ro.soc.name, where soc_info resolves
+    // to ro.board.platform. Every peridot tweak is a safe no-op when a
+    // zone/node is absent, so a spurious match is harmless.
+    if platform == "sun"
+        || soc.contains("sm8635")
+        || soc.contains("pineapple")
+        || boot_hw == "sun"
     {
         score += 2;
     }

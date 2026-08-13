@@ -13,6 +13,10 @@ impl HardwareProbe {
                 &["ro.product.device", "ro.product.model"],
                 "Unknown",
             ),
+            product_board: super::android_prop::get_any_property(
+                &["ro.product.board"],
+                "Unknown",
+            ),
             boot_hardware: super::android_prop::get_any_property(&["ro.boot.hardware"], "Unknown"),
             device_identity: super::android_prop::get_any_property(
                 &["ro.product.model", "ro.product.device"],

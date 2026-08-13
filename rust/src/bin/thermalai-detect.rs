@@ -19,6 +19,8 @@ fn main() -> Result<()> {
     let mut csv_out = String::new();
     csv_out.push_str("Category,Key,Value\n");
     csv_out.push_str(&format!("Metadata,Device,{}\n", profile.device_identity));
+    csv_out.push_str(&format!("Metadata,ProductDevice,{}\n", profile.product_device));
+    csv_out.push_str(&format!("Metadata,ProductBoard,{}\n", profile.product_board));
     csv_out.push_str(&format!("Metadata,SoC,{}\n", profile.soc_info));
     csv_out.push_str(&format!(
         "Metadata,Kernel,{}\n",

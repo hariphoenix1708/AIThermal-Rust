@@ -30,6 +30,17 @@ for node in /sys/class/qcom-battery/restrict_chg \
     [ -w "$node" ] && echo 0 > "$node" 2>/dev/null
 done
 
+# Stop the periodic Joyose suppressor spawned by service.sh. It also
+# self-exits once the module directory is removed, but kill it now so
+# nothing lingers between removal and the next reboot.
+if [ -f "$STATE_DIR/joyose_watcher.pid" ]; then
+    WATCHER_PID=$(cat "$STATE_DIR/joyose_watcher.pid" 2>/dev/null)
+    if [ -n "$WATCHER_PID" ]; then
+        kill "$WATCHER_PID" 2>/dev/null
+    fi
+    rm -f "$STATE_DIR/joyose_watcher.pid"
+fi
+
 # The daemon's own SIGTERM handler restores the hardware snapshot on clean
 # shutdown. We just need to clean up every file/folder it creates under
 # LOG_DIR/STATE_DIR so nothing is left behind after the module is removed.

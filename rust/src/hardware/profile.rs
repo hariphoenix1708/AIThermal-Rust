@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct HardwareProfile {
     pub metadata: CacheMetadata,
     pub product_device: String,
+    pub product_board: String,
     pub boot_hardware: String,
     pub device_identity: String,
     pub soc_info: String,
@@ -123,6 +124,7 @@ pub struct KernelCapabilityProfile {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CacheMetadata {
     pub product_device: String,
+    pub product_board: String,
     pub boot_hardware: String,
     pub device_identity: String,
     pub board_platform: String,
