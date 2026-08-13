@@ -255,6 +255,24 @@ impl PolicyEngine {
             tentative
         };
 
+        // Suspend is a screen-off-only state. The moment the screen is back
+        // on, exit Suspend immediately: the exit debounce (measured from
+        // Suspend entry) would otherwise hold the bare powersave governor on
+        // every cluster for seconds after every wake — the main cause of UI
+        // stutter right after unlocking. Escalations toward a tighter state
+        // still apply: the screen is on and the phone is in use, so real
+        // heat must keep clamping.
+        if self.current_policy == PolicyState::Suspend
+            && !is_screen_off
+            && next_state != PolicyState::Suspend
+        {
+            self.current_policy = next_state.clone();
+            self.last_change_at = std::time::Instant::now();
+            self.active_debounce = self.debounce;
+            self.last_total_score = total_score;
+            return self.current_policy.clone();
+        }
+
         self.apply_transition(next_state, total_score)
     }
 
@@ -500,6 +518,58 @@ mod tests {
         );
 
         assert_eq!(policy, PolicyState::Balanced);
+    }
+
+    #[test]
+    fn suspend_exits_immediately_when_screen_turns_on() {
+        // Regression: after a wake the engine used to hold Suspend (bare
+        // powersave governor) until the exit debounce elapsed — 3-5 s of
+        // min-frequency CPUs on every unlock = UI stutter. A fresh
+        // last_change_at (debounce just armed) must NOT block the exit when
+        // the screen is back on.
+        let mut engine = PolicyEngine::new(10, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Suspend;
+        engine.last_change_at = std::time::Instant::now();
+        let config = ProfilesConfig::default();
+
+        let policy = engine.evaluate(
+            30, 30, 0, false, false, 5.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30,
+        );
+        assert_eq!(policy, PolicyState::Balanced);
+    }
+
+    #[test]
+    fn suspend_hold_is_not_bypassed_while_screen_off() {
+        // Screen-off Suspend must keep its debounce: a score that briefly
+        // crosses above -5 while the screen stays off must NOT exit to
+        // Balanced (avoids Suspend<->Balanced flapping on the boundary).
+        let mut engine = PolicyEngine::new(10, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Suspend;
+        engine.last_change_at = std::time::Instant::now();
+        let config = ProfilesConfig::default();
+
+        let policy = engine.evaluate(
+            30, 30, 0, false, true, 5.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30,
+        );
+        assert_eq!(policy, PolicyState::Suspend);
+    }
+
+    #[test]
+    fn suspend_wake_escape_still_honors_real_heat() {
+        // Waking into a genuinely hot SoC must still escalate straight to
+        // EmergencyCool, never down to Balanced.
+        let mut engine = PolicyEngine::new(10, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Suspend;
+        engine.last_change_at = std::time::Instant::now();
+        let config = ProfilesConfig::default();
+
+        let policy = engine.evaluate(
+            80, 80, 2, false, false, 5.0, 0.0, 0.0, 0.0, 0.0, &config, 40, 40,
+        );
+        assert_eq!(policy, PolicyState::EmergencyCool);
     }
 }
 

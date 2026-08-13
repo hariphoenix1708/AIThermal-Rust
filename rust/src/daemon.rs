@@ -265,14 +265,15 @@ impl Daemon {
                 thread::sleep(Duration::from_millis(this_segment));
                 elapsed_ms += this_segment;
 
-                // Only bother re-checking screen state early if we're in a long
-                // (idle-tier) sleep to begin with - short sleeps don't need this.
-                if sleep_ms > 2000 {
-                    let now_screen_off = self.check_screen_off();
-                    if was_screen_off && !now_screen_off {
-                        tracing::debug!("Screen turned on during idle sleep, waking daemon early");
-                        break;
-                    }
+                // Wake within one segment whenever the screen turns back on,
+                // regardless of the sleep tier. Previously gated to long idle
+                // sleeps, a 2 s poll sleep could hold the powersave governor
+                // (Suspend policy) for up to two extra seconds after every wake,
+                // which read as UI stutter. The sysfs reads here are cheap.
+                let now_screen_off = self.check_screen_off();
+                if was_screen_off && !now_screen_off {
+                    tracing::debug!("Screen turned on during idle sleep, waking daemon early");
+                    break;
                 }
             }
         }

@@ -626,6 +626,23 @@ impl RuntimeTask for SystemOrchestrator {
             tracing::info!(target: "wake", "Screen wake detected; deferring actuation for 800ms");
         }
 
+        // Defense-in-depth: the policy engine already exits Suspend instantly
+        // on screen-on, but a wake must never leave the device on the bare
+        // powersave governor even if the engine is mid-debounce/override or
+        // the actuation throttle (1.5 s) hasn't cleared. Every non-Suspend
+        // policy uses schedutil, so restoring it here can never conflict with
+        // the policy this tick settles on.
+        if just_woke && self.last_applied_cpu_gov.as_deref() == Some("powersave") {
+            if let Some(gov) = self.select_cpu_governor(&["schedutil"]) {
+                if let Err(e) = self.governors.apply_cpu_governor(&gov) {
+                    tracing::warn!("Failed to restore interactive governor on wake: {}", e);
+                } else {
+                    self.last_applied_cpu_gov = Some(gov);
+                    tracing::debug!(target: "thermal", "Restored schedutil governor on wake");
+                }
+            }
+        }
+
         if just_woke
             && ctx
                 .screen_off_since

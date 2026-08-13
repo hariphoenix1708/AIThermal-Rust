@@ -1,5 +1,25 @@
 # Changelog
 
+## v3.2.11 (versionCode 331)
+### Fixed
+- Eliminated the UI stutter right after every screen wake. The Suspend policy
+  (screen-off power saving) exited only after the 6 s policy debounce measured
+  from Suspend entry, so unlocking left every cluster on the bare `powersave`
+  governor (min frequency) for up to ~5 s of interaction. Three changes:
+  1. Policy engine now exits Suspend immediately on the first tick where the
+     screen is on — the exit debounce/hysteresis no longer applies to the
+     Suspend->* direction, so the governor flips back to `schedutil` on the
+     wake tick itself. Escalations toward Conservative/Powersave/EmergencyCool
+     for real heat still win.
+  2. The daemon now wakes for a screen-on event within one 250 ms sleep segment
+     at every sleep tier (previously only during long idle sleeps), cutting the
+     worst-case response from ~2 s to ~250 ms.
+  3. Defense-in-depth in the orchestrator: a wake immediately restores the
+     `schedutil` governor if the last applied governor was `powersave`, even if
+     the actuation throttle (1.5 s) or a policy override would have delayed it.
+- Added regression tests for the screen-on Suspend escape, the screen-off hold
+  (no boundary flapping) and real-heat escalation on wake.
+
 ## v3.2.10 (versionCode 330)
 ### Changed
 - Reworked the installer so the full installation log actually shows during
