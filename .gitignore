@@ -5,3 +5,6 @@ target/
 # Added by cargo
 
 /target
+
+# Build artifacts
+/AIThermal-Rust.zip

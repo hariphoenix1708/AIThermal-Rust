@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.2.7 (versionCode 327)
+### Changed
+- Completely reworked the KernelSU WebUI: modern glassmorphism theme with
+  animated ambient gradient background, blurred cards, gradient typography
+  and a sliding pill tab indicator.
+- Added a full-screen navigation button in the header (uses
+  `ksu.fullScreen` on KernelSU, `setDisplayState` on older managers) with
+  an expand/compress icon toggle.
+- Added horizontal swipe navigation between tabs (left/right), with slide
+  transitions that match the swipe direction. Vertical scrolling stays
+  native; swipes starting on buttons/tabs are ignored.
+- Thermal-zone cards now sort hottest-first with a proportional gradient
+  bar; zone names remain HTML-escaped.
+- Polling now pauses when the WebUI is hidden (KernelSU visibility hooks +
+  `visibilitychange` fallback).
+
 ## v3.2.6 (versionCode 326)
 ### Fixed
 - Hardened peridot (POCO F6 / Redmi Turbo 3, SM8635) detection against the

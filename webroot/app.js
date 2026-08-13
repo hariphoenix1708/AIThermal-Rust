@@ -1,10 +1,15 @@
 /* ThermalAI KernelSU WebUI
  * Talks to the daemon via `thermalair` CLI + direct file reads through ksu.exec().
+ * Modern glassmorphism UI with fullscreen toggle (ksu.fullScreen) and
+ * swipe navigation between tabs.
  */
 
 const STATE_DIR = "/data/local/tmp/thermalai_state";
 const LOG_DIR = "/data/local/tmp";
 const MODULE_DIR = "/data/adb/modules/thermalai_rust";
+const TABS = ["dashboard", "policy", "gaming", "charging", "logs", "hardware"];
+let activeTab = "dashboard";
+let pageVisible = true;
 
 /* ------------------------------------------------------------------ */
 /* KernelSU bridge                                                    */
@@ -58,16 +63,80 @@ function escapeHtml(s) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Tabs                                                               */
+/* Tabs + swipe navigation                                            */
 /* ------------------------------------------------------------------ */
-document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById("view-" + btn.dataset.tab).classList.add("active");
-    loadTab(btn.dataset.tab);
+function moveIndicator() {
+  const active = document.querySelector(".tab.active");
+  const ind = document.getElementById("tabIndicator");
+  if (!active || !ind) return;
+  ind.style.width = active.offsetWidth + "px";
+  ind.style.transform = `translateX(${active.offsetLeft}px)`;
+}
+
+function switchTab(name, dir) {
+  if (TABS.indexOf(name) === -1) return;
+  activeTab = name;
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".view").forEach((v) => {
+    const on = v.id === "view-" + name;
+    v.classList.remove("slide-left", "slide-right");
+    v.classList.toggle("active", on);
+    if (on && dir) v.classList.add(dir === "left" ? "slide-left" : "slide-right");
   });
+  moveIndicator();
+  loadTab(name);
+}
+
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab, null));
+});
+
+/* Horizontal swipe between tabs. Vertical scrolling stays native
+ * (body has touch-action: pan-y); swipes starting on interactive
+ * elements (buttons, tabs) are ignored. */
+const main = document.getElementById("main");
+let sw = { x: 0, y: 0, on: false };
+
+main.addEventListener("touchstart", (e) => {
+  if (e.target.closest("button, a, .tab, .icon-btn")) { sw.on = false; return; }
+  sw = { x: e.touches[0].clientX, y: e.touches[0].clientY, on: true };
+}, { passive: true });
+
+main.addEventListener("touchend", (e) => {
+  if (!sw.on) return;
+  sw.on = false;
+  const dx = e.changedTouches[0].clientX - sw.x;
+  const dy = e.changedTouches[0].clientY - sw.y;
+  if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+  const cur = TABS.indexOf(activeTab);
+  const next = dx < 0 ? cur + 1 : cur - 1; // swipe left -> next tab
+  if (next >= 0 && next < TABS.length) {
+    switchTab(TABS[next], dx < 0 ? "left" : "right");
+  }
+}, { passive: true });
+
+window.addEventListener("resize", moveIndicator);
+
+/* ------------------------------------------------------------------ */
+/* Fullscreen                                                         */
+/* ------------------------------------------------------------------ */
+let isFullscreen = false;
+
+function applyFullscreen(on) {
+  document.getElementById("fullscreenBtn").classList.toggle("on", on);
+  if (typeof ksu === "undefined") return;
+  try {
+    if (typeof ksu.fullScreen === "function") {
+      ksu.fullScreen(on);
+    } else if (typeof ksu.setDisplayState === "function") {
+      ksu.setDisplayState(on ? "open" : "close");
+    }
+  } catch (e) { /* manager may reject fullscreen; ignore */ }
+}
+
+document.getElementById("fullscreenBtn").addEventListener("click", () => {
+  isFullscreen = !isFullscreen;
+  applyFullscreen(isFullscreen);
 });
 
 /* ------------------------------------------------------------------ */
@@ -163,13 +232,23 @@ async function loadZones() {
   done`);
   const zones = document.getElementById("zones");
   if (!r.stdout.trim()) { zones.innerHTML = '<div class="muted small">No zones available.</div>'; return; }
-  const rows = r.stdout.trim().split("\n").map((l) => {
+  const parsed = r.stdout.trim().split("\n").map((l) => {
     const [type, raw] = l.split("|");
     const c = Math.round(Number(raw) / (Math.abs(Number(raw)) > 1000 ? 1000 : 1));
-    const cls = c >= 55 ? "hot" : c >= 45 ? "warm" : "";
-    return `<div class="zone"><div class="zone-name">${escapeHtml(type || "?")}</div><div class="zone-temp ${cls}">${c}°C</div></div>`;
+    return { type: type || "?", c: Number.isFinite(c) ? c : 0 };
+  }).filter((z) => z.c > 0).sort((a, b) => b.c - a.c);
+  const maxT = Math.max(...parsed.map((z) => z.c), 1);
+  zones.innerHTML = parsed.map((z) => {
+    const cls = z.c >= 55 ? "hot" : z.c >= 45 ? "warm" : "";
+    const bar = Math.max(6, Math.round((z.c / maxT) * 100));
+    return `<div class="zone">
+      <div class="zone-head">
+        <div class="zone-name" title="${escapeHtml(z.type)}">${escapeHtml(z.type)}</div>
+        <div class="zone-temp ${cls}">${z.c}°C</div>
+      </div>
+      <div class="zone-bar" style="width:${bar}%"></div>
+    </div>`;
   }).join("");
-  zones.innerHTML = rows;
 }
 
 /* ------------------------------------------------------------------ */
@@ -294,11 +373,20 @@ async function loadVersion() {
 }
 
 loadVersion();
-loadDashboard();
-loadZones();
+switchTab("dashboard", null);
+
+/* Pause polling when the WebUI is not visible. */
+if (typeof ksu !== "undefined") {
+  try {
+    if (typeof ksu.onWebUiVisible === "function") ksu.onWebUiVisible(() => { pageVisible = true; });
+    if (typeof ksu.onWebUiHidden === "function") ksu.onWebUiHidden(() => { pageVisible = false; });
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { pageVisible = !document.hidden; });
 
 /* Poll dashboard every 3s while it's the active tab */
 setInterval(() => {
+  if (!pageVisible) return;
   if (document.getElementById("view-dashboard").classList.contains("active")) {
     loadDashboard();
   }
