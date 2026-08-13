@@ -17,6 +17,10 @@ pub enum FrequencyTier {
     Eco,      // use a frequency between min and mid - consistently smooth
 }
 
+// Minimum parsed frames before a FrameStats jank ratio is considered
+// statistically meaningful for tier decisions.
+const MIN_JANK_SAMPLES: usize = 10;
+
 impl AdaptiveGovernorState {
     pub fn new(sample_interval_secs: u64) -> Self {
         Self {
@@ -53,7 +57,16 @@ impl AdaptiveGovernorState {
     ) -> FrequencyTier {
         self.last_sample_at = Some(Instant::now());
 
-        let raw_next_tier = if let Some(stats) = frame_stats {
+        // Jank from 2-4 recovered frames is statistical noise (dumpsys on
+        // this Android 16 build only ever yields a handful of durations) and
+        // was firing the Max tier on garbage. Require a real sample count
+        // before trusting the jank signal; otherwise fall back to utilization.
+        let enough_samples = frame_stats
+            .map(|s| s.sample_count >= MIN_JANK_SAMPLES)
+            .unwrap_or(false);
+
+        let raw_next_tier = if enough_samples {
+            let stats = frame_stats.unwrap();
             let jank_ratio = stats.jank_ratio();
             if jank_ratio > 0.15 || stats.worst_frame_ns > 50_000_000 {
                 FrequencyTier::Max

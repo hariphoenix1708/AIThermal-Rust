@@ -10,6 +10,15 @@ pub enum PolicyState {
     Suspend,
 }
 
+// Gaming latch: while a game is running, hold Performance against brief
+// score dips caused by trend/comfort noise (which flipped the policy
+// Balanced<->Performance every ~15-30s and rewrote governors + the stock
+// thermal engine mid-frame). The score must stay above the latch threshold
+// for GAMING_LATCH_REQUIRED consecutive ticks before Performance softens to
+// Balanced. Escalation toward Conservative/Powersave is never blocked.
+const GAMING_LATCH_REQUIRED: u8 = 3;
+const GAMING_LATCH_THRESHOLD: f64 = 25.0;
+
 pub struct PolicyEngine {
     pub current_policy: PolicyState,
     pub debounce: std::time::Duration,
@@ -20,6 +29,7 @@ pub struct PolicyEngine {
     startup_grace_secs: u64,
     last_total_score: f64,
     trend_history: std::collections::VecDeque<i32>,
+    gaming_latch_ticks: u8,
 }
 
 impl PolicyEngine {
@@ -36,6 +46,7 @@ impl PolicyEngine {
             startup_grace_secs: 30, // Default 30s grace period for inputs to stabilize
             last_total_score: 0.0,
             trend_history: std::collections::VecDeque::with_capacity(5),
+            gaming_latch_ticks: 0,
         }
     }
 
@@ -146,7 +157,7 @@ impl PolicyEngine {
         // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
         // A typical hot score might be: temp diff (45-35)=10 * 2 = 20, pred (45-35)=15, game=10, trend=5, context=..., comfort=...
         // Let's calibrate:
-        let tentative = if composite_temp >= config.temp_critical
+        let mut tentative = if composite_temp >= config.temp_critical
             || predicted_temp >= config.temp_critical
             || total_score > 90.0
         {
@@ -168,6 +179,28 @@ impl PolicyEngine {
         } else {
             PolicyState::Balanced
         };
+
+        // Gaming latch: hold Performance against brief Balanced dips caused by
+        // noisy trend/comfort terms. Only releases after the score holds above
+        // the threshold for a few consecutive ticks. Does not block escalation.
+        if is_gaming
+            && matches!(self.current_policy, PolicyState::Performance)
+            && tentative == PolicyState::Balanced
+        {
+            if total_score >= GAMING_LATCH_THRESHOLD {
+                self.gaming_latch_ticks = self.gaming_latch_ticks.saturating_add(1);
+                if self.gaming_latch_ticks >= GAMING_LATCH_REQUIRED {
+                    self.gaming_latch_ticks = 0;
+                } else {
+                    tentative = PolicyState::Performance;
+                }
+            } else {
+                self.gaming_latch_ticks = 0;
+                tentative = PolicyState::Performance;
+            }
+        } else {
+            self.gaming_latch_ticks = 0;
+        }
 
         // P5: require sustained pressure before entering Powersave from
         // a lighter state. Single-tick trend spikes must not cliff the UI.
@@ -300,6 +333,58 @@ mod tests {
         // Rise to warm
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(10);
         let _res = engine.evaluate(50, 50, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config, 35, 35);
+    }
+
+    #[test]
+    fn gaming_latch_holds_performance_through_short_balanced_dips() {
+        let mut engine = PolicyEngine::new(1, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Performance;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let config = ProfilesConfig::default();
+
+        // First noisy spike (score 22, in Balanced band but below latch
+        // threshold) must be held at Performance and the counter reset.
+        let policy = engine.evaluate(
+            44, 44, 8, true, false, 14.0, 0.0, 16.0, 10.0, 0.0, &config, 40, 41,
+        );
+        assert_eq!(policy, PolicyState::Performance);
+        assert_eq!(engine.gaming_latch_ticks, 0); // below threshold -> reset
+
+        // Sustained heat (score 36) for fewer than the required ticks stays Performance.
+        let mut engine = PolicyEngine::new(1, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Performance;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let policy = engine.evaluate(
+            46, 46, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 41, 42,
+        );
+        assert_eq!(policy, PolicyState::Performance);
+        assert_eq!(engine.gaming_latch_ticks, 1);
+
+        // Second sustained tick still holds (needs 3).
+        let policy = engine.evaluate(
+            46, 46, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 41, 42,
+        );
+        assert_eq!(policy, PolicyState::Performance);
+        assert_eq!(engine.gaming_latch_ticks, 2);
+
+        // Third sustained tick releases to Balanced.
+        let policy = engine.evaluate(
+            46, 46, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 41, 42,
+        );
+        assert_eq!(policy, PolicyState::Balanced);
+        assert_eq!(engine.gaming_latch_ticks, 0);
+
+        // Escalation to Conservative is never blocked by the latch.
+        // (last_change_at is set past the 15s gaming debounce active_debounce
+        // picked up during the latch release above.)
+        engine.current_policy = PolicyState::Performance;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(16);
+        let policy = engine.evaluate(
+            50, 50, 10, true, false, 14.0, 0.0, 23.0, 10.0, 0.0, &config, 42, 43,
+        );
+        assert_eq!(policy, PolicyState::Conservative);
     }
 
     #[test]

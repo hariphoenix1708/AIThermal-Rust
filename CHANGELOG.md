@@ -1,5 +1,38 @@
 # Changelog
 
+## v3.2.8 (versionCode 328)
+### Fixed
+- Eliminated mid-game animation stutter caused by the policy flapping
+  Performance<->Balanced every ~15-30s during gaming. Two changes:
+  1. The stock thermal engine (`thermal_message/sconfig`) is now disabled for
+     the entire gaming session and gated on the *gaming state*, not the policy
+     name. Previously each Balanced dip mid-game re-armed mi_thermald
+     (`sconfig=0`), which re-asserted stock frequency caps on a hot SoC and
+     caused repeated dropped frames (21 toggles in one 9.5-minute session).
+  2. Added a gaming policy latch: Performance is held against brief score dips
+     from noisy trend/comfort terms and only softens to Balanced after the
+     score holds above the latch threshold for 3 consecutive ticks. Escalation
+     to Conservative/Powersave is never blocked.
+- Fixed the calibration offset drifting to -6C during warm-but-flat normal use,
+  which masked all gaming heat (the thermal model saw 39C while the SoC was at
+  45-55C). Calibration now shifts only on a genuine rising ramp, and the offset
+  is reset to 0 at the start of every gaming session so heat is read honestly.
+- Softened the post-game recovery clamp so the exit animation/home-screen
+  transition right after a game is not capped at 1.7GHz for 20 seconds.
+- The adaptive governor no longer trusts jank statistics derived from only 2-4
+  parsed frames (dumpsys on Android 16 yields too few durations); it now
+  requires at least 10 samples before a jank value can drive a tier decision,
+  otherwise it falls back to CPU utilization. Frame sampling cadence lowered
+  from 1.5s to 5s to stop spawning up to 4 `dumpsys` processes per cycle while
+  gaming.
+- GPU load is now read from `kgsl-3d0/devfreq/busy_time` first (confirmed
+  working on peridot/SM8635) instead of `gpu_busy_percentage`, which returns
+  near-zero during gaming on some HyperOS builds and under-weighted GPU heat in
+  the composite temperature.
+- Fixed cosmetic `p90=n/ams` log formatting (now `p90=n/a` or `p90=123.4ms`).
+- Downgraded the per-tick "framestats parse yielded 0 durations" warning to
+  debug level (normal fallback path on newer Android builds).
+
 ## v3.2.7 (versionCode 327)
 ### Changed
 - Completely reworked the KernelSU WebUI: modern glassmorphism theme with

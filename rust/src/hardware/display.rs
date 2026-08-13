@@ -23,13 +23,26 @@ pub fn is_screen_off() -> bool {
 }
 
 pub fn gpu_load_percent() -> Option<u32> {
-    // 1. Direct percentage (works on some Adreno/governor combos)
+    // 1. kgsl-3d0 devfreq busy_time/total_time DIRECTLY
+    //    (confirmed working on peridot/SM8635 — same path gaming.rs uses).
+    //    Checked FIRST because gpu_busy_percentage returns near-zero garbage
+    //    during gaming on some HyperOS/kernel builds, which under-weighted
+    //    GPU heat in the composite temp.
+    let busy = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/devfreq/busy_time").ok();
+    let total = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/devfreq/total_time").ok();
+    if let (Some(b), Some(t)) = (busy, total)
+        && let (Ok(b), Ok(t)) = (b.trim().parse::<u64>(), t.trim().parse::<u64>())
+            && t > 0 {
+                return Some(((b as f64 / t as f64) * 100.0).round().min(100.0) as u32);
+            }
+
+    // 2. Direct percentage (works on some Adreno/governor combos)
     if let Ok(content) = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage")
         && let Ok(v) = content.trim().parse::<u32>() {
             return Some(v.min(100));
         }
 
-    // 2. gpubusy pair
+    // 3. gpubusy pair
     if let Ok(content) = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/gpubusy") {
         let parts: Vec<&str> = content.split_whitespace().collect();
         if parts.len() >= 2
@@ -38,16 +51,6 @@ pub fn gpu_load_percent() -> Option<u32> {
                     return Some(((busy as f64 / total as f64) * 100.0).round().min(100.0) as u32);
                 }
     }
-
-    // 3. kgsl-3d0 devfreq busy_time/total_time DIRECTLY
-    //    (confirmed working on peridot/SM8635 — same path gaming.rs uses)
-    let busy = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/devfreq/busy_time").ok();
-    let total = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/devfreq/total_time").ok();
-    if let (Some(b), Some(t)) = (busy, total)
-        && let (Ok(b), Ok(t)) = (b.trim().parse::<u64>(), t.trim().parse::<u64>())
-            && t > 0 {
-                return Some(((b as f64 / t as f64) * 100.0).round().min(100.0) as u32);
-            }
 
     // No fallback to a fake value — return None honestly.
     None

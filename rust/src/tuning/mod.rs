@@ -707,6 +707,9 @@ impl RuntimeTuner {
                 ("performance", None),
             "Balanced"                       => ("schedutil", None),
             "Conservative"                   => ("schedutil", Some(85)),
+            // Post-game / thermal recovery: gentler clamp than Conservative so
+            // the exit animation isn't starved while the SoC cools down.
+            "Recovery"                       => ("schedutil", Some(90)),
             "Powersave"                      => ("schedutil", Some(70)),
             "EmergencyCool"                  => ("schedutil", Some(55)),
             "Suspend"                        => ("powersave",  None),

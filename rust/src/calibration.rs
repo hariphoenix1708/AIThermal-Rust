@@ -97,6 +97,22 @@ impl CalibrationManager {
             // If drop is between 1 and 3, it's neutral, do nothing.
         }
     }
+    /// Zero out any calibration offset at the start of a gaming session so a
+    /// stale negative offset (accumulated during warm-flat normal use) cannot
+    /// mask real SoC heat and delay thermal escalation mid-game.
+    pub fn reset_for_gaming_session(&mut self) {
+        let prev = self.active_offset;
+        self.active_offset = 0;
+        self.hot_ticks = 0;
+        self.cool_ticks = 0;
+        if prev != 0 {
+            tracing::info!(
+                "Calibration offset reset for gaming session (was {}C)", prev
+            );
+            let _ = self.save_state();
+        }
+    }
+
     pub fn apply_calibration(&mut self, is_heating_or_flat: bool) {
         let mut changed = false;
 

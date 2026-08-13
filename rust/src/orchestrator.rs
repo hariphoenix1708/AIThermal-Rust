@@ -659,6 +659,9 @@ impl RuntimeTask for SystemOrchestrator {
                 "Game detected: {}",
                 confirmed_pkg.as_deref().unwrap_or("unknown")
             );
+            // A stale negative calibration offset must not blind the thermal
+            // model during a session: start each game with honest temps.
+            self.calibration.reset_for_gaming_session();
             // Peak temp will be set below after sensors
         }
 
@@ -711,7 +714,10 @@ impl RuntimeTask for SystemOrchestrator {
             }
         }
         let is_cooling = self.thermal.is_cooling();
-        self.calibration.apply_calibration(!is_cooling);
+        // Calibration shifts offset only on a genuine rising ramp, not on
+        // warm-but-flat idle (the latter drove offset to -6C during normal
+        // use and masked all gaming heat).
+        self.calibration.apply_calibration(self.thermal.is_heating());
 
         // 4. Prediction
         let mut predicted_temp = self.thermal.get_smoothed_temp();
@@ -1276,7 +1282,12 @@ impl RuntimeTask for SystemOrchestrator {
                     && let Err(e) = self.runtime_tuner.apply_scheduler(policy_str) {
                         tracing::warn!("Failed to apply scheduler: {}", e);
                     }
-                self.runtime_tuner.apply_universal_cpu_tuning(policy_str);
+                // During recovery the final_policy is forced Conservative, but
+                // its 85% Fmax clamp starves the exit animation for 20s. Use
+                // the gentler Recovery clamp (90% Fmax) instead; every other
+                // tuner only branches on is_perf/is_game and behaves identically.
+                let tuning_policy = if ctx.recovery_mode { "Recovery" } else { policy_str };
+                self.runtime_tuner.apply_universal_cpu_tuning(tuning_policy);
                 self.runtime_tuner.apply_universal_gpu_control(policy_str);
 
                 // v3.2.4: advanced tuning pass — schedutil rate limits,
@@ -1289,8 +1300,13 @@ impl RuntimeTask for SystemOrchestrator {
                 }
             }
 
-            // Stock thermal enable/disable based on gaming/perf
-            let want_disabled = policy_str == "Performance" || policy_str == "Gaming";
+            // Stock thermal enable/disable. Keyed on the GAMING STATE, not the
+            // policy name: mid-game Performance<->Balanced score flapping must
+            // never toggle mi_thermald on/off (each re-arm re-asserts stock
+            // frequency caps on a hot SoC and stutters the game). Stock thermal
+            // stays off for the whole session and is restored only after game
+            // exit settles.
+            let want_disabled = is_gaming;
             let currently_disabled = self.stock_thermal_disabled.unwrap_or(false);
 
             if want_disabled && !currently_disabled {
@@ -1337,8 +1353,9 @@ impl RuntimeTask for SystemOrchestrator {
         if is_gaming {
             let stats = self.background_frame_sampler.latest_stats();
             let (jank_str, p90_str) = match stats {
-                Some(s) if s.captured_at.map_or(false, |t| t.elapsed() > std::time::Duration::from_secs(5)) => {
-                    // Stale stats safety net: older than 5 seconds means the sampler is frozen/failing
+                Some(s) if s.captured_at.map_or(false, |t| t.elapsed() > std::time::Duration::from_secs(12)) => {
+                    // Stale stats safety net: older than 12s (sampler cadence is 5s)
+                    // means the sampler is frozen/failing
                     ("n/a".to_string(), "n/a".to_string())
                 }
                 Some(s)
@@ -1348,12 +1365,12 @@ impl RuntimeTask for SystemOrchestrator {
                 {
                     (
                         format!("{:.2}", s.jank_ratio() * 100.0),
-                        format!("{:.1}", s.p90_frame_ns as f64 / 1_000_000.0),
+                        format!("{:.1}ms", s.p90_frame_ns as f64 / 1_000_000.0),
                     )
                 }
                 Some(s) if s.frame_count() < 5 => {
                     // Diagnostic: Parse succeeded, but not enough frames captured
-                    // yet in this 1.5s window to be statistically meaningful.
+                    // yet in this sampling window to be statistically meaningful.
                     (
                         format!("insufficient_samples({})", s.frame_count()),
                         "n/a".to_string(),
@@ -1362,7 +1379,7 @@ impl RuntimeTask for SystemOrchestrator {
                 _ => ("n/a".to_string(), "n/a".to_string()),
             };
             tracing::info!(target: "gaming",
-                "tick pkg={} temp={}C policy={:?} gpu_load={}% jank={}% p90={}ms comfort={} session_peak={}C",
+                "tick pkg={} temp={}C policy={:?} gpu_load={}% jank={}% p90={} comfort={} session_peak={}C",
                 confirmed_pkg.as_deref().unwrap_or("?"), comp_temp, final_policy,
                 gpu_load, jank_str, p90_str, comfort_weight, ctx.game_session_peak_temp);
         }

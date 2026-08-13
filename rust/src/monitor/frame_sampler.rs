@@ -206,7 +206,7 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
     }
 
     if durations.is_empty() {
-        tracing::warn!("framestats parse yielded 0 durations — dumpsys output format may not match expected layout on this Android build");
+        tracing::debug!("framestats parse yielded 0 durations — dumpsys output format may not match expected layout on this Android build");
         return None;
     }
 
@@ -257,7 +257,11 @@ impl BackgroundFrameSampler {
                         if let Ok(mut slot) = latest_thread.lock() {
                             *slot = result;
                         }
-                        1500
+                        // Spawning up to 4 `dumpsys` processes per cycle while
+                        // a game runs is heavy; every 5s is enough signal for
+                        // the adaptive governor without stealing CPU from the
+                        // game itself.
+                        5000
                     }
                     None => {
                         if let Ok(mut slot) = latest_thread.lock() {

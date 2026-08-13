@@ -79,6 +79,21 @@ impl ThermalEngine {
             false
         }
     }
+
+    /// True when temperature has genuinely RISEN by >= 2C over the history
+    /// window. Used by calibration so that warm-but-flat idle is not mistaken
+    /// for active heating (which previously drove the calibration offset down
+    /// every ~2 minutes during normal use).
+    pub fn is_heating(&self) -> bool {
+        if self.history.len() < 3 {
+            return false;
+        }
+        if let (Some(&last), Some(&first)) = (self.history.back(), self.history.front()) {
+            (last - first) >= 2
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -106,6 +121,23 @@ mod tests {
         engine2.update(51); // 52 - 51 = 1 >= 2 -> false
         assert_eq!(engine2.history.len(), 3); // [52, 53, 51]
         assert!(!engine2.is_cooling());
+
+        // Rising case: is_heating true, is_cooling false.
+        let mut engine3 = ThermalEngine::new(3);
+        engine3.update(44);
+        engine3.update(46);
+        engine3.update(48); // 48 - 44 = 4 >= 2 -> rising
+        assert!(engine3.is_heating());
+        assert!(!engine3.is_cooling());
+
+        // Warm-but-flat: neither heating nor cooling (the idle case that
+        // previously drove the calibration offset down).
+        let mut engine4 = ThermalEngine::new(3);
+        engine4.update(40);
+        engine4.update(40);
+        engine4.update(41); // +1 rise < 2
+        assert!(!engine4.is_heating());
+        assert!(!engine4.is_cooling());
 
         // EMA check
         let smoothed = engine.get_smoothed_temp();
