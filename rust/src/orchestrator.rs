@@ -191,23 +191,26 @@ impl SystemOrchestrator {
         is_cooling_slowly: bool,
         mem_pressure: f32,
     ) -> f64 {
-        let mut base = 10.0;
+        let mut base = 5.0;
 
-        //
-        if skin_temp >= 42 {
-            base += 15.0;
-        } else if skin_temp >= 40 {
-            base += 8.0;
+        // Skin comfort only adds measured pressure once the phone is genuinely
+        // hot to the touch. The old +15 for skin >= 42 alone inflated the
+        // score by 25 and, together with a +25 trend, pushed a 50C device
+        // into Powersave/EmergencyCool territory right after boot.
+        if skin_temp >= 45 {
+            base += 10.0;
+        } else if skin_temp >= 42 {
+            base += 5.0;
         }
 
         if bat_temp >= 45 {
-            base += 15.0;
-        } else if bat_temp >= 42 {
             base += 8.0;
+        } else if bat_temp >= 42 {
+            base += 4.0;
         }
 
         if is_cooling_slowly {
-            base += 5.0;
+            base += 3.0;
         }
 
         if mem_pressure > 80.0 {
@@ -309,7 +312,15 @@ impl SystemOrchestrator {
         &mut self,
         pkg: Option<&str>,
         ctx: &crate::runtime_context::RuntimeContext,
+        is_gaming: bool,
     ) -> f64 {
+        // Game modifier must only ever shape the score while a game is ACTIVE.
+        // The confirmed package lingers a few ticks after game exit; keying on
+        // the package alone leaked a -11 (known-hot) modifier into the
+        // post-game cooldown scoring window.
+        if !is_gaming {
+            return 0.0;
+        }
         if let Some(p) = pkg.and_then(|name| self.game_profiles.get_profile(name)) {
             let mut modifier = if p.known_hot { -12.0 } else { 0.0 };
 
@@ -739,7 +750,7 @@ impl RuntimeTask for SystemOrchestrator {
             ctx.screen_off_since = None;
         }
 
-        let game_modifier = self.compute_game_modifier(confirmed_pkg.as_deref(), ctx);
+        let game_modifier = self.compute_game_modifier(confirmed_pkg.as_deref(), ctx, is_gaming);
         let mem_pressure = self
             .hardware
             .memory_profile
@@ -820,9 +831,21 @@ impl RuntimeTask for SystemOrchestrator {
                     self.last_applied_cpu_gov = Some(gov);
                 }
             }
-            if let Some(level) = self.hardware.gpu_profile.max_power_level {
-                let _ = self.governors.apply_gpu_power_level(level.saturating_sub(1));
-                self.last_applied_gpu_level = Some(level.saturating_sub(1));
+            // Mild post-game GPU clamp to help the SoC shed heat. Uses the
+            // WORST power level (max of the discovered pair — this device:
+            // min=10, max=0 -> worst=10) so the old code's raw max (0) did
+            // not leave the GPU boosted after game exit.
+            let gpu_worst_at_exit = self
+                .hardware
+                .gpu_profile
+                .min_power_level
+                .unwrap_or(0)
+                .max(self.hardware.gpu_profile.max_power_level.unwrap_or(4));
+            if self.hardware.gpu_profile.max_power_level.is_some() {
+                let _ = self
+                    .governors
+                    .apply_gpu_power_level(gpu_worst_at_exit.saturating_sub(1));
+                self.last_applied_gpu_level = Some(gpu_worst_at_exit.saturating_sub(1));
             }
 
             self.last_applied_policy = None;
@@ -863,7 +886,14 @@ impl RuntimeTask for SystemOrchestrator {
             ctx.cooldown_source_pkg = None;
         }
 
-        ctx.cooldown_active = is_cooldown && !is_gaming;
+        // Cooldown only holds the Conservative clamp while the SoC is actually
+        // still warm. A time-only 120s cooldown kept the CPU at 85% Fmax for
+        // two full minutes after game exit even at 44C — the major UI stutter
+        // the user hit after closing the game. Once the SoC drops below
+        // temp_warm, release the clamp (cooldown_until stays armed in case it
+        // reheats within the window).
+        ctx.cooldown_active =
+            is_cooldown && !is_gaming && adj_temp >= ctx.config.profiles.temp_warm;
 
         // 7. Recovery overrides & Final Policy Computation
         // desired_policy already reflects the PolicyEngine's debounce and hysteresis filtering.
@@ -871,7 +901,14 @@ impl RuntimeTask for SystemOrchestrator {
             .recovery
             .check_recovery(&desired_policy, was_gaming, is_gaming);
 
-        let final_policy = if ctx.cooldown_active || ctx.recovery_mode {
+        let final_policy = if desired_policy == PolicyState::EmergencyCool {
+            // A real emergency (composite/predicted >= temp_critical, or a
+            // high score at temp >= temp_hot) must always win over the
+            // cooldown/recovery Conservative floor — otherwise EmergencyCool's
+            // hard clamp would be silently downgraded to 85% exactly when the
+            // SoC needs the most aggressive action.
+            PolicyState::EmergencyCool
+        } else if ctx.cooldown_active || ctx.recovery_mode {
             PolicyState::Conservative
         } else {
             desired_policy
@@ -967,24 +1004,24 @@ impl RuntimeTask for SystemOrchestrator {
             self.select_cpu_governor(&["schedutil"])
         };
 
+        // KGSL power levels: LOWER index = HIGHER performance. The discovery
+        // reports the raw bounds (this device: current=10, min=10, max=0) so
+        // the "min"/"max" fields are inverted vs. intuition. Derive best/worst
+        // from the pair — the old code wrote the raw min (10 = power-save)
+        // for Performance/Balanced-gaming and crippled the GPU mid-game.
+        let gpu_min = self.hardware.gpu_profile.min_power_level;
+        let gpu_max = self.hardware.gpu_profile.max_power_level;
+        let gpu_best = gpu_min.map(|m| m.min(gpu_max.unwrap_or(m))).unwrap_or(0);
+        let gpu_worst = gpu_min.map(|m| m.max(gpu_max.unwrap_or(m))).unwrap_or(4);
+
         let gpu_level = match final_policy {
-            PolicyState::Performance => self.hardware.gpu_profile.min_power_level.unwrap_or(0),
-            PolicyState::Balanced if !is_gaming => self
-                .hardware
-                .gpu_profile
-                .max_power_level
-                .unwrap_or(4)
-                .saturating_sub(1),
-            PolicyState::Balanced => self.hardware.gpu_profile.min_power_level.unwrap_or(0),
-            PolicyState::Conservative => self
-                .hardware
-                .gpu_profile
-                .max_power_level
-                .unwrap_or(4)
-                .saturating_sub(1),
-            PolicyState::Powersave => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
-            PolicyState::EmergencyCool => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
-            PolicyState::Suspend => self.hardware.gpu_profile.max_power_level.unwrap_or(4),
+            PolicyState::Performance => gpu_best,
+            PolicyState::Balanced if !is_gaming => gpu_worst.saturating_sub(1),
+            PolicyState::Balanced => gpu_best,
+            PolicyState::Conservative => gpu_worst.saturating_sub(1),
+            PolicyState::Powersave => gpu_worst,
+            PolicyState::EmergencyCool => gpu_worst,
+            PolicyState::Suspend => gpu_worst,
         };
 
         // Grace period to avoid burst-apply stutter at game launch, tune threshold based on real-device testing.
@@ -1286,9 +1323,14 @@ impl RuntimeTask for SystemOrchestrator {
                 // its 85% Fmax clamp starves the exit animation for 20s. Use
                 // the gentler Recovery clamp (90% Fmax) instead; every other
                 // tuner only branches on is_perf/is_game and behaves identically.
-                let tuning_policy = if ctx.recovery_mode { "Recovery" } else { policy_str };
+                // Cooldown is routed through the same gentler clamp.
+                let tuning_policy = if ctx.recovery_mode || ctx.cooldown_active {
+                    "Recovery"
+                } else {
+                    policy_str
+                };
                 self.runtime_tuner.apply_universal_cpu_tuning(tuning_policy);
-                self.runtime_tuner.apply_universal_gpu_control(policy_str);
+                self.runtime_tuner.apply_universal_gpu_control(policy_str, is_gaming);
 
                 // v3.2.4: advanced tuning pass — schedutil rate limits,
                 // CFS/WALT responsiveness, deep-idle enable, zRAM algo,

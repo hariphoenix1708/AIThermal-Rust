@@ -157,9 +157,15 @@ impl PolicyEngine {
         // With screen_weight removed and comfort_weight no longer *10, the score is tighter.
         // A typical hot score might be: temp diff (45-35)=10 * 2 = 20, pred (45-35)=15, game=10, trend=5, context=..., comfort=...
         // Let's calibrate:
+        // Real heat is the only way into the hard-clamp states. A score past
+        // 90 means nothing if the SoC is still well below the hot threshold —
+        // a warm phone with a rising trend (e.g. right after boot) must not
+        // jump straight to EmergencyCool/Powersave and stutter the UI.
+        // Ladder: Conservative 40-65 (any temp), Powersave 65+ at temp_hot,
+        // EmergencyCool 90+ at temp_powersave (or real critical temp).
         let mut tentative = if composite_temp >= config.temp_critical
             || predicted_temp >= config.temp_critical
-            || total_score > 90.0
+            || (total_score > 90.0 && composite_temp >= config.temp_powersave)
         {
             PolicyState::EmergencyCool
         } else if is_screen_off
@@ -168,7 +174,7 @@ impl PolicyEngine {
             && self.last_change_at.elapsed().as_secs() > 10
         {
             PolicyState::Suspend
-        } else if total_score > 65.0 {
+        } else if total_score > 65.0 && composite_temp >= config.temp_hot {
             PolicyState::Powersave
         } else if total_score > 40.0 {
             PolicyState::Conservative
@@ -200,6 +206,21 @@ impl PolicyEngine {
             }
         } else {
             self.gaming_latch_ticks = 0;
+        }
+
+        // Gaming floor: never clamp CPU/GPU below Balanced while a game is
+        // running and the SoC is below the hot threshold. Mid-game dips into
+        // Conservative/Powersave from trend/comfort noise were the biggest
+        // source of in-game frame pacing jitter — each dip rewrote the CPU
+        // Fmax cap AND dropped the GPU to its lowest power level mid-render.
+        // Real emergencies (temp >= temp_critical / predicted) still pass.
+        if is_gaming && composite_temp < config.temp_hot {
+            match tentative {
+                PolicyState::Conservative | PolicyState::Powersave => {
+                    tentative = PolicyState::Balanced;
+                }
+                _ => {}
+            }
         }
 
         // P5: require sustained pressure before entering Powersave from
@@ -376,7 +397,9 @@ mod tests {
         assert_eq!(policy, PolicyState::Balanced);
         assert_eq!(engine.gaming_latch_ticks, 0);
 
-        // Escalation to Conservative is never blocked by the latch.
+        // Mid-game Conservative-tentative below temp_hot is now floored to
+        // Balanced (gaming floor) — the old code clamped the CPU AND dropped
+        // the GPU mid-frame, the primary in-game jitter source.
         // (last_change_at is set past the 15s gaming debounce active_debounce
         // picked up during the latch release above.)
         engine.current_policy = PolicyState::Performance;
@@ -384,7 +407,73 @@ mod tests {
         let policy = engine.evaluate(
             50, 50, 10, true, false, 14.0, 0.0, 23.0, 10.0, 0.0, &config, 42, 43,
         );
+        assert_eq!(policy, PolicyState::Balanced);
+
+        // Same score but at temp_hot (58): the gaming floor lifts and
+        // escalation to Conservative is allowed for real protection.
+        engine.current_policy = PolicyState::Performance;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(16);
+        let policy = engine.evaluate(
+            config.temp_hot, config.temp_hot, 10, true, false, 14.0, 0.0, 23.0, 10.0, 0.0,
+            &config, 42, 43,
+        );
         assert_eq!(policy, PolicyState::Conservative);
+    }
+
+    #[test]
+    fn emergency_requires_real_heat() {
+        let mut engine = PolicyEngine::new(1, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Balanced;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let config = ProfilesConfig::default();
+
+        // A warm post-boot ramp at 50C (score ~79) must NOT escalate to
+        // EmergencyCool — that used to force a 45s Recovery clamp at moderate
+        // temps. With real heat (>= temp_powersave) the same pressure does.
+        let policy = engine.evaluate(
+            50, 50, 10, false, false, 5.0, 0.0, 15.0, 20.0, 0.0, &config, 43, 45,
+        );
+        assert_ne!(policy, PolicyState::EmergencyCool);
+
+        engine.current_policy = PolicyState::Balanced;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let policy = engine.evaluate(
+            config.temp_powersave, config.temp_powersave, 10, false, false, 5.0, 0.0, 15.0,
+            20.0, 0.0, &config, 45, 46,
+        );
+        assert_eq!(policy, PolicyState::EmergencyCool);
+    }
+
+    #[test]
+    fn powersave_requires_real_heat() {
+        let mut engine = PolicyEngine::new(1, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Balanced;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(11);
+        let config = ProfilesConfig::default();
+
+        // Score ~79 at 50C must not reach Powersave; it stays Conservative.
+        let policy = engine.evaluate(
+            50, 50, 10, false, false, 5.0, 0.0, 15.0, 20.0, 0.0, &config, 43, 45,
+        );
+        assert_ne!(policy, PolicyState::Powersave);
+        assert_eq!(policy, PolicyState::Conservative);
+
+        // Same pressure at temp_hot (58C) arms, then reaches Powersave
+        // (P5 requires two consecutive ticks when below temp_powersave).
+        engine.current_policy = PolicyState::Balanced;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(11);
+        let _ = engine.evaluate(
+            config.temp_hot, config.temp_hot, 0, false, false, 5.0, 0.0, 15.0, 20.0, 0.0,
+            &config, 45, 46,
+        );
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(11);
+        let policy = engine.evaluate(
+            config.temp_hot, config.temp_hot, 0, false, false, 5.0, 0.0, 15.0, 20.0, 0.0,
+            &config, 45, 46,
+        );
+        assert_eq!(policy, PolicyState::Powersave);
     }
 
     #[test]

@@ -1,5 +1,45 @@
 # Changelog
 
+## v3.2.9 (versionCode 329)
+### Fixed
+- Eliminated mid-game CPU/GPU clamps caused by Balanced<->Conservative policy
+  flapping (~30 transitions in one COD session). Two changes:
+  1. Added a gaming floor: while a game is active and the SoC is below
+     `temp_hot` (58C), the policy can never drop below Balanced. Mid-game
+     Conservative/Powersave dips (from trend/comfort noise) previously rewrote
+     the CPU Fmax cap to 85% and dropped the GPU to its lowest power level in
+     the middle of a frame.
+  2. GPU power levels were discovered inverted on this device (`default_pwrlevel`
+     current=10, min=10, max=0 — lower index = higher performance). The old code
+     wrote the raw "min" (10 = power-save) for Performance/Balanced-gaming, so
+     the GPU ran at its slowest level for most of the session, and the runtime
+     tuner's restore path re-wrote power level 10 whenever the policy wasn't
+     literally "Performance". Boost is now derived from the best of the min/max
+     pair and applied for the whole gaming session regardless of policy string.
+- Fixed the major post-game UI stutter: the learned cooldown (`cooldown_sec=120`
+  for known-hot games) forced the CPU to 85% Fmax for two full minutes after
+  game exit even at 44C. Cooldown now only holds the clamp while the SoC is at
+  or above `temp_warm` (48C) — once the device cools, the clamp releases early
+  (and is re-armed only if it reheats inside the window). Cooldown also uses the
+  gentler 90% Recovery clamp instead of 85%.
+- Fixed a fake EmergencyCool after warm reboots: the score hit 91 at ~50C (a
+  +25 trend, a +25 comfort weight and the +6 normal-use guard) which entered
+  `Recovery -> Thermal` and clamped the CPU for 45s right after boot. The hard
+  clamp states now require real heat: EmergencyCool needs score > 90 AND
+  SoC >= temp_powersave (or composite/predicted >= temp_critical), Powersave
+  needs score > 65 AND SoC >= temp_hot. A genuine EmergencyCool also now wins
+  over the cooldown/recovery Conservative override instead of being silently
+  downgraded to 85%.
+- Reduced comfort-weight inflation: base 10->5, skin >= 42 was +15 (now +5,
+  +10 only at >= 45), battery inflation halved. A warm-but-okay phone no longer
+  scores into Powersave territory on comfort alone.
+- The game modifier (known-hot -12 etc.) was keyed on the lingering package name
+  and leaked into the post-game scoring window after exit; it is now zeroed the
+  moment gaming stops.
+- Added a daemon keeper to `service.sh`: if the thermal daemon dies mid-session
+  (crash, OOM, manual kill), the watcher loop restarts it instead of leaving the
+  device unmanaged until the next reboot.
+
 ## v3.2.8 (versionCode 328)
 ### Fixed
 - Eliminated mid-game animation stutter caused by the policy flapping

@@ -112,6 +112,26 @@ log_startup "starting daemon path=$DAEMON module=$MODDIR log_dir=$LOG_DIR state_
         if pgrep -f com.xiaomi.joyose > /dev/null 2>&1; then
             killall com.xiaomi.joyose 2>/dev/null
         fi
+
+        # Daemon keeper: if the thermal daemon died mid-session, bring it back.
+        # Only restart when the device is actually booted (not during
+        # shutdown/reboot), and only once — if the new PID dies again within a
+        # few seconds we leave it alone rather than fight the system.
+        if [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ]; then
+            DAEMON_PID="$(cat "$PID_FILE" 2>/dev/null)"
+            if [ -n "$DAEMON_PID" ] && ! is_alive "$DAEMON_PID"; then
+                log_startup "daemon not alive pid=$DAEMON_PID; restarting"
+                rm -f "$PID_FILE" "$PID_FILE.lock" 2>/dev/null
+                "$DAEMON" >/dev/null 2>&1 &
+                sleep 5
+                NEW_PID="$(cat "$PID_FILE" 2>/dev/null)"
+                if is_alive "$NEW_PID"; then
+                    log_startup "daemon restarted ok pid=$NEW_PID"
+                else
+                    log_startup "daemon restart failed pid=$NEW_PID"
+                fi
+            fi
+        fi
     done
 ) &
 JOYOSE_WATCHER_PID=$!

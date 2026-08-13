@@ -558,9 +558,13 @@ impl RuntimeTuner {
         tracing::debug!(target: "tuning", "restore_stock_thermal: unlocked and cleared locked-node registry");
     }
 
-    pub fn apply_universal_gpu_control(&self, policy: &str) {
+    pub fn apply_universal_gpu_control(&self, policy: &str, is_gaming: bool) {
         let is_perf = policy == "Performance" || policy == "performance";
-        let is_game = policy == "Gaming" || policy == "gaming" || is_perf;
+        // Boost for the whole active gaming session, not just when the policy
+        // string happens to be "Performance". Mid-game Balanced/Conservative
+        // flapping previously took the restore path and dropped the GPU to its
+        // lowest power level (default_pwrlevel=10) in the middle of a frame.
+        let is_game = policy == "Gaming" || policy == "gaming" || is_perf || is_gaming;
 
         if is_game && self.hardware.gpu_profile.is_kgsl {
             if self.hardware.gpu_profile.has_bus_split {
@@ -602,7 +606,10 @@ impl RuntimeTuner {
             if let Ok(mut last) = self.last_gpu_boost.lock() {
                 *last = Some(std::time::Instant::now());
             }
-            max_level
+            // Boost = the best (lowest-index) level. This device reports
+            // min=10/max=0, so the old `max_level` target (0) only worked by
+            // coincidence; `low` is correct by construction on any KGSL node.
+            low
         } else if let Some(current) = self.hardware.gpu_profile.current_power_level {
             if let Ok(last) = self.last_gpu_boost.lock()
                 && let Some(t) = *last
@@ -764,7 +771,7 @@ impl RuntimeTuner {
     }
 
     pub fn set_gpu_power_levels(&self, policy: &str) {
-        self.apply_universal_gpu_control(policy);
+        self.apply_universal_gpu_control(policy, false);
     }
 
     pub fn apply_universal_cpu_tuning(&self, policy: &str) {
