@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.2.10 (versionCode 330)
+### Changed
+- Reworked the installer so the full installation log actually shows during
+  install on every manager. KernelSU and KernelSU-Next ignore
+  `META-INF/com/google/android/update-binary` and only run `customize.sh`, so
+  the version banner, device/ROM/KSU info, log/state clearing and the feature
+  summary have moved into `customize.sh` (the single source for both Magisk
+  and KernelSU flows). Magisk's `update-binary` now only does the
+  extract + permission pass and hands off to `customize.sh`. The banner reads
+  the version straight from `module.prop` (`ThermalAI v3.2.10 - Rust Edition`).
+
 ## v3.2.9 (versionCode 329)
 ### Fixed
 - Eliminated mid-game CPU/GPU clamps caused by Balanced<->Conservative policy
