@@ -177,7 +177,7 @@ impl RuntimeTask for UiMonitor {
         let now = Instant::now();
         if self
             .last_sample
-            .is_none_or(|t| now.duration_since(t) < SAMPLE_EVERY)
+            .is_some_and(|t| now.duration_since(t) < SAMPLE_EVERY)
         {
             return Ok(());
         }
@@ -229,11 +229,26 @@ fn read_display_refresh_hz() -> Option<f32> {
         return None;
     }
     let text = String::from_utf8_lossy(&out.stdout);
+
     for line in text.lines() {
-        if !line.contains("refreshRate") {
-            continue;
+        if line.contains("mActiveDisplayModeInfo")
+            && let Some(hz) = extract_hz(line)
+        {
+            return Some(hz);
         }
-        if let Some(hz) = extract_hz(line) {
+    }
+    for line in text.lines() {
+        if line.contains("refreshRate")
+            && let Some(hz) = extract_hz(line)
+        {
+            return Some(hz);
+        }
+    }
+    for line in text.lines() {
+        if line.contains("Mode")
+            && !line.contains("supportedModes")
+            && let Some(hz) = extract_hz(line)
+        {
             return Some(hz);
         }
     }
@@ -241,18 +256,22 @@ fn read_display_refresh_hz() -> Option<f32> {
 }
 
 fn extract_hz(line: &str) -> Option<f32> {
-    let toks: Vec<&str> = line.split_whitespace().collect();
-    for (i, t) in toks.iter().enumerate() {
-        if t.contains("refreshRate") {
-            for next in toks.iter().skip(i + 1) {
-                let digits: String = next
-                    .chars()
-                    .take_while(|c| c.is_ascii_digit() || *c == '.')
-                    .collect();
-                if !digits.is_empty() {
-                    return digits.parse().ok();
-                }
-            }
+    for t in line.split_whitespace() {
+        let digits: String = t
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        if digits.is_empty() {
+            continue;
+        }
+        if !(t.contains("Hz") || t.contains("fps") || t.contains("refreshRate")) {
+            continue;
+        }
+        if let Ok(hz) = digits.parse::<f32>()
+            && hz > 0.0
+            && hz < 1000.0
+        {
+            return Some(hz);
         }
     }
     None

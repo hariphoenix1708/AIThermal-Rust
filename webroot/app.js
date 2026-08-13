@@ -4,8 +4,8 @@
  * swipe navigation between tabs.
  */
 
-const STATE_DIR = "/data/local/tmp/thermalai_state";
-const LOG_DIR = "/data/local/tmp";
+const STATE_DIR = "/data/local/tmp/AIThermal/state";
+const LOG_DIR = "/data/local/tmp/AIThermal";
 const MODULE_DIR = "/data/adb/modules/thermalai_rust";
 const TABS = ["dashboard", "policy", "gaming", "charging", "logs", "hardware"];
 let activeTab = "dashboard";
@@ -301,6 +301,7 @@ const LOG_FILES = {
   gaming:   "thermalai_gaming.log",
   battery:  "thermalai_battery.log",
   verbose:  "thermalai_verbose.log",
+  ui:       "thermalai_ui.log",
 };
 let currentLog = "logs";
 async function loadLogs(kind = currentLog) {

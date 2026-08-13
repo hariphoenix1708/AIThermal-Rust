@@ -1,5 +1,28 @@
 # Changelog
 
+## v3.2.13 (versionCode 333)
+### Fixed
+- UI monitor now actually samples. `UiMonitor::execute` used `Option::is_none_or`,
+  which returns `true` when no sample has been taken yet, so `last_sample` stayed
+  `None` forever and the monitor early-returned every tick — `thermalai_ui.log`
+  was always 0 bytes (first emitted only after the first 5 s gap was wrongly
+  satisfied, then the screen-off reset kept clearing it). Switched to
+  `is_some_and`, which skips only when a sample was taken within the last 5 s.
+- WebUI was still pointed at the old pre-v3.2.12 paths:
+  `STATE_DIR="/data/local/tmp/thermalai_state"` and `LOG_DIR="/data/local/tmp"`
+  made every dashboard/charging/logs/hardware read fail after logs moved to
+  `/data/local/tmp/AIThermal`. `webroot/app.js` now uses the relocated
+  `/data/local/tmp/AIThermal` and `/data/local/tmp/AIThermal/state` directories.
+- Added the `thermalai_ui.log` stream to the WebUI Logs tab (new "UI" button),
+  so the monitor output is viewable in-app instead of only via adb.
+- Display refresh-rate detection now works on Android 16 `dumpsys display`
+  output. The old parser only matched lines containing the literal token
+  `refreshRate`, but modern dumpsys emits the active mode as
+  `mActiveDisplayModeInfo: 1080x2400 120.00002Hz`. The parser now scans for
+  `mActiveDisplayModeInfo` first, falls back to `refreshRate` lines, then any
+  mode line, extracting `<number>Hz`/`<number>fps` tokens (value bounded to
+  a sane 0-1000 range).
+
 ## v3.2.12 (versionCode 332)
 ### Changed
 - Logs now live under `/data/local/tmp/AIThermal` instead of `/data/local/tmp`:
