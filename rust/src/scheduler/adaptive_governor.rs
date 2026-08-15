@@ -18,8 +18,12 @@ pub enum FrequencyTier {
 }
 
 // Minimum parsed frames before a FrameStats jank ratio is considered
-// statistically meaningful for tier decisions.
-const MIN_JANK_SAMPLES: usize = 10;
+// statistically meaningful for tier decisions. The Android 16 framestats
+// windows on this device only yield ~5-9 durations per capture, so this must
+// stay at or below that floor or the jank signal never fires and the governor
+// idles on the Balanced (mid-frequency) cap mid-game. Matches the gaming-log
+// threshold (`frame_count() >= 5`).
+const MIN_JANK_SAMPLES: usize = 5;
 
 impl AdaptiveGovernorState {
     pub fn new(sample_interval_secs: u64) -> Self {

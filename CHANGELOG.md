@@ -1,5 +1,33 @@
 # Changelog
 
+## v3.2.14 (versionCode 334)
+### Fixed
+- CPU was throttled to the mid-frequency cap for entire game sessions. The
+  adaptive governor only trusts the jank signal after `MIN_JANK_SAMPLES` (10)
+  parsed frames, but the Android 16 framestats windows on this device yield
+  only ~5-9 durations per capture (see the earlier noise note in the code), so
+  the threshold was effectively never reached. `decide_tier` fell back to the
+  utilization-only branch and idled on `Balanced`, re-applying the
+  1228/1593/1651 MHz `scaling_max_freq` cap every sample while policy was
+  Performance — starving the CPU mid-game even though the game was janking at
+  33-40%. `MIN_JANK_SAMPLES` lowered to 5, matching the gaming-log threshold
+  (`frame_count() >= 5`) so the governor actually escalates to Max when jank
+  exceeds 15% and releases the cap.
+- UI monitor `gfx[n/a]` on every sample. `read_top_window` returns the full
+  `mCurrentFocus` component (`pkg/Activity`), but `dumpsys gfxinfo` needs the
+  bare package name — so the frame/jank summary parse always failed. The
+  monitor now extracts the package before calling gfxinfo; `frames/jank/p50/
+  p90/missVsync/slowUI` and the jank WARN lines are live again.
+- Display refresh rate read as `?Hz` on Android 16. Modern `dumpsys display`
+  no longer emits a literal `refreshRate` token; the active rate is carried as
+  `renderFrameRate 120.000002` / `mActiveRenderFrameRate=120.000002` /
+  `vsyncRate=...` / `fps=...`, with the number after `=` or in the next token.
+  The parser now scans `mOverrideDisplayInfo`→`renderFrameRate`→`refreshRate`
+  →`DisplayModeRecord`→`fps=` (in that order) and extracts values
+  case-insensitively. Unit-tested against real capture formats.
+- Animation scales that read `null` (unset, e.g. `animator_duration_scale`)
+  are displayed as `n/a` instead of a raw `null` in the UI log.
+
 ## v3.2.13 (versionCode 333)
 ### Fixed
 - UI monitor now actually samples. `UiMonitor::execute` used `Option::is_none_or`,

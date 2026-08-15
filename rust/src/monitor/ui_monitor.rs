@@ -72,7 +72,13 @@ impl UiMonitor {
 
         let refresh_hz = self.refresh_hz_cached();
         let top = read_top_window();
-        let gfx = top.as_deref().and_then(read_gfxinfo_summary);
+        // mCurrentFocus yields "pkg/Activity" — gfxinfo needs the bare package,
+        // and the compact log line wants the package too.
+        let top_pkg = top
+            .as_deref()
+            .and_then(|p| p.split('/').next())
+            .filter(|p| !p.is_empty());
+        let gfx = top_pkg.and_then(read_gfxinfo_summary);
         let procs = self.proc_cpu_percent();
         let anim = read_anim_scales();
         let scaling = read_scaling_state();
@@ -80,10 +86,7 @@ impl UiMonitor {
         let refresh_str = refresh_hz
             .map(|h| format!("{:.0}", h))
             .unwrap_or_else(|| "?".to_string());
-        let top_str = top
-            .as_deref()
-            .map(|p| p.split('/').next().unwrap_or(p))
-            .unwrap_or("none");
+        let top_str = top_pkg.unwrap_or("none");
         let gfx_str = gfx
             .as_ref()
             .map(|g| g.to_compact())
@@ -230,23 +233,35 @@ fn read_display_refresh_hz() -> Option<f32> {
     }
     let text = String::from_utf8_lossy(&out.stdout);
 
-    for line in text.lines() {
-        if line.contains("mActiveDisplayModeInfo")
-            && let Some(hz) = extract_hz(line)
-        {
-            return Some(hz);
-        }
+    // Modern AOSP (13+) DisplayInfo exposes the effective rate apps are paced
+    // at as `renderFrameRate 120.000002` / `mActiveRenderFrameRate=120.000002`
+    // (LRT / auto-switch aware). Prefer the override info first — it is what
+    // the top app actually receives — then any renderFrameRate line.
+    if let Some(hz) = scan_lines(&text, &["mOverrideDisplayInfo", "renderFrameRate"]) {
+        return Some(hz);
     }
-    for line in text.lines() {
-        if line.contains("refreshRate")
-            && let Some(hz) = extract_hz(line)
-        {
-            return Some(hz);
-        }
+    if let Some(hz) = scan_lines(&text, &["renderFrameRate"]) {
+        return Some(hz);
     }
+    // Legacy format (Android <= 12): `..., refreshRate 120.00002 fps, ...`.
+    if let Some(hz) = scan_lines(&text, &["refreshRate"]) {
+        return Some(hz);
+    }
+    // Last resort: mode entries (`fps=` / `vsyncRate=` in supportedModes /
+    // DisplayModeRecord). Tends to report the panel's max mode rather than
+    // the active one, but beats nothing.
+    if let Some(hz) = scan_lines(&text, &["DisplayModeRecord"]) {
+        return Some(hz);
+    }
+    if let Some(hz) = scan_lines(&text, &["fps="]) {
+        return Some(hz);
+    }
+    None
+}
+
+fn scan_lines(text: &str, needles: &[&str]) -> Option<f32> {
     for line in text.lines() {
-        if line.contains("Mode")
-            && !line.contains("supportedModes")
+        if needles.iter().all(|n| line.contains(n))
             && let Some(hz) = extract_hz(line)
         {
             return Some(hz);
@@ -256,25 +271,49 @@ fn read_display_refresh_hz() -> Option<f32> {
 }
 
 fn extract_hz(line: &str) -> Option<f32> {
-    for t in line.split_whitespace() {
-        let digits: String = t
-            .chars()
-            .take_while(|c| c.is_ascii_digit() || *c == '.')
-            .collect();
-        if digits.is_empty() {
+    let toks: Vec<&str> = line.split_whitespace().collect();
+    for (i, t) in toks.iter().enumerate() {
+        let lower = t.to_lowercase();
+        let has_kw = ["hz", "fps", "refreshrate", "vsyncrate", "renderframerate"]
+            .iter()
+            .any(|k| lower.contains(k));
+        if !has_kw {
             continue;
         }
-        if !(t.contains("Hz") || t.contains("fps") || t.contains("refreshRate")) {
-            continue;
+        // Value rides after '=' in the same token (`fps=120.00001`,
+        // `vsyncRate=120.00001`), bare in the token (`120.00002Hz`), or in the
+        // NEXT token (`renderFrameRate 120.000002,`).
+        let mut candidates: Vec<&str> = Vec::new();
+        if let Some((_, v)) = t.rsplit_once('=') {
+            candidates.push(v);
+        } else {
+            candidates.push(t);
+            if let Some(next) = toks.get(i + 1) {
+                candidates.push(next);
+            }
         }
-        if let Ok(hz) = digits.parse::<f32>()
-            && hz > 0.0
-            && hz < 1000.0
-        {
-            return Some(hz);
+        for c in candidates {
+            if let Some(hz) = first_num(c)
+                && hz > 0.0
+                && hz < 1000.0
+            {
+                return Some(hz);
+            }
         }
     }
     None
+}
+
+fn first_num(s: &str) -> Option<f32> {
+    let mut digits = String::new();
+    for c in s.chars() {
+        if c.is_ascii_digit() || c == '.' {
+            digits.push(c);
+        } else if !digits.is_empty() {
+            break;
+        }
+    }
+    digits.parse().ok()
 }
 
 fn read_top_window() -> Option<String> {
@@ -381,7 +420,12 @@ fn read_anim_scales() -> [String; 3] {
             .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
             .unwrap_or_default();
-        out[i] = v;
+        out[i] = if v == "null" || v.is_empty() {
+            // Some devices report an unset scale as "null"; show it as n/a.
+            "n/a".to_string()
+        } else {
+            v
+        };
     }
     out
 }
@@ -415,4 +459,49 @@ fn read_scaling_state() -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_modern_render_frame_rate() {
+        // Android 13+ DisplayInfo line (LRT-aware active rate).
+        let line = "DisplayInfo{\"Built-in Screen\", displayId 0, real 1440 x 3168, mode 2, renderFrameRate 60.000004, defaultMode 1, supportedModes [{id=1, width=1440, height=3168, fps=120.00001}], ...}";
+        assert_eq!(extract_hz(line), Some(60.000004));
+    }
+
+    #[test]
+    fn extracts_modern_active_render_frame_rate_token() {
+        let line = "mActiveRenderFrameRate=120.00001";
+        assert_eq!(extract_hz(line), Some(120.00001));
+    }
+
+    #[test]
+    fn extracts_vsync_rate_token() {
+        let line = "mActiveSfDisplayMode=DisplayMode{id=1, width=1440, height=3168, vsyncRate=120.00001, peakRefreshRate=120.00001}";
+        assert_eq!(extract_hz(line), Some(120.00001));
+    }
+
+    #[test]
+    fn extracts_fps_from_mode_list_token() {
+        // Multiple fields in one token: must take the fps value, not id/width.
+        let line = "{id=2,width=1080,height=2400,fps=90.0}}";
+        assert_eq!(extract_hz(line), Some(90.0));
+    }
+
+    #[test]
+    fn extracts_legacy_refresh_rate() {
+        let line = "DisplayInfo{real 1080 x 2400, refreshRate 120.00002 fps, ...}";
+        assert_eq!(extract_hz(line), Some(120.00002));
+        let line2 = "mRefreshRate=90.0";
+        assert_eq!(extract_hz(line2), Some(90.0));
+    }
+
+    #[test]
+    fn rejects_bogus_values() {
+        assert_eq!(extract_hz("modeId=1 width=1080"), None);
+        assert_eq!(extract_hz("no rate keywords anywhere"), None);
+    }
 }
