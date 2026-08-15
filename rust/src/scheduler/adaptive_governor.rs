@@ -19,10 +19,11 @@ pub enum FrequencyTier {
 
 // Minimum parsed frames before a FrameStats jank ratio is considered
 // statistically meaningful for tier decisions. The Android 16 framestats
-// windows on this device only yield ~5-9 durations per capture, so this must
-// stay at or below that floor or the jank signal never fires and the governor
-// idles on the Balanced (mid-frequency) cap mid-game. Matches the gaming-log
-// threshold (`frame_count() >= 5`).
+// windows on this device only yield ~5-9 durations per capture (often 3-4 in
+// lobbies/menus), so this must sit at or below that floor. Below this
+// threshold we cannot PROVE the game is running smoothly, so the governor
+// holds Max instead of capping on low utilization (which previously starved
+// COD at the Balanced mid-frequency all session).
 const MIN_JANK_SAMPLES: usize = 5;
 
 impl AdaptiveGovernorState {
@@ -61,10 +62,16 @@ impl AdaptiveGovernorState {
     ) -> FrequencyTier {
         self.last_sample_at = Some(Instant::now());
 
-        // Jank from 2-4 recovered frames is statistical noise (dumpsys on
-        // this Android 16 build only ever yields a handful of durations) and
-        // was firing the Max tier on garbage. Require a real sample count
-        // before trusting the jank signal; otherwise fall back to utilization.
+        // decide_tier is only ever called while a game is running (the
+        // orchestrator gates it on is_gaming + Performance policy). Jank from
+        // 2-4 recovered frames is statistical noise, so we never trust a
+        // handful of durations to DEMOTE the tier; but equally, a missing or
+        // too-thin frame signal must not be treated as "idle". The old
+        // utilization fallback capped COD at the Balanced mid-frequency
+        // (1.2-1.65 GHz) for entire sessions because lobbies keep CPU util
+        // low, and the frame windows on this device never yielded >=5 samples
+        // for jank to fire. When we cannot prove the game is smooth we run at
+        // Max; only jank==0 over a real sample count is allowed to step down.
         let enough_samples = frame_stats
             .map(|s| s.sample_count >= MIN_JANK_SAMPLES)
             .unwrap_or(false);
@@ -82,13 +89,7 @@ impl AdaptiveGovernorState {
                 FrequencyTier::Balanced
             }
         } else {
-            if cluster_utilization > 0.75 {
-                FrequencyTier::High
-            } else if cluster_utilization < 0.55 {
-                FrequencyTier::Eco
-            } else {
-                FrequencyTier::Balanced
-            }
+            FrequencyTier::Max
         };
 
         let next_tier = if self.current_tier == FrequencyTier::Eco
@@ -200,17 +201,17 @@ mod tests {
         assert_eq!(tier, FrequencyTier::Max); // 1st good sample, stays Max
 
         let tier = gov.decide_tier(None, 0.8);
-        assert_eq!(tier, FrequencyTier::High); // 2nd good sample, steps down one to High
+        assert_eq!(tier, FrequencyTier::Max); // 2nd good sample, stays Max
 
         // Update struct's current tier as the orchestrator would.
         gov.current_tier = tier;
 
         // Med util -> Next is Balanced.
         let tier = gov.decide_tier(None, 0.6);
-        assert_eq!(tier, FrequencyTier::High); // 1st good sample, stays High
+        assert_eq!(tier, FrequencyTier::Max); // 1st good sample, stays Max
 
         let tier = gov.decide_tier(None, 0.6);
-        assert_eq!(tier, FrequencyTier::Balanced); // 2nd good sample, steps down to Balanced
+        assert_eq!(tier, FrequencyTier::Max); // 2nd good sample, stays Max
 
         gov.current_tier = tier;
 
@@ -221,85 +222,57 @@ mod tests {
         // Total = 3 hits of low util.
 
         let tier = gov.decide_tier(None, 0.5);
-        assert_eq!(tier, FrequencyTier::Balanced); // demotion streak = 1 -> next_tier = Balanced. stepped = Balanced.
+        assert_eq!(tier, FrequencyTier::Max); // no signal -> Max, not Eco
         gov.current_tier = tier;
 
         let tier = gov.decide_tier(None, 0.5);
-        assert_eq!(tier, FrequencyTier::Balanced); // demotion streak = 2 -> next_tier = Eco. step down samples = 1. stepped = Balanced.
+        assert_eq!(tier, FrequencyTier::Max);
         gov.current_tier = tier;
 
-        let _ = gov.current_tier; // Ignore unused warning
+        // A missing frame signal is never enough to DEMOTE a gaming session;
+        // only proven-clean samples are allowed to walk the tier back down.
+        let _ = gov.current_tier;
+    }
 
-        // Actually, let's step it out cleanly since the step down logic requires 2 steps and demotion required 2 before it.
-        // The first `0.5` gives raw_next_tier = Eco. demotion_streak = 1. next_tier = Balanced. stepped_tier = Balanced.
-        // The second `0.5` gives raw_next_tier = Eco. demotion_streak = 2. next_tier = Eco. stepped_tier = step_down(Balanced) ? No, consecutive_good_samples goes from 0 to 1 because next_tier(Eco) != self.current_tier(Balanced). So stepped_tier = Balanced.
-        // The third `0.5` gives raw_next_tier = Eco. BUT now since next_tier = Eco, we hit the `else` branch (not current_tier == Balanced && raw == Eco)
-        // Wait, raw_next_tier is STILL Eco. current_tier is STILL Balanced. So demotion_streak increments to 3!
-        // `if self.demotion_streak >= 2` triggers. `self.demotion_streak = 0; FrequencyTier::Eco`. So next_tier = Eco.
-        // Then `consecutive_good_samples` increments to 2! `step_down_one` triggers -> Eco!
+    fn frame_stats(n: usize, janky: usize) -> crate::monitor::frame_sampler::FrameStats {
+        crate::monitor::frame_sampler::FrameStats {
+            sample_count: n,
+            janky_frames: janky,
+            p90_frame_ns: 8_000_000,
+            worst_frame_ns: 12_000_000,
+            captured_at: None,
+        }
+    }
 
-        // For demotion to Eco, we need two raw hits of Eco to set next_tier to Eco.
-        // Then we need next_tier to be Eco twice while current_tier is Balanced.
-        // But wait! If next_tier becomes Eco, step_down_one(Balanced) is Eco.
-        // But the first time next_tier is Eco, current_tier is still Balanced.
-        // So stepped_tier remains Balanced!
-        // But the test manually sets `gov.current_tier = tier`, which is Balanced.
-        // Next iteration: current_tier is still Balanced. raw_next_tier is Eco.
-        // BUT wait: since current_tier is Balanced and raw_next_tier is Eco, the demotion streak increments again!
-        // It goes to 3! It still returns FrequencyTier::Eco as next_tier.
-        // Then consecutive_good_samples increments to 2!
-        // And step_down_one(Balanced) returns Eco!
-
+    #[test]
+    fn test_steps_down_from_max_only_on_clean_samples() {
         let mut gov = AdaptiveGovernorState::new(0);
-        gov.current_tier = FrequencyTier::Balanced;
+        gov.current_tier = FrequencyTier::Max;
 
-        // 1. raw_next = Eco, demotion = 1, next = Balanced, stepped = Balanced
-        let tier = gov.decide_tier(None, 0.5);
-        assert_eq!(tier, FrequencyTier::Balanced);
+        // Enough clean samples (>= MIN_JANK_SAMPLES, jank==0) allow a step
+        // down after two consecutive good samples.
+        let clean = frame_stats(8, 0);
+
+        let tier = gov.decide_tier(Some(&clean), 0.6);
+        assert_eq!(tier, FrequencyTier::Max); // 1st good sample, holds Max
         gov.current_tier = tier;
 
-        // 2. raw_next = Eco, demotion = 2, next = Eco.
-        // tier_rank(Eco) < tier_rank(Balanced). consecutive = 1. stepped = Balanced.
-        let tier = gov.decide_tier(None, 0.5);
-        assert_eq!(tier, FrequencyTier::Balanced);
+        let tier = gov.decide_tier(Some(&clean), 0.6);
+        assert_eq!(tier, FrequencyTier::High); // 2nd good sample, step to High
         gov.current_tier = tier;
 
-        // 3. raw_next = Eco, demotion = 3 (wait! `if self.demotion_streak >= 2` executes. It sets demotion_streak = 0. So it goes to 0!)
-        // In the previous step, `self.demotion_streak >= 2` executed. It sets it to 0.
-        // So this step is demotion_streak = 1 again! It returns Balanced!
-        // To get to Eco, we need another streak of 2 to hit `next_tier = Eco` again!
-        // Since `consecutive_good_samples` was 1, it needs another `next_tier = Eco` to reach 2!
-        let tier = gov.decide_tier(None, 0.5);
-        assert_eq!(tier, FrequencyTier::Balanced);
+        let tier = gov.decide_tier(Some(&clean), 0.6);
+        assert_eq!(tier, FrequencyTier::High); // 1st good sample from High
         gov.current_tier = tier;
 
-        // Let's do it manually:
-        // Current: Balanced. raw: Eco. demotion_streak was 3! Wait.
-        // If demotion_streak reaches 2, it is set to 0. So it oscillates.
-        // To successfully step down, we need `next_tier` to be Eco for two consecutive calls.
-        // But if `self.demotion_streak` hits 2, it resets to 0 and `next_tier` is Eco.
-        // The NEXT call, `demotion_streak` is 1! So `next_tier` is Balanced!
-        // This means `consecutive_good_samples` (which tracks consecutive times `next_tier` is lower) resets!
-        // This is a known behavior of the current adaptive governor - it requires a very sustained streak.
-        // We will just verify it stays Balanced for a few ticks.
-
-        gov.current_tier = gov.decide_tier(None, 0.5);
-        assert_eq!(gov.current_tier, FrequencyTier::Balanced);
-
-        // Let's manually set current_tier to Eco to test promotion.
-        gov.current_tier = FrequencyTier::Eco;
-
-        // Promotion requires 2 hits > 0.55
-        // 1. raw_next = Balanced, promotion = 1, next = Eco. stepped = Eco.
-        let tier = gov.decide_tier(None, 0.6);
-        assert_eq!(tier, FrequencyTier::Eco);
+        let tier = gov.decide_tier(Some(&clean), 0.6);
+        assert_eq!(tier, FrequencyTier::Balanced); // 2nd good sample, step to Balanced
         gov.current_tier = tier;
 
-        // 2. raw_next = Balanced, promotion = 2, next = Balanced.
-        // tier_rank(Balanced) > tier_rank(Eco). stepped = Balanced.
-        let tier = gov.decide_tier(None, 0.6);
-        assert_eq!(tier, FrequencyTier::Balanced);
-
-        let _ = gov.current_tier; // Ignore unused warning
+        // A noisy few-frame window (3-4 samples, under the threshold) cannot
+        // demote from Balanced; it escalates to Max instead of trusting jank.
+        let noisy = frame_stats(3, 1);
+        let tier = gov.decide_tier(Some(&noisy), 0.6);
+        assert_eq!(tier, FrequencyTier::Max);
     }
 }

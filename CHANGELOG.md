@@ -1,5 +1,30 @@
 # Changelog
 
+## v3.2.15 (versionCode 335)
+### Fixed
+- In-game stutter from the adaptive governor capping the CPU for entire game
+  sessions. The governor was still called with the utilization-only fallback
+  whenever the framestats capture yielded fewer than `MIN_JANK_SAMPLES`
+  durations (this device regularly returns only 3-4 in lobbies/menus), so it
+  sat on the `Balanced` mid-frequency cap (1228/1593/1651 MHz) from the moment
+  COD launched and never moved — the jank signal could not fire. When the
+  frame signal is too thin to prove the game is running smoothly, the
+  governor now holds `Max` (full `scaling_max_freq`) instead of trusting CPU
+  utilization; only jank==0 over a real sample count is allowed to step the
+  tier down. Thermal safety during gaming is unchanged — the policy engine
+  still escalates by temperature and the P3 clamps still own `scaling_max_freq`.
+- Charging locked at ~900 mA despite a 3 A-capable source. The device exposes
+  `/sys/class/qcom-battery/restrict_cur` as a writable voter node and it was
+  left at `1000000` (1 A), which caps charge current regardless of the
+  negotiated USB-PD/QC contract. `MaxSpeed`/`Urgent` (and gaming `UnderLoad`)
+  now write `restrict_cur=0` to clear the cap; the charging log warns at
+  session start whenever a positive `restrict_cur` cap is present and explains
+  how to clear it. `Adaptive` mode still does not fight HyperOS by design.
+- Charging session duration under-reported (e.g. 179 s recorded for a 22-minute
+  charge). The session clock used `Instant` (CLOCK_MONOTONIC), which pauses
+  while the device dozes during screen-off charging. Switched to wall-clock
+  timing so `duration_sec`, samples-per-second and drain rates are correct.
+
 ## v3.2.14 (versionCode 334)
 ### Fixed
 - CPU was throttled to the mid-frequency cap for entire game sessions. The

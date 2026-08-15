@@ -50,7 +50,7 @@ pub struct ChargingEngine {
     pub re_enforce_at: std::time::Instant,
     pub charge_mode: ChargeMode,
     pub session_peak_temp: i32,
-    pub session_start_time: Option<std::time::Instant>,
+    pub session_start_time: Option<std::time::SystemTime>,
     pub session_peak_usb_temp: i32,
     pub session_peak_pmic_temp: i32,
     pub thermal_reduction_count: u32,
@@ -152,6 +152,18 @@ impl ChargingEngine {
                 tracing::info!(target: "charging", "  {} = {}  (writable)", node, v.trim());
             }
         }
+        for node in &self.voter_nodes.clone() {
+            if node.ends_with("/restrict_cur")
+                && let Ok(v) = std::fs::read_to_string(node)
+                && let Ok(ua) = v.trim().parse::<i64>()
+                && ua > 0
+            {
+                tracing::warn!(target: "charging",
+                    "restrict_cur={}mA is set: this caps charge current regardless of the charger's negotiated contract. \
+                     MaxSpeed/Urgent charging mode clears it to restore full speed.",
+                    ua / 1000);
+            }
+        }
         tracing::info!(target: "charging", "----- end diagnostic dump -----");
     }
 
@@ -162,7 +174,14 @@ impl ChargingEngine {
         // Desired state per mode.
         // (restrict_chg, restrict_cur_ua, input_suspend, night_charging)
         let (restrict, cur_ua, suspend, night) = match mode {
-            ChargeMode::MaxSpeed | ChargeMode::Urgent => (Some("0"), None, Some("0"), Some("0")),
+            ChargeMode::MaxSpeed | ChargeMode::Urgent => {
+                // Clear any current restriction (restrict_cur=0 = no cap).
+                // Xiaomi's qcom-battery can leave restrict_cur at 1 A even
+                // with restrict_chg=0, silently capping a 3 A charger at
+                // ~900 mA - exactly the "charging is slow" symptom seen on
+                // the POCO F6 (peridot). MaxSpeed/Urgent must lift it.
+                (Some("0"), Some(0), Some("0"), Some("0"))
+            }
             ChargeMode::BatteryCare => {
                 // Cap current at target_ma; but never below 500 mA and
                 // never above 3000 mA in BatteryCare.
@@ -177,10 +196,11 @@ impl ChargingEngine {
                 )
             }
             ChargeMode::UnderLoad => {
-                // Screen-on gaming while plugged: keep restrict off so
-                // the phone can outrun the load, but tell HyperOS not
-                // to switch to night_charging.
-                (Some("0"), None, Some("0"), Some("0"))
+                // Screen-on gaming while plugged: keep restrict off so the
+                // phone can outrun the load, and clear any current cap so the
+                // battery can still fill, but tell HyperOS not to switch to
+                // night_charging.
+                (Some("0"), Some(0), Some("0"), Some("0"))
             }
             ChargeMode::Adaptive => {
                 // Neutral: don't fight HyperOS, just make sure charge
@@ -490,7 +510,7 @@ impl ChargingEngine {
             self.learned_stable_current = Self::soc_target_ma(soc, &self.charge_mode);
             self.session_start_soc = soc;
             self.session_peak_temp = bat_temp;
-            self.session_start_time = Some(std::time::Instant::now());
+            self.session_start_time = Some(std::time::SystemTime::now());
             self.session_peak_usb_temp = inputs.usb_temp;
             self.session_peak_pmic_temp = inputs.pmic_temp;
             self.thermal_reduction_count = 0;
@@ -609,7 +629,7 @@ impl ChargingEngine {
         let now = std::time::Instant::now();
         let settled = self
             .session_start_time
-            .map(|t| t.elapsed().as_secs() >= 3)
+            .map(|t| t.elapsed().unwrap_or_default().as_secs() >= 3)
             .unwrap_or(true);
 
         let ready_for_next_attempt = settled
@@ -654,7 +674,7 @@ impl ChargingEngine {
     fn finish_session(&self, state_dir: &str, final_soc: u8) {
         let duration = self
             .session_start_time
-            .map(|t| t.elapsed().as_secs())
+            .map(|t| t.elapsed().unwrap_or_default().as_secs())
             .unwrap_or(0);
 
         let mut avg_current = 0;
@@ -703,6 +723,22 @@ impl ChargingEngine {
                     "AIThermal has no writable current-limit node on this device; \
                      observed charge current is set entirely by kernel/PMIC (typically \
                      ~900 mA on USB SDP, or the negotiated USB-PD/QC contract).");
+                // If a writable restrict_cur cap exists (voter node), the
+                // observed ~900 mA is almost certainly that 1 A cap biting,
+                // not the source. Surface it so the user knows MaxSpeed/Urgent
+                // will clear it.
+                for node in &self.voter_nodes {
+                    if node.ends_with("/restrict_cur")
+                        && let Ok(v) = std::fs::read_to_string(node)
+                        && let Ok(ua) = v.trim().parse::<i64>()
+                        && ua > 0
+                    {
+                        tracing::warn!(target: "charging",
+                            "Detected a {}mA current cap on {} — slow charging is caused by \
+                             this cap, not by AIThermal. MaxSpeed/Urgent mode clears it.",
+                            ua / 1000, node);
+                    }
+                }
             }
             return false;
         }
