@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.2.17 (versionCode 337)
+### Fixed
+- Mid-game policy flip-flop (7 drops in a single 20-min session on the
+  reference device) persisted through v3.2.16: the gaming drop-latch released
+  to Balanced whenever the score held above 25 for 3 ticks, but legitimate
+  mid-game heat (composite ~50C) routinely scored 25-33, so a rendering game
+  was still softened and churned back up repeatedly. The latch threshold now
+  sits at the Conservative boundary (40): a Balanced-band gaming score is held
+  at Performance, and only a score that genuinely crosses into Conservative
+  territory can soften the game (clamped to Balanced by the gaming floor while
+  composite stays below `temp_hot`). Thermal protection is preserved — drops
+  still happen right below the hot cliff (~56C on the reference device).
+- Version banner mismatch: the binary logged "3.2.15" while the module
+  reported v3.2.16 because `rust/Cargo.toml` was never bumped when the module
+  version advanced. `Cargo.toml` now matches `module.prop` (v3.2.17/337).
+
 ## v3.2.16 (versionCode 336)
 ### Fixed
 - Mid-game policy flip-flop (Performance <-> Balanced every ~15-30s) as

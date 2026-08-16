@@ -13,11 +13,15 @@ pub enum PolicyState {
 // Gaming latch: while a game is running, hold Performance against brief
 // score dips caused by trend/comfort noise (which flipped the policy
 // Balanced<->Performance every ~15-30s and rewrote governors + the stock
-// thermal engine mid-frame). The score must stay above the latch threshold
-// for GAMING_LATCH_REQUIRED consecutive ticks before Performance softens to
-// Balanced. Escalation toward Conservative/Powersave is never blocked.
+// thermal engine mid-frame). The latch threshold sits at the Conservative
+// boundary (40): a mid-game score in the Balanced band (15-40) is held at
+// Performance, and only a score that actually crosses into Conservative
+// territory (>40) is allowed to soften the game — and below temp_hot the
+// gaming floor clamps that to Balanced. This keeps the latch from releasing
+// during legitimate mid-game heat (composite ~50C routinely scored 25-33 on
+// the reference device, causing 7 drops in one 20-min session).
 const GAMING_LATCH_REQUIRED: u8 = 3;
-const GAMING_LATCH_THRESHOLD: f64 = 25.0;
+const GAMING_LATCH_THRESHOLD: f64 = 40.0;
 // Symmetric return latch: once softened to Balanced mid-game, require a few
 // confirmed cool ticks before the governor is flipped back to `performance`,
 // so a single cool dip cannot yank Performance back up only to reheat and
@@ -415,7 +419,9 @@ mod tests {
         assert_eq!(policy, PolicyState::Performance);
         assert_eq!(engine.gaming_latch_ticks, 0); // below threshold -> reset
 
-        // Sustained heat (score 36) for fewer than the required ticks stays Performance.
+        // Legitimate mid-game heat (score ~32 at composite 46C) sits in the
+        // Balanced band but below the Conservative boundary (40): held at
+        // Performance on every tick, never softened.
         let mut engine = PolicyEngine::new(1, 2);
         engine.startup_grace_secs = 0;
         engine.current_policy = PolicyState::Performance;
@@ -424,31 +430,21 @@ mod tests {
             46, 46, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 41, 42,
         );
         assert_eq!(policy, PolicyState::Performance);
-        assert_eq!(engine.gaming_latch_ticks, 1);
+        assert_eq!(engine.gaming_latch_ticks, 0); // below threshold -> hold, counter reset
 
-        // Second sustained tick still holds (needs 3).
+        // Repeated ticks at the same mid-game score stay Performance; the
+        // latch no longer softens anything short of the Conservative boundary.
         let policy = engine.evaluate(
             46, 46, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 41, 42,
         );
         assert_eq!(policy, PolicyState::Performance);
-        assert_eq!(engine.gaming_latch_ticks, 2);
-
-        // Third sustained tick releases to Balanced.
-        let policy = engine.evaluate(
-            46, 46, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 41, 42,
-        );
-        assert_eq!(policy, PolicyState::Balanced);
         assert_eq!(engine.gaming_latch_ticks, 0);
 
-        // Mid-game Conservative-tentative below temp_hot is now floored to
-        // Balanced (gaming floor) — the old code clamped the CPU AND dropped
-        // the GPU mid-frame, the primary in-game jitter source.
-        // (last_change_at is set past the 15s gaming debounce active_debounce
-        // picked up during the latch release above.)
-        engine.current_policy = PolicyState::Performance;
-        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(16);
+        // A score that genuinely crosses into Conservative territory (~46 at
+        // composite 50C) is allowed to soften: the latch never blocks it, and
+        // the gaming floor clamps it to Balanced while composite < temp_hot.
         let policy = engine.evaluate(
-            50, 50, 10, true, false, 14.0, 0.0, 23.0, 10.0, 0.0, &config, 42, 43,
+            50, 50, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 42, 43,
         );
         assert_eq!(policy, PolicyState::Balanced);
 
