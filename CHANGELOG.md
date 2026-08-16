@@ -1,5 +1,28 @@
 # Changelog
 
+## v3.2.16 (versionCode 336)
+### Fixed
+- Mid-game policy flip-flop (Performance <-> Balanced every ~15-30s) as
+  temperatures climbed. The per-game `game_modifier` was gated behind the
+  `game_profiles.json` lookup, and profiles are only written at session END, so
+  a game's first session ran with `game_modifier=0.0` — no `known_hot` relief
+  and, critically, no frame-stutter mitigation. On this device the COD session
+  hovered right on the `Balanced` score boundary, so the policy churned between
+  `performance` and `walt` governors mid-match (visible CPU drops to ~1.1 GHz on
+  the big cluster in the UI log). Fixes:
+  - Frame-stutter mitigation now applies to EVERY game, profiled or not. When
+    `detect_frame_stutter()` confirms heavy rendering (KGSL busy >95%), the
+    modifier pulls the score DOWN (-15) instead of pushing it up, keeping a
+    visibly-rendering game in `Performance` rather than softening it under its
+    own heat load. The old `+15` was inverted — it actively pushed the score
+    toward `Balanced`/`Conservative` exactly when the game needed the headroom.
+  - Added a symmetric gaming return-latch: once softened to `Balanced`
+    mid-game, the engine requires two consecutive confirmed-cool ticks before
+    flipping back to `performance`, so a single cool dip cannot yank the
+    governor up only to reheat and drop again seconds later.
+- `compute_game_modifier` still applies `known_hot` (-12), foreground-priority
+  and long-session relief only to profiled games, as before.
+
 ## v3.2.15 (versionCode 335)
 ### Fixed
 - In-game stutter from the adaptive governor capping the CPU for entire game

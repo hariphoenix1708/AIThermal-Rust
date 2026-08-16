@@ -18,6 +18,11 @@ pub enum PolicyState {
 // Balanced. Escalation toward Conservative/Powersave is never blocked.
 const GAMING_LATCH_REQUIRED: u8 = 3;
 const GAMING_LATCH_THRESHOLD: f64 = 25.0;
+// Symmetric return latch: once softened to Balanced mid-game, require a few
+// confirmed cool ticks before the governor is flipped back to `performance`,
+// so a single cool dip cannot yank Performance back up only to reheat and
+// drop again seconds later.
+const GAMING_RETURN_REQUIRED: u8 = 2;
 
 pub struct PolicyEngine {
     pub current_policy: PolicyState,
@@ -30,6 +35,7 @@ pub struct PolicyEngine {
     last_total_score: f64,
     trend_history: std::collections::VecDeque<i32>,
     gaming_latch_ticks: u8,
+    gaming_return_ticks: u8,
 }
 
 impl PolicyEngine {
@@ -47,6 +53,7 @@ impl PolicyEngine {
             last_total_score: 0.0,
             trend_history: std::collections::VecDeque::with_capacity(5),
             gaming_latch_ticks: 0,
+            gaming_return_ticks: 0,
         }
     }
 
@@ -206,6 +213,24 @@ impl PolicyEngine {
             }
         } else {
             self.gaming_latch_ticks = 0;
+        }
+
+        // Symmetric return latch: while gaming and already softened to
+        // Balanced, hold Balanced until the cool score has been confirmed for
+        // a couple of consecutive ticks. Prevents the single-cool-tick yank
+        // back to Performance that immediately reheated and dropped again.
+        if is_gaming
+            && matches!(self.current_policy, PolicyState::Balanced)
+            && tentative == PolicyState::Performance
+        {
+            self.gaming_return_ticks = self.gaming_return_ticks.saturating_add(1);
+            if self.gaming_return_ticks <= GAMING_RETURN_REQUIRED {
+                tentative = PolicyState::Balanced;
+            } else {
+                self.gaming_return_ticks = 0;
+            }
+        } else {
+            self.gaming_return_ticks = 0;
         }
 
         // Gaming floor: never clamp CPU/GPU below Balanced while a game is
@@ -436,6 +461,43 @@ mod tests {
             &config, 42, 43,
         );
         assert_eq!(policy, PolicyState::Conservative);
+    }
+
+    #[test]
+    fn gaming_return_latch_holds_balanced_until_cool_confirmed() {
+        let mut engine = PolicyEngine::new(1, 2);
+        engine.startup_grace_secs = 0;
+        engine.current_policy = PolicyState::Balanced;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let config = ProfilesConfig::default();
+
+        // Cool gaming score (well below the Balanced boundary) must be held at
+        // Balanced for the first GAMING_RETURN_REQUIRED ticks instead of
+        // yanking the governor straight back to performance.
+        let evaluate_cool = |e: &mut PolicyEngine| {
+            e.evaluate(30, 30, -5, true, false, 5.0, 0.0, 5.0, 0.0, 0.0, &config, 30, 30)
+        };
+
+        let policy = evaluate_cool(&mut engine);
+        assert_eq!(policy, PolicyState::Balanced);
+        assert_eq!(engine.gaming_return_ticks, 1);
+
+        let policy = evaluate_cool(&mut engine);
+        assert_eq!(policy, PolicyState::Balanced);
+        assert_eq!(engine.gaming_return_ticks, 2);
+
+        // Third confirmed cool tick returns to Performance.
+        let policy = evaluate_cool(&mut engine);
+        assert_eq!(policy, PolicyState::Performance);
+        assert_eq!(engine.gaming_return_ticks, 0);
+
+        // A single warm blip during the confirmation resets the counter.
+        engine.current_policy = PolicyState::Balanced;
+        engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let _ = evaluate_cool(&mut engine);
+        assert_eq!(engine.gaming_return_ticks, 1);
+        let _ = engine.evaluate(58, 58, 8, true, false, 5.0, 0.0, 15.0, 10.0, 0.0, &config, 40, 41);
+        assert_eq!(engine.gaming_return_ticks, 0);
     }
 
     #[test]

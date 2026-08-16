@@ -321,21 +321,26 @@ impl SystemOrchestrator {
         if !is_gaming {
             return 0.0;
         }
+
+        let mut modifier = 0.0;
+
+        // Frame stutter mitigation applies to every game, not just profiled
+        // ones. The profile is only written at session end, so a game's first
+        // session got zero stutter protection: once heat pushed the score over
+        // the Balanced boundary the engine flip-flopped the governor mid-match.
+        if self.gaming.detect_frame_stutter(ctx.game_session_started_at) {
+            modifier -= 15.0;
+        }
+
         if let Some(p) = pkg.and_then(|name| self.game_profiles.get_profile(name)) {
-            let mut modifier = if p.known_hot { -12.0 } else { 0.0 };
+            if p.known_hot {
+                modifier -= 12.0;
+            }
 
             // Active foreground gaming priority influence
             let is_screen_off = crate::hardware::display::is_screen_off();
             let fg_priority = self.gaming.foreground_priority(p.known_hot, is_screen_off) as f64;
             modifier += fg_priority / 10.0;
-
-            // Frame stutter penalty mitigation
-            if self
-                .gaming
-                .detect_frame_stutter(ctx.game_session_started_at)
-            {
-                modifier += 15.0; // Boost performance score to mitigate stutter
-            }
 
             let active_secs = ctx
                 .game_session_started_at
@@ -351,10 +356,9 @@ impl SystemOrchestrator {
                     }
                 }
             }
-            modifier
-        } else {
-            0.0
         }
+
+        modifier
     }
 
     fn policy_state_name(policy: &PolicyState) -> &'static str {
