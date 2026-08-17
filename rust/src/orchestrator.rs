@@ -246,7 +246,7 @@ impl SystemOrchestrator {
         );
         let prediction = PredictionEngine::new(ctx.config.profiles.prediction_window, 3); // 3 steps ahead
 
-        let charging = ChargingEngine::new(&hardware);
+        let charging = ChargingEngine::new(&hardware, ctx.config.profiles.temp_warm, ctx.config.profiles.temp_hot);
         let watchdog = Watchdog::with_threshold(ctx.config.profiles.poll_interval, ctx.config.profiles.watchdog_stall_threshold);
         let recovery = RecoveryManager::new();
         let calibration = CalibrationManager::new(&ctx.state_dir);
@@ -518,7 +518,7 @@ impl SystemOrchestrator {
             ),
             governors: GovernorManager::new(),
             cpuset: CpusetManager::new(),
-            charging: ChargingEngine::new(&hardware),
+            charging: ChargingEngine::new(&hardware, 48, 58),
             gaming: GameDetector::new(Vec::new(), 0, 1, 1, 1),
             watchdog: Watchdog::with_threshold(ctx.config.profiles.poll_interval, ctx.config.profiles.watchdog_stall_threshold),
             recovery: RecoveryManager::new(),
@@ -1531,6 +1531,7 @@ impl RuntimeTask for SystemOrchestrator {
             current_now_ua,
             voltage_now_uv,
             charge_counter_uah,
+            composite_temp: adj_temp,
         };
         self.charging
             .evaluate(&charging_inputs, &ctx.state_dir, &self.hardware);

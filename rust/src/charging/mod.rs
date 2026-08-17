@@ -37,6 +37,7 @@ pub struct ChargingInputs {
     pub current_now_ua: Option<i64>,
     pub voltage_now_uv: Option<i64>,
     pub charge_counter_uah: Option<i64>,
+    pub composite_temp: i32,
 }
 
 pub struct ChargingEngine {
@@ -68,6 +69,8 @@ pub struct ChargingEngine {
     pub voter_nodes: Vec<String>,
     pub voter_dump_done: bool,
     pub forced_mode: Option<ChargeMode>,
+    pub thermal_temp_warm: i32,
+    pub thermal_temp_hot: i32,
 }
 
 impl ChargingEngine {
@@ -84,7 +87,7 @@ impl ChargingEngine {
         }
     }
 
-    pub fn new(hw: &crate::hardware::HardwareProfile) -> Self {
+    pub fn new(hw: &crate::hardware::HardwareProfile, thermal_temp_warm: i32, thermal_temp_hot: i32) -> Self {
         let limit_nodes = hw.charging_profile.current_limit_nodes.clone();
 
         Self {
@@ -116,6 +119,8 @@ impl ChargingEngine {
             voter_nodes: hw.charging_profile.voter_nodes.clone(),
             voter_dump_done: false,
             forced_mode: None,
+            thermal_temp_warm,
+            thermal_temp_hot,
         }
     }
 
@@ -170,7 +175,7 @@ impl ChargingEngine {
     /// Writes the correct voter state for the current ChargeMode.
     /// Idempotent — safe to call every tick; only writes when the
     /// desired value differs from the currently-read value.
-    fn apply_voters_for_mode(&self, mode: &ChargeMode, target_ma: i64) {
+    fn apply_voters_for_mode(&self, mode: &ChargeMode, target_ma: i64, composite_temp: i32) {
         // Desired state per mode.
         // (restrict_chg, restrict_cur_ua, input_suspend, night_charging)
         let (restrict, cur_ua, suspend, night) = match mode {
@@ -196,11 +201,22 @@ impl ChargingEngine {
                 )
             }
             ChargeMode::UnderLoad => {
-                // Screen-on gaming while plugged: keep restrict off so the
-                // phone can outrun the load, and clear any current cap so the
-                // battery can still fill, but tell HyperOS not to switch to
-                // night_charging.
-                (Some("0"), Some(0), Some("0"), Some("0"))
+                // Proactive thermal-aware charging during gaming:
+                // reduce PMIC heat BEFORE the thermal policy escalates
+                // to Powersave. This keeps composite below temp_hot and
+                // prevents the cpuset-tight frame drops.
+                //
+                // restrict_cur acts as a hard PMIC current cap. The
+                // input_current_limit (via limit_nodes) is the softer lever.
+                // Together they reduce total PMIC heat dissipation.
+                let restrict_cur_ua = if composite_temp >= self.thermal_temp_hot {
+                    1_500_000  // 1.5A: aggressive thermal relief at temp_hot
+                } else if composite_temp >= self.thermal_temp_warm {
+                    2_500_000  // 2.5A: moderate reduction approaching temp_hot
+                } else {
+                    0          // no cap: full speed when cool
+                };
+                (Some("0"), Some(restrict_cur_ua), Some("0"), Some("0"))
             }
             ChargeMode::Adaptive => {
                 // Neutral: don't fight HyperOS, just make sure charge
@@ -491,7 +507,7 @@ impl ChargingEngine {
         }
 
         self.charge_mode = Self::select_charge_mode(&inputs, &self.forced_mode);
-        self.apply_voters_for_mode(&self.charge_mode, self.learned_stable_current);
+        self.apply_voters_for_mode(&self.charge_mode, self.learned_stable_current, inputs.composite_temp);
         let mode_clone = self.charge_mode.clone();
         let next = self.next_state(&inputs, &mode_clone);
 
@@ -578,7 +594,20 @@ impl ChargingEngine {
 
         let mut final_target = match next {
             ChargeState::Normal => base_target,
-            ChargeState::UnderLoad => base_target.min(2500),
+            ChargeState::UnderLoad => {
+                // Proactive composite-based thermal cap: reduce PMIC heat
+                // before thermal policy escalates to Powersave. When composite
+                // is cool, allow fast charging (POCO F6 supports 90W). As it
+                // warms, back off proactively to keep gameplay smooth.
+                let composite_cap = if inputs.composite_temp >= self.thermal_temp_hot {
+                    1_500  // 1.5A: aggressive thermal relief at temp_hot
+                } else if inputs.composite_temp >= self.thermal_temp_warm {
+                    2_500  // 2.5A: moderate reduction approaching temp_hot
+                } else {
+                    5_000  // 5A: allow fast charging when cool
+                };
+                base_target.min(composite_cap)
+            }
             ChargeState::ThermalThrottle => base_target.min(thermal_cap),
             ChargeState::Emergency => 500.min(base_target),
             ChargeState::Disconnected => 0,
@@ -798,6 +827,6 @@ impl ChargingEngine {
 
 impl Default for ChargingEngine {
     fn default() -> Self {
-        Self::new(&crate::hardware::HardwareProfile::default())
+        Self::new(&crate::hardware::HardwareProfile::default(), 48, 58)
     }
 }
