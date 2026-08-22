@@ -1,5 +1,37 @@
 # Changelog
 
+## v3.2.27 (versionCode 347)
+### Fixed
+- **Safety: Emergency thermal state protection**: Periodic battery cooling
+  device enforcement now skips during `Emergency` state (battery ≥50°C,
+  charger ≥70°C, USB ≥65°C, PMIC ≥70°C). Previously, the enforcement
+  would zero the kernel's emergency battery thermal mitigation while
+  AIThermal was also trying to throttle — suppressing a safety backstop.
+- **Safety: Hot battery at plug-in**: `one_shot_clear_restrict()` now
+  skips the battery cooling device clear when battery temperature is
+  already ≥44°C at plug-in. The kernel's thermal mitigation should remain
+  active to protect the battery.
+- **Session carryover state**: `rejected_ceiling`, `last_known_good_ma`,
+  `consecutive_failures`, `active_limit_ma`, and `previous_target` are
+  now reset at session start. Previously, a ceiling learned with one
+  charger/cable could throttle the next session with different hardware.
+- **Battery cooling timer reset**: `last_battery_cooling_clear` is reset
+  to `None` at session start so the first periodic re-check runs
+  immediately after the one-shot clear (was inheriting stale timer from
+  prior session).
+- **Voltage_max false positive**: The "Slow charger detected" warning
+  (which fired on every session where voltage_max showed 5V before QC/PD
+  renegotiation completed) is now an informational note explaining the
+  value may be stale after the battery cooling device clear.
+### Changed
+- Updated stale comments that framed `restrict_chg`/`restrict_cur` as the
+  root cause of slow charging — now correctly described as secondary
+  contributors (primary cause is the battery thermal cooling device).
+### Removed
+- Dead code: `taper_started_at` field (never read), `Default` impl for
+  `ChargingEngine` (no callers), unreachable `Disconnected` match arm.
+- Reduced clippy warnings from 9 to 7 (removed 2 dead-code warnings).
+
 ## v3.2.26 (versionCode 346)
 ### Fixed
 - **Primary slow-charging fix**: On Xiaomi SM8635 (peridot), the kernel

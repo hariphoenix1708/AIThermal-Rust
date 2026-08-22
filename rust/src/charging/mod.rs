@@ -47,7 +47,6 @@ pub struct ChargingEngine {
     pub current_state: ChargeState,
     pub learned_stable_current: i64,
     pub session_start_soc: u8,
-    pub taper_started_at: Option<std::time::Instant>,
     pub re_enforce_at: std::time::Instant,
     pub charge_mode: ChargeMode,
     pub session_peak_temp: i32,
@@ -122,7 +121,6 @@ impl ChargingEngine {
             current_state: ChargeState::Disconnected,
             learned_stable_current: 3000,
             session_start_soc: 0,
-            taper_started_at: None,
             re_enforce_at: std::time::Instant::now(),
             charge_mode: ChargeMode::Adaptive,
             session_peak_temp: 0,
@@ -218,7 +216,8 @@ impl ChargingEngine {
                     && ua > 0
                 {
                     tracing::warn!(target: "charging",
-                        "restrict_chg=1 ENFORCES restrict_cur={}mA — this is the root cause of slow charging. \
+                        "restrict_chg=1 ENFORCES restrict_cur={}mA — a secondary contributor to slow charging. \
+                         The primary cause on this device is the battery thermal cooling device (cur_state > 0). \
                          One-shot clear will attempt restrict_chg=0 + restrict_cur=0 at session start.",
                         ua / 1000);
                 } else {
@@ -245,35 +244,41 @@ impl ChargingEngine {
         }
 
         // --- Battery cooling device analysis ---
-        if let Some(ref path) = self.battery_cooling_path {
-            if let Ok(v) = fs::read_to_string(path) {
-                let state = v.trim();
-                if state != "0" {
-                    tracing::warn!(target: "charging",
-                        "Battery cooling device {} = {} — thermal framework is throttling charge current. \
-                         This is the PRIMARY cause of slow charging: it forces voltage_max=5V and blocks \
-                         QC/PD negotiation. Will be cleared to 0 during charging session.",
-                        path, state);
-                } else {
-                    tracing::info!(target: "charging",
-                        "Battery cooling device {} = 0 (no thermal throttle active)", path);
-                }
+        if let Some(ref path) = self.battery_cooling_path
+            && let Ok(v) = fs::read_to_string(path)
+        {
+            let state = v.trim();
+            if state != "0" {
+                tracing::warn!(target: "charging",
+                    "Battery cooling device {} = {} — thermal framework is throttling charge current. \
+                     This is the PRIMARY cause of slow charging: it forces voltage_max=5V and blocks \
+                     QC/PD negotiation. Will be cleared to 0 during charging session.",
+                    path, state);
+            } else {
+                tracing::info!(target: "charging",
+                    "Battery cooling device {} = 0 (no thermal throttle active)", path);
             }
         }
 
         // --- Voltage analysis ---
+        // NOTE: voltage_max may show 5V at dump time even when the charger
+        // supports QC/PD. The battery cooling device (cur_state > 0) blocks
+        // voltage negotiation; after clearing it, renegotiation takes
+        // several seconds. This dump runs before the one-shot clear, so
+        // the value is often stale. The real verdict comes ~30s into the
+        // session when current_now confirms the actual charge rate.
         if let Ok(v) = std::fs::read_to_string("/sys/class/power_supply/usb/voltage_max")
             && let Ok(v_max) = v.trim().parse::<i64>()
         {
             if v_max < 9_000_000 {
-                tracing::warn!(target: "charging",
-                    "Charger voltage_max={}mV — charger is NOT negotiating fast charge. \
-                     Hardware limitation: charger/cable does not support QC/PD. \
-                     Charging speed limited to ~900mA at 5V.",
+                tracing::info!(target: "charging",
+                    "Charger voltage_max={}mV at dump time — may be stale if battery cooling device \
+                     was just cleared. QC/PD renegotiation takes several seconds; actual charge rate \
+                     will confirm in the battery log.",
                     v_max / 1000);
             } else {
                 tracing::info!(target: "charging",
-                    "Charger voltage_max={}mV — fast charge (QC/PD) is active.",
+                    "Charger voltage_max={}mV — fast charge (QC/PD) appears active.",
                     v_max / 1000);
             }
         }
@@ -294,7 +299,11 @@ impl ChargingEngine {
     /// and writes it back. Some Xiaomi kernels reject idempotent writes
     /// (to reduce unnecessary SPMI traffic), falsely marking the node as
     /// read-only. Writing a DIFFERENT value ("0") usually succeeds.
-    fn one_shot_clear_restrict(&self) {
+    ///
+    /// `bat_temp` is the battery temperature at session start. When ≥44°C,
+    /// the battery cooling device clear is skipped — the kernel's thermal
+    /// mitigation should remain active to protect the battery.
+    fn one_shot_clear_restrict(&self, bat_temp: i32) {
         let restrict_chg_path = "/sys/class/qcom-battery/restrict_chg";
         let restrict_cur_path = "/sys/class/qcom-battery/restrict_cur";
 
@@ -358,23 +367,32 @@ impl ChargingEngine {
         // We clear it at session start AND hold it at 0 during the session
         // (enforced in evaluate()) because the stock thermal engine may
         // re-set it on each thermal zone check.
-        if let Some(ref path) = self.battery_cooling_path {
-            if let Ok(current) = fs::read_to_string(path) {
-                let val = current.trim();
-                if val != "0" {
-                    match crate::sysfs::write_string(path, "0") {
-                        Ok(()) => tracing::info!(target: "charging",
-                            "One-shot: battery cooling device {} → 0 (was {}) — unblocked QC/PD negotiation",
-                            path, val),
-                        Err(e) => tracing::warn!(target: "charging",
-                            "One-shot: battery cooling device write failed: {} — charge current may remain throttled. \
-                             The stock thermal framework is holding cur_state={}.",
-                            e, val),
-                    }
-                } else {
-                    tracing::debug!(target: "charging",
-                        "battery cooling device {} already 0 (no throttle)", path);
+        //
+        // SAFETY: Skip when battery is already hot (≥44°C). At that
+        // temperature the kernel's own battery thermal mitigation is a
+        // safety backstop — clearing it would suppress the kernel-side
+        // emergency charge throttle before any AIThermal state check runs.
+        if bat_temp >= 44 {
+            tracing::info!(target: "charging",
+                "Battery cooling device clear skipped (bat_temp={}°C ≥ 44°C) — kernel thermal mitigation preserved",
+                bat_temp);
+        } else if let Some(ref path) = self.battery_cooling_path
+            && let Ok(current) = fs::read_to_string(path)
+        {
+            let val = current.trim();
+            if val != "0" {
+                match crate::sysfs::write_string(path, "0") {
+                    Ok(()) => tracing::info!(target: "charging",
+                        "One-shot: battery cooling device {} → 0 (was {}) — unblocked QC/PD negotiation",
+                        path, val),
+                    Err(e) => tracing::warn!(target: "charging",
+                        "One-shot: battery cooling device write failed: {} — charge current may remain throttled. \
+                         The stock thermal framework is holding cur_state={}.",
+                        e, val),
                 }
+            } else {
+                tracing::debug!(target: "charging",
+                    "battery cooling device {} already 0 (no throttle)", path);
             }
         }
     }
@@ -388,10 +406,11 @@ impl ChargingEngine {
         let (restrict, cur_ua, suspend, night) = match mode {
             ChargeMode::MaxSpeed | ChargeMode::Urgent => {
                 // Clear any current restriction (restrict_cur=0 = no cap).
-                // Xiaomi's qcom-battery can leave restrict_cur at 1 A even
-                // with restrict_chg=0, silently capping a 3 A charger at
-                // ~900 mA - exactly the "charging is slow" symptom seen on
-                // the POCO F6 (peridot). MaxSpeed/Urgent must lift it.
+                // This is a secondary measure — the primary throttle on
+                // Xiaomi SM8635 is the battery thermal cooling device
+                // (cleared separately in one_shot_clear_restrict).
+                // But restrict_cur can still be non-zero if HyperOS
+                // re-asserts it, so we clear it every tick here.
                 (Some("0"), Some(0), Some("0"), Some("0"))
             }
             ChargeMode::BatteryCare => {
@@ -572,7 +591,7 @@ impl ChargingEngine {
     // tuned against the POCO F6 (peridot) and its specific charger IC behavior. They should be
     // treated as a starting point rather than universal constants if this code is ever adapted
     // for a different device.
-    // See the TODO at the bottom of this file (line ~515) regarding manual probing if EINVAL persists.
+    // See the TODO in apply_limit() regarding manual probing if EINVAL persists.
     fn soc_target_ma(soc: u8, mode: &ChargeMode) -> i64 {
         match mode {
             ChargeMode::UnderLoad => {
@@ -755,6 +774,17 @@ impl ChargingEngine {
             self.total_power_uw_samples = 0;
             self.sample_count = 0;
             self.voter_dump_done = false;
+            // Reset session carryover state: rejected_ceiling and
+            // last_known_good_ma from a previous session (possibly with
+            // different charger/cable) must not carry over.
+            self.rejected_ceiling = None;
+            self.last_known_good_ma = None;
+            self.consecutive_failures = 0;
+            self.active_limit_ma = 0;
+            self.previous_target = Self::soc_target_ma(soc, &self.charge_mode);
+            // Reset battery cooling enforcement timer so the first
+            // re-check runs immediately after the one-shot clear.
+            self.last_battery_cooling_clear = None;
             tracing::info!(target: "charging", "Charging session started at {}% SOC", soc);
 
             self.dump_charger_diagnostics();
@@ -774,7 +804,7 @@ impl ChargingEngine {
             // display controller. Writing it ONCE at session start is safe
             // because: (a) the display is freshly on and idle, (b) the
             // write completes in microseconds, (c) it's not repeated.
-            self.one_shot_clear_restrict();
+            self.one_shot_clear_restrict(bat_temp);
 
             if let Some(node) = self.limit_nodes.first() {
                 tracing::info!(target: "charging",
@@ -786,8 +816,11 @@ impl ChargingEngine {
             }
 
             // --- Charger voltage check ---
-            // Log the charger contract voltage for diagnostics. If < 9V,
-            // the charger is NOT negotiating QC/PD fast charge.
+            // Log the charger contract voltage for diagnostics. Note:
+            // voltage_max may still show 5V at this point even with a QC/PD
+            // charger, because the battery cooling device was just cleared
+            // and renegotiation takes several seconds. The battery log's
+            // current_now readings will confirm the actual charge rate.
             // WARNING: We do NOT write restrict_chg here — toggling it
             // on the SPMI bus can freeze the display controller on
             // Xiaomi devices (SM8635 shares SPMI between charger PMIC
@@ -797,15 +830,7 @@ impl ChargingEngine {
                 .ok()
                 .and_then(|s| s.trim().parse::<i64>().ok());
             if let Some(v_max) = voltage_max {
-                tracing::info!(target: "charging", "USB voltage_max={}mV (charger contract)", v_max / 1000);
-                if v_max < 9_000_000 {
-                    tracing::warn!(target: "charging",
-                        "Slow charger detected ({}mV < 9000mV): charger is NOT negotiating QC/PD. \
-                         This is a hardware limitation — the charger or cable does not support \
-                         Quick Charge. No software workaround is possible. Charging speed is \
-                         limited to ~900mA at 5V (~4.5W).",
-                        v_max / 1000);
-                }
+                tracing::info!(target: "charging", "USB voltage_max={}mV at session start (may be stale; QC/PD renegotiation takes seconds)", v_max / 1000);
             }
         }
 
@@ -828,7 +853,16 @@ impl ChargingEngine {
         // thermal zone check, re-throttling charging. We re-check every 15
         // seconds and clear it back to 0 if needed. This is a lightweight
         // sysfs read (one stat + one read_file, ~2µs) — negligible overhead.
-        if let Some(ref path) = self.battery_cooling_path {
+        //
+        // SAFETY: Skip enforcement during Emergency state (battery ≥50°C,
+        // charger ≥70°C, USB ≥65°C, PMIC ≥70°C). In Emergency, the kernel's
+        // own battery thermal mitigation is a safety backstop — zeroing
+        // cur_state would suppress the kernel-side emergency charge throttle
+        // while AIThermal is also trying to throttle. Our own Emergency target
+        // (500mA) is applied via voter nodes separately.
+        if let Some(ref path) = self.battery_cooling_path
+            && next != ChargeState::Emergency
+        {
             let should_enforce = match self.last_battery_cooling_clear {
                 Some(last) => last.elapsed().as_secs() >= 15,
                 None => true,
@@ -900,7 +934,7 @@ impl ChargingEngine {
             }
             ChargeState::ThermalThrottle => base_target.min(thermal_cap),
             ChargeState::Emergency => 500.min(base_target),
-            ChargeState::Disconnected => 0,
+            _ => 0, // Unreachable: Disconnected returns early above
         };
 
         let live_cycles = hw_profile
@@ -1052,10 +1086,11 @@ impl ChargingEngine {
                         && let Ok(ua) = v.trim().parse::<i64>()
                         && ua > 0
                     {
-                        tracing::warn!(target: "charging",
-                            "Detected a {}mA current cap on {} — slow charging is caused by \
-                             this cap, not by AIThermal. MaxSpeed/Urgent mode clears it.",
-                            ua / 1000, node);
+                tracing::warn!(target: "charging",
+                    "Detected a {}mA current cap on {} — a secondary contributor to slow charging. \
+                     The primary cause on this device is the battery thermal cooling device (cur_state > 0). \
+                     MaxSpeed/Urgent mode clears restrict_cur.",
+                    ua / 1000, node);
                     }
                 }
             }
@@ -1112,11 +1147,5 @@ impl ChargingEngine {
                 false
             }
         }
-    }
-}
-
-impl Default for ChargingEngine {
-    fn default() -> Self {
-        Self::new(&crate::hardware::HardwareProfile::default(), 48, 58)
     }
 }
