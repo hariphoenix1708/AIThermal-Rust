@@ -1,5 +1,28 @@
 # Changelog
 
+## v3.2.26 (versionCode 346)
+### Fixed
+- **Primary slow-charging fix**: On Xiaomi SM8635 (peridot), the kernel
+  thermal framework's battery cooling device (`cooling_device41/cur_state`)
+  is the actual throttle mechanism — NOT `restrict_chg`/`restrict_cur`
+  (which are already 0). The battery cooling device forces
+  `voltage_max=5V`, blocks QC/PD voltage negotiation, and caps charge
+  current to ~900mA even with a 40W charger. Confirmed by RedFox Kernel
+  Manager's "Bypass Thermal Limit" (clears `cur_state` → 0) which
+  instantly restores 40W charging (9516mA/40.6W peak).
+- Added `battery_cooling_path` field to `ChargingEngine` — discovered at
+  init by scanning cooling devices for `type=battery`. At session start,
+  AIThermal now clears the battery cooling device to 0 (one-shot).
+- Added periodic enforcement: every 15 seconds, re-checks
+  `cur_state`; if the stock thermal engine has re-set it, clears it
+  back to 0. This prevents mi_thermald/thermal-engine from re-throttling
+  charging during the session. AIThermal's own thermal management
+  (Emergency at 50°C, ThermalThrottle at 44-48°C) replaces the kernel
+  battery cooling device.
+- Added battery cooling device state to diagnostic dump — logs
+  `cur_state` value and warns when it's non-zero (root cause of slow
+  charging).
+
 ## v3.2.25 (versionCode 345)
 ### Fixed
 - Slow charging root cause: On Xiaomi SM8635 (peridot), the kernel

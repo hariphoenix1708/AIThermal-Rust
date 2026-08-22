@@ -71,6 +71,16 @@ pub struct ChargingEngine {
     pub forced_mode: Option<ChargeMode>,
     pub thermal_temp_warm: i32,
     pub thermal_temp_hot: i32,
+    /// Path to the battery thermal cooling device cur_state (e.g.
+    /// `/sys/class/thermal/cooling_device41/cur_state`). Discovered at
+    /// init by scanning cooling devices for type=battery. When non-None,
+    /// the charging engine will hold this at 0 during active sessions
+    /// to prevent the stock thermal framework from throttling charge
+    /// current via the battery cooling device.
+    pub battery_cooling_path: Option<String>,
+    /// Last time we enforced battery_cooling_path = 0. Prevents
+    /// re-writing every tick; re-checks every 15 seconds.
+    pub last_battery_cooling_clear: Option<std::time::Instant>,
 }
 
 impl ChargingEngine {
@@ -89,6 +99,21 @@ impl ChargingEngine {
 
     pub fn new(hw: &crate::hardware::HardwareProfile, thermal_temp_warm: i32, thermal_temp_hot: i32) -> Self {
         let limit_nodes = hw.charging_profile.current_limit_nodes.clone();
+
+        // Discover the battery thermal cooling device. On Qualcomm SM8635
+        // (peridot), the kernel thermal framework uses a "battery" type
+        // cooling device (e.g. cooling_device41) to throttle charge current.
+        // Its cur_state controls the charge current cap — higher state =
+        // lower current. When stock thermal is active, it sets this to a
+        // non-zero value that forces voltage_max=5V and blocks QC/PD
+        // negotiation, capping charging at ~900mA even with a 40W charger.
+        // We clear it to 0 during charging sessions to unblock full speed.
+        let battery_cooling_path = hw
+            .thermal_profile
+            .cooling_devices
+            .iter()
+            .find(|d| d.device_type.to_lowercase() == "battery")
+            .map(|d| format!("{}/cur_state", d.sysfs_path));
 
         Self {
             limit_nodes,
@@ -121,6 +146,8 @@ impl ChargingEngine {
             forced_mode: None,
             thermal_temp_warm,
             thermal_temp_hot,
+            battery_cooling_path,
+            last_battery_cooling_clear: None,
         }
     }
 
@@ -217,6 +244,23 @@ impl ChargingEngine {
                 ua / 1000);
         }
 
+        // --- Battery cooling device analysis ---
+        if let Some(ref path) = self.battery_cooling_path {
+            if let Ok(v) = fs::read_to_string(path) {
+                let state = v.trim();
+                if state != "0" {
+                    tracing::warn!(target: "charging",
+                        "Battery cooling device {} = {} — thermal framework is throttling charge current. \
+                         This is the PRIMARY cause of slow charging: it forces voltage_max=5V and blocks \
+                         QC/PD negotiation. Will be cleared to 0 during charging session.",
+                        path, state);
+                } else {
+                    tracing::info!(target: "charging",
+                        "Battery cooling device {} = 0 (no thermal throttle active)", path);
+                }
+            }
+        }
+
         // --- Voltage analysis ---
         if let Ok(v) = std::fs::read_to_string("/sys/class/power_supply/usb/voltage_max")
             && let Ok(v_max) = v.trim().parse::<i64>()
@@ -300,6 +344,37 @@ impl ChargingEngine {
                 tracing::info!(target: "charging",
                     "restrict_cur='{}' (non-numeric, attempting clear)", val);
                 let _ = crate::sysfs::write_string(restrict_cur_path, "0");
+            }
+        }
+
+        // Step 3: Clear the battery thermal cooling device.
+        // On Xiaomi SM8635 (peridot), the kernel thermal framework uses a
+        // "battery" type cooling device (cooling_device41) to throttle charge
+        // current. cur_state > 0 forces voltage_max=5V, blocks QC/PD
+        // negotiation, and caps current to ~900mA — even with a 40W charger.
+        // RedFox Kernel Manager's "Bypass Thermal Limit" clears this to 0,
+        // instantly unblocking 40W+ charging.
+        //
+        // We clear it at session start AND hold it at 0 during the session
+        // (enforced in evaluate()) because the stock thermal engine may
+        // re-set it on each thermal zone check.
+        if let Some(ref path) = self.battery_cooling_path {
+            if let Ok(current) = fs::read_to_string(path) {
+                let val = current.trim();
+                if val != "0" {
+                    match crate::sysfs::write_string(path, "0") {
+                        Ok(()) => tracing::info!(target: "charging",
+                            "One-shot: battery cooling device {} → 0 (was {}) — unblocked QC/PD negotiation",
+                            path, val),
+                        Err(e) => tracing::warn!(target: "charging",
+                            "One-shot: battery cooling device write failed: {} — charge current may remain throttled. \
+                             The stock thermal framework is holding cur_state={}.",
+                            e, val),
+                    }
+                } else {
+                    tracing::debug!(target: "charging",
+                        "battery cooling device {} already 0 (no throttle)", path);
+                }
             }
         }
     }
@@ -745,6 +820,36 @@ impl ChargingEngine {
                 self.total_power_uw_samples += power_uw;
             }
             self.sample_count += 1;
+        }
+
+        // --- Periodic battery cooling device enforcement ---
+        // The stock thermal engine (mi_thermald/thermal-engine) may re-set
+        // the battery cooling device cur_state to a non-zero value on each
+        // thermal zone check, re-throttling charging. We re-check every 15
+        // seconds and clear it back to 0 if needed. This is a lightweight
+        // sysfs read (one stat + one read_file, ~2µs) — negligible overhead.
+        if let Some(ref path) = self.battery_cooling_path {
+            let should_enforce = match self.last_battery_cooling_clear {
+                Some(last) => last.elapsed().as_secs() >= 15,
+                None => true,
+            };
+            if should_enforce {
+                self.last_battery_cooling_clear = Some(std::time::Instant::now());
+                if let Ok(current) = fs::read_to_string(path) {
+                    let val = current.trim();
+                    if val != "0" {
+                        if let Err(e) = crate::sysfs::write_string(path, "0") {
+                            tracing::warn!(target: "charging",
+                                "Battery cooling device {} re-clear failed: {} — charge current may remain throttled",
+                                path, e);
+                        } else {
+                            tracing::info!(target: "charging",
+                                "Battery cooling device {} re-cleared: {} → 0 (stock thermal engine re-set it)",
+                                path, val);
+                        }
+                    }
+                }
+            }
         }
 
         if next == ChargeState::ThermalThrottle
