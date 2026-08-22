@@ -16,6 +16,7 @@ pub struct RuntimeTuner {
     hardware: HardwareProfile,
     original_state: std::sync::Mutex<HashMap<String, String>>,
     last_gpu_boost: std::sync::Mutex<Option<std::time::Instant>>,
+    last_drop_cache: std::sync::Mutex<Option<std::time::Instant>>,
     unsupported_cooling_nodes: std::sync::Mutex<std::collections::HashSet<String>>,
     locked_sysfs_nodes: std::sync::Mutex<Vec<String>>,
     state_dir: Option<PathBuf>,
@@ -54,6 +55,7 @@ impl RuntimeTuner {
             hardware,
             original_state: std::sync::Mutex::new(HashMap::new()),
             last_gpu_boost: std::sync::Mutex::new(None),
+            last_drop_cache: std::sync::Mutex::new(None),
             unsupported_cooling_nodes: std::sync::Mutex::new(std::collections::HashSet::new()),
             locked_sysfs_nodes: std::sync::Mutex::new(Vec::new()),
             state_dir: None,
@@ -207,6 +209,7 @@ impl RuntimeTuner {
     pub fn apply_network_tweaks(
         &self,
         policy: &str,
+        is_gaming: bool,
     ) -> Result<(), crate::tuning::backend::BackendError> {
         // Master off-switch: v3.1.0's TCP writes caused visible connectivity
         // regressions (DNS failures, stalled HTTPS streams). Off by default.
@@ -219,7 +222,9 @@ impl RuntimeTuner {
             return Ok(());
         }
 
-        let is_perf = policy == "Performance" || policy == "performance";
+        // Keep network tweaks active during gaming even if policy drops to
+        // Balanced due to thermal pressure — game packets need low latency.
+        let is_perf = policy == "Performance" || policy == "performance" || is_gaming;
 
         let path_keepalive = "/proc/sys/net/ipv4/tcp_keepalive_time";
         let path_congestion = "/proc/sys/net/ipv4/tcp_congestion_control";
@@ -420,6 +425,23 @@ impl RuntimeTuner {
     }
 
     pub fn drop_cache(&self, drop_slab: bool) -> Result<(), BackendError> {
+        const MIN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+
+        // Rate-limit drop_caches: writing "1" to drop_caches on every
+        // Powersave tick forces immediate re-faulting and more I/O, which
+        // is counterproductive when the device is already under memory
+        // pressure. EmergencyCool (drop_caches=3) is rare and exempt.
+        if !drop_slab
+            && let Ok(last) = self.last_drop_cache.lock()
+            && let Some(t) = *last
+            && t.elapsed() < MIN_INTERVAL
+        {
+            return Ok(());
+        }
+        if let Ok(mut last) = self.last_drop_cache.lock() {
+            *last = Some(std::time::Instant::now());
+        }
+
         if drop_slab {
             crate::tuning::backend::TuningBackend::write_string("/proc/sys/vm/drop_caches", "3");
         } else {
@@ -797,6 +819,6 @@ impl crate::tuning::backend::NetworkBackend for RuntimeTuner {
         &self,
         algo: &str,
     ) -> Result<(), crate::tuning::backend::BackendError> {
-        self.apply_network_tweaks(algo)
+        self.apply_network_tweaks(algo, false)
     }
 }

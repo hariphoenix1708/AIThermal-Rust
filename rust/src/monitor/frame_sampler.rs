@@ -31,11 +31,82 @@ impl FrameStats {
     }
 }
 
-// Target frame budget for jank classification. 16_666_667ns = 60fps budget.
-// This should ideally be derived from the display's actual current refresh
-// rate (see Step 4's optional refinement) rather than hardcoded, but 60fps is
-// a safe, conservative default starting point.
+// Target frame budget for jank classification. Dynamically detected from
+// the display's actual current refresh rate. Falls back to 60fps if
+// detection fails.
 const DEFAULT_FRAME_BUDGET_NS: u64 = 16_666_667;
+
+/// Detect the display's actual refresh rate from dumpsys.
+/// Returns the frame budget in nanoseconds.
+fn detect_frame_budget_ns() -> u64 {
+    // Try to read from dumpsys display
+    if let Ok(output) = std::process::Command::new("dumpsys")
+        .arg("display")
+        .output()
+    {
+        let text = String::from_utf8_lossy(&output.stdout);
+        // Look for "mRefreshRate=" or "refreshRate=" pattern
+        for line in text.lines() {
+            let line = line.trim();
+            if let Some(idx) = line.find("mRefreshRate=") {
+                let val_str = &line[idx + 13..];
+                if let Some(end) = val_str.find(|c: char| !c.is_ascii_digit() && c != '.') {
+                    let val_str = &val_str[..end];
+                    if let Ok(hz) = val_str.parse::<f64>()
+                        && hz > 0.0 && hz <= 240.0
+                    {
+                        let ns = (1_000_000_000.0 / hz) as u64;
+                        tracing::debug!("Detected display refresh rate: {}Hz (budget={}ns)", hz, ns);
+                        return ns;
+                    }
+                }
+            }
+            if let Some(idx) = line.find("refreshRate=") {
+                let val_str = &line[idx + 12..];
+                if let Some(end) = val_str.find(|c: char| !c.is_ascii_digit() && c != '.') {
+                    let val_str = &val_str[..end];
+                    if let Ok(hz) = val_str.parse::<f64>()
+                        && hz > 0.0 && hz <= 240.0
+                    {
+                        let ns = (1_000_000_000.0 / hz) as u64;
+                        tracing::debug!("Detected display refresh rate: {}Hz (budget={}ns)", hz, ns);
+                        return ns;
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: try to read from SurfaceFlinger
+    if let Ok(output) = std::process::Command::new("dumpsys")
+        .arg("SurfaceFlinger")
+        .arg("--display-id")
+        .output()
+    {
+        let text = String::from_utf8_lossy(&output.stdout);
+        for line in text.lines() {
+            if line.contains("refresh") && line.contains("Hz") {
+                // Try to extract number before "Hz"
+                if let Some(idx) = line.rfind(|c: char| c.is_ascii_digit()) {
+                    let start = line[..=idx].rfind(|c: char| !c.is_ascii_digit() && c != '.')
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    let val_str = &line[start..=idx];
+                    if let Ok(hz) = val_str.parse::<f64>()
+                        && hz > 0.0 && hz <= 240.0
+                    {
+                        let ns = (1_000_000_000.0 / hz) as u64;
+                        tracing::debug!("Detected display refresh rate via SF: {}Hz (budget={}ns)", hz, ns);
+                        return ns;
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::debug!("Could not detect display refresh rate, using 60fps default");
+    DEFAULT_FRAME_BUDGET_NS
+}
 
 fn compute_stats_from_durations(mut durations: Vec<u64>, frame_budget_ns: u64) -> Option<FrameStats> {
     if durations.is_empty() {
@@ -66,13 +137,13 @@ fn parse_latency_output(text: &str, frame_budget_ns: u64) -> Option<FrameStats> 
     lines.next()?;
 
     for line in lines {
-        let fields: Vec<&str> = line.trim().split_whitespace().collect();
+        let fields: Vec<&str> = line.split_whitespace().collect();
         if fields.len() >= 3 {
             // INTENDED_VSYNC (col 0), VSYNC (col 1), FRAME_COMPLETED (col 2)
-            if let (Ok(iv), Ok(fc)) = (fields[0].parse::<u64>(), fields[2].parse::<u64>()) {
-                if fc > iv && iv > 0 && fc < u64::MAX {
-                    durations.push(fc - iv);
-                }
+            if let (Ok(iv), Ok(fc)) = (fields[0].parse::<u64>(), fields[2].parse::<u64>())
+                && fc > iv && iv > 0 && fc < u64::MAX
+            {
+                durations.push(fc - iv);
             }
         }
     }
@@ -80,7 +151,7 @@ fn parse_latency_output(text: &str, frame_budget_ns: u64) -> Option<FrameStats> 
     compute_stats_from_durations(durations, frame_budget_ns)
 }
 
-fn try_gfxinfo_latency(package: &str) -> Option<FrameStats> {
+fn try_gfxinfo_latency(package: &str, frame_budget_ns: u64) -> Option<FrameStats> {
     let output = Command::new("dumpsys")
         .arg("gfxinfo")
         .arg(package)
@@ -93,10 +164,10 @@ fn try_gfxinfo_latency(package: &str) -> Option<FrameStats> {
     }
 
     let text = String::from_utf8_lossy(&output.stdout);
-    parse_latency_output(&text, DEFAULT_FRAME_BUDGET_NS)
+    parse_latency_output(&text, frame_budget_ns)
 }
 
-fn try_surfaceflinger_latency(package: &str) -> Option<FrameStats> {
+fn try_surfaceflinger_latency(package: &str, frame_budget_ns: u64) -> Option<FrameStats> {
     let output = Command::new("dumpsys")
         .arg("SurfaceFlinger")
         .arg("--latency")
@@ -108,10 +179,10 @@ fn try_surfaceflinger_latency(package: &str) -> Option<FrameStats> {
         return None;
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    parse_latency_output(&text, DEFAULT_FRAME_BUDGET_NS)
+    parse_latency_output(&text, frame_budget_ns)
 }
 
-fn try_surfaceflinger_latency_fallback(package: &str) -> Option<FrameStats> {
+fn try_surfaceflinger_latency_fallback(package: &str, frame_budget_ns: u64) -> Option<FrameStats> {
     let output = Command::new("dumpsys")
         .arg("SurfaceFlinger")
         .arg("--latency")
@@ -123,23 +194,27 @@ fn try_surfaceflinger_latency_fallback(package: &str) -> Option<FrameStats> {
         return None;
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    parse_latency_output(&text, DEFAULT_FRAME_BUDGET_NS)
+    parse_latency_output(&text, frame_budget_ns)
 }
 
 pub fn sample_frame_stats(package: &str) -> Option<FrameStats> {
+    // Detect display refresh rate each sample cycle to handle
+    // dynamic refresh rate changes (e.g., 60Hz idle -> 120Hz gaming).
+    let frame_budget_ns = detect_frame_budget_ns();
+
     let result = (|| {
         // Try #1: FrameTimeline / gfxinfo latency
-        if let Some(stats) = try_gfxinfo_latency(package) {
+        if let Some(stats) = try_gfxinfo_latency(package, frame_budget_ns) {
             return Some(stats);
         }
 
         // Try #2: SurfaceFlinger latency SurfaceView (usually where game renders)
-        if let Some(stats) = try_surfaceflinger_latency(package) {
+        if let Some(stats) = try_surfaceflinger_latency(package, frame_budget_ns) {
             return Some(stats);
         }
 
         // Try #3: SurfaceFlinger latency base package
-        if let Some(stats) = try_surfaceflinger_latency_fallback(package) {
+        if let Some(stats) = try_surfaceflinger_latency_fallback(package, frame_budget_ns) {
             return Some(stats);
         }
 
@@ -153,7 +228,7 @@ pub fn sample_frame_stats(package: &str) -> Option<FrameStats> {
 
         if output.status.success() {
             let text = String::from_utf8_lossy(&output.stdout);
-            return parse_framestats(&text, DEFAULT_FRAME_BUDGET_NS);
+            return parse_framestats(&text, frame_budget_ns);
         }
 
         None
@@ -240,7 +315,7 @@ impl Default for BackgroundFrameSampler {
 
 impl BackgroundFrameSampler {
     pub fn new() -> Self {
-        let latest = Arc::new(Mutex::new(None));
+        let latest = Arc::new(Mutex::new(None::<FrameStats>));
         let package = Arc::new(Mutex::new(None::<String>));
         let running = Arc::new(AtomicBool::new(true));
 
@@ -255,7 +330,22 @@ impl BackgroundFrameSampler {
                     Some(pkg) => {
                         let result = sample_frame_stats(&pkg);
                         if let Ok(mut slot) = latest_thread.lock() {
-                            *slot = result;
+                            // Only refresh the slot when values actually
+                            // changed.  If dumpsys returns stale / frozen
+                            // counters we leave the OLD slot in place so
+                            // its original captured_at ages normally and
+                            // the existing 12s staleness guard fires.
+                            let unchanged = matches!(
+                                (&*slot, &result),
+                                (Some(prev), Some(new))
+                                    if prev.sample_count == new.sample_count
+                                        && prev.janky_frames == new.janky_frames
+                                        && prev.p90_frame_ns == new.p90_frame_ns
+                                        && prev.worst_frame_ns == new.worst_frame_ns
+                            );
+                            if !unchanged {
+                                *slot = result;
+                            }
                         }
                         // Spawning up to 4 `dumpsys` processes per cycle while
                         // a game runs is heavy; every 5s is enough signal for

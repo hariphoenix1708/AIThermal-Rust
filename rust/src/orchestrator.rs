@@ -344,7 +344,8 @@ impl SystemOrchestrator {
 
             let active_secs = ctx
                 .game_session_started_at
-                .map(|t: std::time::Instant| t.elapsed().as_secs())
+                .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
+                .map(|d| d.as_secs())
                 .unwrap_or(0);
             if active_secs >= 1800 {
                 modifier -= ((active_secs / 1800).saturating_sub(1) as f64) * 5.0;
@@ -504,6 +505,7 @@ impl SystemOrchestrator {
             cooldown_source_pkg: None,
             game_session_started_at: None,
             game_session_peak_temp: 0,
+            last_session_peak_temp: 0,
             last_gaming_state: false,
             plugged_in_at: None,
             screen_off_since: None,
@@ -685,7 +687,7 @@ impl RuntimeTask for SystemOrchestrator {
         let now = std::time::Instant::now();
 
         if is_gaming && !was_gaming {
-            ctx.game_session_started_at = Some(now);
+            ctx.game_session_started_at = Some(std::time::SystemTime::now());
             tracing::info!(
                 target: "gaming",
                 "Game detected: {}",
@@ -881,7 +883,8 @@ impl RuntimeTask for SystemOrchestrator {
 
             let session_secs = ctx
                 .game_session_started_at
-                .map(|t: std::time::Instant| t.elapsed().as_secs())
+                .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
+                .map(|d| d.as_secs())
                 .unwrap_or(0);
             if let Err(e) = self.game_profiles.update_session(
                 &pkg,
@@ -892,6 +895,7 @@ impl RuntimeTask for SystemOrchestrator {
                 tracing::warn!("Failed to save game profile for {}: {}", pkg, e);
             }
 
+            ctx.last_session_peak_temp = ctx.game_session_peak_temp;
             ctx.game_session_peak_temp = 0;
             ctx.game_session_started_at = None;
             ctx.current_game = None;
@@ -902,7 +906,7 @@ impl RuntimeTask for SystemOrchestrator {
         // Evaluate post-game cooling when cooldown expires
         if !is_cooldown && ctx.cooldown_until.is_some() {
             self.calibration
-                .evaluate_post_game_cooling(ctx.game_session_peak_temp, bat_temp);
+                .evaluate_post_game_cooling(ctx.last_session_peak_temp, bat_temp);
             ctx.cooldown_until = None;
             ctx.cooldown_source_pkg = None;
         }
@@ -996,12 +1000,26 @@ impl RuntimeTask for SystemOrchestrator {
         }
 
         if !disable_tweaks {
-            // If game was just detected and confirmed, try pinning critical render thread
-            if is_gaming && !was_gaming
-                && let Some(pid) = self.gaming.confirmed_pid {
+            // Pin critical render thread — retry for a short window after
+            // session start because game engines commonly spawn the
+            // RenderThread hundreds of ms to seconds AFTER the main process.
+            if is_gaming
+                && let Some(pid) = self.gaming.confirmed_pid
+            {
+                let session_young = ctx
+                    .game_session_started_at
+                    .and_then(|t| {
+                        std::time::SystemTime::now()
+                            .duration_since(t)
+                            .ok()
+                            .map(|d| d.as_secs() < 15)
+                    })
+                    .unwrap_or(false);
+                if !was_gaming || session_young {
                     self.runtime_tuner
                         .pin_critical_render_thread(pid, "top-app");
                 }
+            }
         } else if needs_apply {
             tracing::info!(target: "tuning", "Tweaks disabled by config, skipping actuation for policy: {}", policy_str);
         }
@@ -1053,7 +1071,8 @@ impl RuntimeTask for SystemOrchestrator {
         // Grace period to avoid burst-apply stutter at game launch, tune threshold based on real-device testing.
         let game_grace_elapsed = ctx
             .game_session_started_at
-            .map(|t| t.elapsed().as_secs() >= 2)
+            .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
+            .map(|d| d.as_secs() >= 2)
             .unwrap_or(true);
 
         if !disable_tweaks
@@ -1334,7 +1353,7 @@ impl RuntimeTask for SystemOrchestrator {
         if !disable_tweaks && needs_apply {
             if can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
-                if let Err(e) = self.runtime_tuner.apply_network_tweaks(policy_str) {
+                if let Err(e) = self.runtime_tuner.apply_network_tweaks(policy_str, is_gaming) {
                     tracing::warn!("Failed to apply network tweaks: {}", e);
                 }
                 if let Err(e) = self.runtime_tuner.apply_touch_display_tweaks(policy_str) {
@@ -1350,7 +1369,13 @@ impl RuntimeTask for SystemOrchestrator {
                 // the gentler Recovery clamp (90% Fmax) instead; every other
                 // tuner only branches on is_perf/is_game and behaves identically.
                 // Cooldown is routed through the same gentler clamp.
+                // During gaming, keep walt governor and avoid schedutil transition
+                // stall even if thermal policy is Conservative/Powersave.
                 let tuning_policy = if ctx.recovery_mode || ctx.cooldown_active {
+                    "Recovery"
+                } else if is_gaming && !matches!(policy_str, "Performance" | "performance") {
+                    // Gaming with thermal pressure: keep walt governor
+                    // but apply a milder frequency clamp (90% vs 85%)
                     "Recovery"
                 } else {
                     policy_str
@@ -1624,7 +1649,13 @@ impl RuntimeTask for SystemOrchestrator {
             "slow_cooler_persistent": self.calibration.slow_cooler_persistent,
             "sleep_ms": ctx.sleep_ms,
             "session_peak_temp": ctx.game_session_peak_temp,
-            "session_started_at": ctx.game_session_started_at.map(|t| chrono::Utc::now().timestamp() - t.elapsed().as_secs() as i64),
+            "session_started_at": ctx.game_session_started_at.map(|t| {
+                std::time::SystemTime::now()
+                    .duration_since(t)
+                    .ok()
+                    .map(|d| chrono::Utc::now().timestamp() - d.as_secs() as i64)
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp())
+            }),
             // Extra fields consumed by the KernelSU WebUI - always present
             // (null when inactive) so the UI never has to guess a schema.
             "cooldown_active": ctx.cooldown_active,

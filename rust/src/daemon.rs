@@ -38,7 +38,7 @@ pub struct Daemon {
     screen_on: Arc<AtomicBool>,
     last_screen_netlink_update: Arc<AtomicU64>,
     was_netlink_fresh_last_check: bool,
-    last_tick_completed: Option<std::time::Instant>,
+    last_tick_completed: Option<std::time::SystemTime>,
 }
 
 /// Monotonic tick counter used by the heartbeat instrumentation in the main
@@ -79,6 +79,7 @@ impl Daemon {
             cooldown_source_pkg: None,
             game_session_started_at: None,
             game_session_peak_temp: 0,
+            last_session_peak_temp: 0,
             last_gaming_state: false,
             plugged_in_at: None,
             screen_off_since: None,
@@ -234,7 +235,10 @@ impl Daemon {
             // instead of only inferable from log archaeology after the fact.
             // Long-idle screen-off sleeps are intentional and excluded.
             if let Some(last) = self.last_tick_completed {
-                let elapsed = last.elapsed().as_secs();
+                let elapsed = std::time::SystemTime::now()
+                    .duration_since(last)
+                    .unwrap_or_default()
+                    .as_secs();
                 let prev_sleep_secs = self.ctx.sleep_ms / 1000;
                 let was_long_idle_sleep = prev_sleep_secs >= STALL_WARN_THRESHOLD_SECS;
                 if !was_long_idle_sleep && elapsed > STALL_WARN_THRESHOLD_SECS {
@@ -251,7 +255,7 @@ impl Daemon {
             if let Err(e) = self.tick() {
                 error!("Error in daemon tick: {}", e);
             }
-            self.last_tick_completed = Some(std::time::Instant::now());
+            self.last_tick_completed = Some(std::time::SystemTime::now());
 
             let sleep_ms = self.ctx.sleep_ms.max(1);
             let was_screen_off = self.check_screen_off();

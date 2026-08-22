@@ -201,6 +201,112 @@ pub fn apply_powerhints(is_perf_or_gaming: bool) {
     write_if_absent_or_different(&format!("{}/cpus_online", base), "0:4 1:4");
 }
 
+/// TCP/UDP buffer tuning + busy_poll + netdev backlog for gaming.
+/// Reduces packet loss and latency under load. All paths are
+/// capability-probed and writes are idempotent.
+pub fn apply_network_buffers(is_gaming: bool) {
+    if !is_gaming {
+        return;
+    }
+
+    // TCP receive buffer: min=4KB default=128KB max=16MB
+    // Larger buffers prevent packet drops under bursty game traffic.
+    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_rmem", "4096 131072 16777216");
+    // TCP send buffer: min=4KB default=64KB max=8MB
+    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_wmem", "4096 65536 8388608");
+    // TCP memory pressure thresholds (pages): low=7680 low+15360 high=23040
+    // Roughly 30MB/60MB/90MB on 4K pages.
+    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_mem", "786432 1048576 1572864");
+    // UDP receive buffer: 256KB — games use UDP for voice/position updates
+    write_if_absent_or_different("/proc/sys/net/core/rmem_max", "16777216");
+    write_if_absent_or_different("/proc/sys/net/core/wmem_max", "8388608");
+    // Increase netdev backlog to prevent packet drops on fast Wi-Fi
+    write_if_absent_or_different("/proc/sys/net/core/netdev_max_backlog", "5000");
+    // Netdev budget: process more packets per NAPI poll cycle
+    write_if_absent_or_different("/proc/sys/net/core/netdev_budget", "600");
+    // Busy-poll: kernel bypass for lower latency on socket reads
+    // 50us is a good balance between latency and CPU overhead.
+    write_if_absent_or_different("/proc/sys/net/core/busy_poll", "50");
+    write_if_absent_or_different("/proc/sys/net/core/busy_read", "50");
+    // Dev weight: process more packets per softirq
+    write_if_absent_or_different("/proc/sys/net/core/dev_weight", "64");
+    // UDP memory pressure (pages): prevent UDP packet drops
+    write_if_absent_or_different("/proc/sys/net/ipv4/udp_mem", "32768 65536 131072");
+    // TCP fastopen: reduce handshake latency for reconnections
+    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_fastopen", "3");
+}
+
+/// CPU frequency floor during gaming: prevent deep frequency drops
+/// between frame bursts by raising scaling_min_freq.
+pub fn apply_freq_floor(hw: &HardwareProfile, is_gaming: bool) {
+    for cluster in &hw.cpu_topology.clusters {
+        let min_path = format!(
+            "/sys/devices/system/cpu/cpufreq/{}/scaling_min_freq",
+            cluster.name
+        );
+        let cpuinfo_min_path = format!(
+            "/sys/devices/system/cpu/cpufreq/{}/cpuinfo_min_freq",
+            cluster.name
+        );
+        if is_gaming {
+            // Raise min_freq to 50% of max for big/mid cores during gaming
+            // to prevent governor from dropping to lowest state between bursts.
+            // Little cores stay at default to save power on background work.
+            if cluster.name.contains("cpu") && !cluster.name.contains("0") && !cluster.name.contains("1")
+                && let Ok(s) = std::fs::read_to_string(
+                    format!("/sys/devices/system/cpu/cpufreq/{}/cpuinfo_max_freq", cluster.name)
+                )
+                && let Ok(fmax) = s.trim().parse::<u64>()
+            {
+                let floor = fmax / 2; // 50% of max
+                let snapped = snap_to_available_freq_static(&cluster.name, floor, &cluster.available_frequencies)
+                    .unwrap_or(floor);
+                write_if_absent_or_different(&min_path, &snapped.to_string());
+            }
+        } else {
+            // Restore to cpuinfo_min_freq when not gaming
+            if let Ok(s) = std::fs::read_to_string(&cpuinfo_min_path) {
+                write_if_absent_or_different(&min_path, s.trim());
+            }
+        }
+    }
+}
+
+fn snap_to_available_freq_static(_cluster_name: &str, target: u64, available: &[u64]) -> Option<u64> {
+    if available.is_empty() {
+        return None;
+    }
+    // Find closest available frequency
+    let mut best = available[0];
+    for &freq in available {
+        if (freq as i64 - target as i64).abs() < (best as i64 - target as i64).abs() {
+            best = freq;
+        }
+    }
+    Some(best)
+}
+
+/// uclamp tuning: set minimum capacity for top-app (game) threads
+/// so the scheduler never drops below a useful capacity floor.
+pub fn apply_uclamp(is_gaming: bool) {
+    let uclamp_max_path = "/dev/cpuctl/top-app/cpu.uclamp.max";
+    let uclamp_min_path = "/dev/cpuctl/top-app/cpu.uclamp.min";
+    if !std::path::Path::new(uclamp_max_path).exists() {
+        return;
+    }
+    if is_gaming {
+        // During gaming: raise min capacity floor to 40% so the scheduler
+        // never puts the game's render thread on a capacity-starved core.
+        // Unset max (use "max" = no cap) to allow full burst.
+        write_if_absent_or_different(uclamp_min_path, "40");
+        write_if_absent_or_different(uclamp_max_path, "max");
+    } else {
+        // Default: no min cap, allow normal energy-aware scheduling
+        write_if_absent_or_different(uclamp_min_path, "0");
+        write_if_absent_or_different(uclamp_max_path, "max");
+    }
+}
+
 /// Single entry-point called once per policy transition after the existing
 /// tuner has run. Gated by config.advanced_tuning_enabled.
 pub fn apply_all(hw: &HardwareProfile, policy: &str) {
@@ -212,6 +318,9 @@ pub fn apply_all(hw: &HardwareProfile, policy: &str) {
     apply_zram_tuning(is_gaming);
     apply_f2fs_tuning(is_perf);
     apply_powerhints(is_perf);
+    apply_network_buffers(is_gaming);
+    apply_freq_floor(hw, is_gaming);
+    apply_uclamp(is_gaming);
 
     // Deep idle states are a boot-time / rarely-changing knob — enable
     // once and never touch again per policy tick. The write is idempotent

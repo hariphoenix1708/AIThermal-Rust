@@ -144,6 +144,14 @@ impl ChargingEngine {
             "/sys/class/power_supply/usb/input_current_now",
             "/sys/class/power_supply/battery/charge_type",
             "/sys/class/power_supply/battery/constant_charge_current_max",
+            "/sys/class/power_supply/battery/voltage_now",
+            "/sys/class/power_supply/battery/current_now",
+            "/sys/class/power_supply/battery/status",
+            "/sys/class/power_supply/battery/health",
+            "/sys/class/qcom-battery/restrict_chg",
+            "/sys/class/qcom-battery/restrict_cur",
+            "/sys/class/qcom-battery/charging_enabled",
+            "/sys/class/power_supply/battery/system_temp_level",
         ];
 
         tracing::info!(target: "charging", "----- charger diagnostic dump -----");
@@ -169,7 +177,131 @@ impl ChargingEngine {
                     ua / 1000);
             }
         }
+        // --- restrict_cur / restrict_chg analysis (even if not in voter_nodes) ---
+        // These nodes control charge current on Qualcomm PMIC. restrict_chg=1
+        // enforces restrict_cur; restrict_chg=0 disables the cap entirely.
+        // They may not be in voter_nodes (detected as read-only by idempotent
+        // probe), but writing a DIFFERENT value (like "0") can still succeed.
+        if let Ok(v) = std::fs::read_to_string("/sys/class/qcom-battery/restrict_chg") {
+            let val = v.trim();
+            if val == "1" {
+                // restrict_chg=1 means restrict_cur is being enforced
+                if let Ok(cv) = std::fs::read_to_string("/sys/class/qcom-battery/restrict_cur")
+                    && let Ok(ua) = cv.trim().parse::<i64>()
+                    && ua > 0
+                {
+                    tracing::warn!(target: "charging",
+                        "restrict_chg=1 ENFORCES restrict_cur={}mA — this is the root cause of slow charging. \
+                         One-shot clear will attempt restrict_chg=0 + restrict_cur=0 at session start.",
+                        ua / 1000);
+                } else {
+                    tracing::warn!(target: "charging",
+                        "restrict_chg=1 but restrict_cur unreadable — current may be capped. \
+                         One-shot clear will attempt restrict_chg=0 at session start.");
+                }
+            } else {
+                tracing::info!(target: "charging",
+                    "restrict_chg={} — current restriction is {}.",
+                    val, if val == "0" { "disabled (good)" } else { "unknown state" });
+            }
+        }
+        // Also check restrict_cur directly in case it's not in voter_nodes
+        if !self.voter_nodes.iter().any(|n| n.ends_with("/restrict_cur"))
+            && let Ok(v) = std::fs::read_to_string("/sys/class/qcom-battery/restrict_cur")
+            && let Ok(ua) = v.trim().parse::<i64>()
+            && ua > 0
+        {
+            tracing::warn!(target: "charging",
+                "restrict_cur={}mA (read-only to idempotent probe): caps charge current. \
+                 Will attempt one-shot write of 0 at session start.",
+                ua / 1000);
+        }
+
+        // --- Voltage analysis ---
+        if let Ok(v) = std::fs::read_to_string("/sys/class/power_supply/usb/voltage_max")
+            && let Ok(v_max) = v.trim().parse::<i64>()
+        {
+            if v_max < 9_000_000 {
+                tracing::warn!(target: "charging",
+                    "Charger voltage_max={}mV — charger is NOT negotiating fast charge. \
+                     Hardware limitation: charger/cable does not support QC/PD. \
+                     Charging speed limited to ~900mA at 5V.",
+                    v_max / 1000);
+            } else {
+                tracing::info!(target: "charging",
+                    "Charger voltage_max={}mV — fast charge (QC/PD) is active.",
+                    v_max / 1000);
+            }
+        }
         tracing::info!(target: "charging", "----- end diagnostic dump -----");
+    }
+
+    /// One-shot: clear restrict_chg and restrict_cur at session start.
+    ///
+    /// These nodes control the Qualcomm PMIC charge current limit.
+    /// - `restrict_chg=1` + `restrict_cur=X` → current capped at X μA
+    /// - `restrict_chg=0` → restriction disabled entirely
+    ///
+    /// Writing `restrict_chg` every tick causes SPMI bus contention with
+    /// the display controller on SM8635, so we only do this once per
+    /// charging session (at the Disconnected→Normal transition).
+    ///
+    /// The idempotent probe in `probe_charging()` reads the current value
+    /// and writes it back. Some Xiaomi kernels reject idempotent writes
+    /// (to reduce unnecessary SPMI traffic), falsely marking the node as
+    /// read-only. Writing a DIFFERENT value ("0") usually succeeds.
+    fn one_shot_clear_restrict(&self) {
+        let restrict_chg_path = "/sys/class/qcom-battery/restrict_chg";
+        let restrict_cur_path = "/sys/class/qcom-battery/restrict_cur";
+
+        // Step 1: Clear restrict_chg first (disables enforcement)
+        if Path::new(restrict_chg_path).exists()
+            && let Ok(current) = fs::read_to_string(restrict_chg_path)
+        {
+            let val = current.trim();
+            if val == "1" {
+                match crate::sysfs::write_string(restrict_chg_path, "0") {
+                    Ok(()) => tracing::info!(target: "charging",
+                        "One-shot: restrict_chg 1 → 0 (disabled current restriction enforcement)"),
+                    Err(e) => tracing::warn!(target: "charging",
+                        "One-shot: restrict_chg write failed: {} — current may remain limited. \
+                         If this persists, the SPMI bus may be contended; try a reboot.",
+                        e),
+                }
+            } else if val == "0" {
+                tracing::debug!(target: "charging", "restrict_chg already 0 (no enforcement)");
+            } else {
+                tracing::info!(target: "charging", "restrict_chg={} (unexpected value, attempting clear)", val);
+                let _ = crate::sysfs::write_string(restrict_chg_path, "0");
+            }
+        }
+
+        // Step 2: Clear restrict_cur (removes any residual cap)
+        if Path::new(restrict_cur_path).exists()
+            && let Ok(current) = fs::read_to_string(restrict_cur_path)
+        {
+            let val = current.trim();
+            if let Ok(ua) = val.parse::<i64>() {
+                if ua > 0 {
+                    match crate::sysfs::write_string(restrict_cur_path, "0") {
+                        Ok(()) => tracing::info!(target: "charging",
+                            "One-shot: restrict_cur {} → 0 (cleared {}mA current cap)",
+                            val, ua / 1000),
+                        Err(e) => tracing::warn!(target: "charging",
+                            "One-shot: restrict_cur write failed: {} — {}mA cap may remain. \
+                             The node's idempotent probe failed but a direct write of 0 \
+                             should work on most Qualcomm PMICs.",
+                            e, ua / 1000),
+                    }
+                } else {
+                    tracing::debug!(target: "charging", "restrict_cur already 0 (no cap)");
+                }
+            } else {
+                tracing::info!(target: "charging",
+                    "restrict_cur='{}' (non-numeric, attempting clear)", val);
+                let _ = crate::sysfs::write_string(restrict_cur_path, "0");
+            }
+        }
     }
 
     /// Writes the correct voter state for the current ChargeMode.
@@ -268,6 +400,17 @@ impl ChargingEngine {
             };
             let _ = crate::sysfs::write_string(node, default);
         }
+        // Clear restrict nodes that may not be in voter_nodes (detected as
+        // read-only by idempotent probe). Writing "0" removes any current
+        // cap so HyperOS can manage charging normally after AIThermal exits.
+        for path in [
+            "/sys/class/qcom-battery/restrict_chg",
+            "/sys/class/qcom-battery/restrict_cur",
+        ] {
+            if Path::new(path).exists() {
+                let _ = crate::sysfs::write_string(path, "0");
+            }
+        }
     }
 
     fn check_overrides(
@@ -359,7 +502,7 @@ impl ChargingEngine {
         match mode {
             ChargeMode::UnderLoad => {
                 if soc < 20 {
-                    9800
+                    9000
                 } else if soc < 40 {
                     8750
                 } else if soc < 51 {
@@ -395,18 +538,16 @@ impl ChargingEngine {
                 }
             }
             ChargeMode::MaxSpeed | ChargeMode::Urgent => {
-                if soc < 20 {
-                    18000
-                } else if soc < 40 {
-                    16000
-                } else if soc < 51 {
-                    14000
-                } else if soc < 60 {
-                    12000
-                } else if soc < 80 {
+                if soc < 40 {
                     9000
+                } else if soc < 51 {
+                    8500
+                } else if soc < 60 {
+                    7500
+                } else if soc < 80 {
+                    6000
                 } else {
-                    5000
+                    3500
                 }
             }
             ChargeMode::BatteryCare => {
@@ -517,6 +658,10 @@ impl ChargingEngine {
                 self.finish_session(state_dir, soc);
                 self.limit_write_failure_count = 0;
                 self.limit_write_disabled = false;
+                // Release all voter nodes on disconnect to prevent latching.
+                // Without this, input_suspend=1 from a prior state can remain
+                // stuck across reconnect cycles (observed: 8-minute latch).
+                self.release_voters_on_shutdown();
             }
             self.current_state = next;
             return 0;
@@ -539,6 +684,23 @@ impl ChargingEngine {
 
             self.dump_charger_diagnostics();
 
+            // --- One-shot restrict clearance ---
+            // The Qualcomm PMIC charging driver uses two sysfs nodes to
+            // control charge current:
+            //   restrict_chg=1 + restrict_cur=X → cap current at X μA
+            //   restrict_chg=0                  → ignore restrict_cur, full speed
+            //
+            // restrict_cur's idempotent probe (read→write same value) often
+            // fails on Xiaomi kernels, falsely marking it read-only. Writing
+            // a DIFFERENT value ("0") usually succeeds.
+            //
+            // restrict_chg was removed from voter_nodes in v3.2.18 because
+            // writing it every tick caused SPMI bus contention with the
+            // display controller. Writing it ONCE at session start is safe
+            // because: (a) the display is freshly on and idle, (b) the
+            // write completes in microseconds, (c) it's not repeated.
+            self.one_shot_clear_restrict();
+
             if let Some(node) = self.limit_nodes.first() {
                 tracing::info!(target: "charging",
                     "Charge-limit control node: {} ({} candidates writable)",
@@ -546,6 +708,29 @@ impl ChargingEngine {
             } else {
                 tracing::info!(target: "charging",
                     "Charge-limit control: NONE (device controls current itself)");
+            }
+
+            // --- Charger voltage check ---
+            // Log the charger contract voltage for diagnostics. If < 9V,
+            // the charger is NOT negotiating QC/PD fast charge.
+            // WARNING: We do NOT write restrict_chg here — toggling it
+            // on the SPMI bus can freeze the display controller on
+            // Xiaomi devices (SM8635 shares SPMI between charger PMIC
+            // and display PMIC).
+            let voltage_max = std::fs::read_to_string(
+                "/sys/class/power_supply/usb/voltage_max")
+                .ok()
+                .and_then(|s| s.trim().parse::<i64>().ok());
+            if let Some(v_max) = voltage_max {
+                tracing::info!(target: "charging", "USB voltage_max={}mV (charger contract)", v_max / 1000);
+                if v_max < 9_000_000 {
+                    tracing::warn!(target: "charging",
+                        "Slow charger detected ({}mV < 9000mV): charger is NOT negotiating QC/PD. \
+                         This is a hardware limitation — the charger or cable does not support \
+                         Quick Charge. No software workaround is possible. Charging speed is \
+                         limited to ~900mA at 5V (~4.5W).",
+                        v_max / 1000);
+                }
             }
         }
 
@@ -776,7 +961,7 @@ impl ChargingEngine {
             return false;
         }
 
-        let clamped_ma = ma.clamp(500, 12_000);
+        let clamped_ma = ma.clamp(500, 9_000);
         // Round to nearest 100mA as a first attempt at hitting an accepted step;
         // if EINVAL persists even after this, the device may need a hardcoded
         // accepted-value table instead.

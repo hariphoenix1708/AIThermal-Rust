@@ -48,14 +48,18 @@ impl GameDetector {
         priority
     }
 
-    pub fn detect_frame_stutter(&mut self, session_started_at: Option<Instant>) -> bool {
+    pub fn detect_frame_stutter(&mut self, session_started_at: Option<std::time::SystemTime>) -> bool {
         if !self.is_gaming {
             self.stutter_streak = 0;
             return false;
         }
 
         if let Some(start) = session_started_at {
-            if start.elapsed() < Duration::from_secs(60) {
+            if std::time::SystemTime::now()
+                .duration_since(start)
+                .map(|d| d < Duration::from_secs(60))
+                .unwrap_or(true)
+            {
                 self.stutter_streak = 0;
                 return false;
             }
@@ -394,7 +398,7 @@ mod tests {
         let mut gd = GameDetector::new(vec![], 45, 3, 1, 5);
 
         // Not gaming -> no stutter
-        assert_eq!(gd.detect_frame_stutter(Some(Instant::now())), false);
+        assert_eq!(gd.detect_frame_stutter(Some(std::time::SystemTime::now())), false);
 
         gd.is_gaming = true;
         gd.confirmed_package = Some("com.roblox.client".to_string());
@@ -403,11 +407,11 @@ mod tests {
         assert_eq!(gd.detect_frame_stutter(None), false);
 
         // Session just started -> false (grace period)
-        assert_eq!(gd.detect_frame_stutter(Some(Instant::now())), false);
+        assert_eq!(gd.detect_frame_stutter(Some(std::time::SystemTime::now())), false);
 
         // detect_frame_stutter depends on sysfs reads of kgsl busy_time.
         // It returns false if sysfs reads fail. Thus in test env without sysfs, it returns false.
-        let old_session = Instant::now().checked_sub(Duration::from_secs(60));
+        let old_session = std::time::SystemTime::now().checked_sub(Duration::from_secs(60));
         assert_eq!(gd.detect_frame_stutter(old_session), false);
     }
 }

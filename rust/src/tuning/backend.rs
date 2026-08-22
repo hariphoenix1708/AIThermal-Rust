@@ -166,6 +166,7 @@ impl TuningBackend {
                 Ok(())
             }
             Err(e) => {
+                LEGACY_WRITE_FAILURES.fetch_add(1, Ordering::Relaxed);
                 record_failure(path);
                 Err(BackendError::Sysfs(e))
             }

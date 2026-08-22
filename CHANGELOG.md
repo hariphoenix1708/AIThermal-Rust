@@ -1,5 +1,71 @@
 # Changelog
 
+## v3.2.25 (versionCode 345)
+### Fixed
+- Slow charging root cause: On Xiaomi SM8635 (peridot), the kernel
+  thermal framework sets `restrict_chg=1` + `restrict_cur=<limit>` to
+  cap charge current, but the idempotent probe (read→write same value)
+  falsely marks `restrict_cur` as read-only. Added non-idempotent probe
+  fallback (write "0") in `probe_charging()` so the node is added to
+  `voter_nodes` when it actually accepts different values.
+- One-shot restrict clearance: At each session start
+  (Disconnected→Normal), AIThermal now writes `restrict_chg=0` (disables
+  enforcement) and `restrict_cur=0` (clears any residual cap) ONCE.
+  Writing `restrict_chg` every tick caused SPMI bus contention with the
+  display controller on SM8635; writing it once at session start is safe.
+- Diagnostic coverage: `dump_charger_diagnostics()` now reads and logs
+  `restrict_chg`, `restrict_cur`, `charging_enabled`, and
+  `system_temp_level` values (even if read-only) so the user can see the
+  kernel's charging state. Warns when `restrict_chg=1` is the root cause
+  of slow charging.
+- Shutdown cleanup: `release_voters_on_shutdown()` now also clears
+  `restrict_chg` and `restrict_cur` to "0" even if they are not in
+  `voter_nodes`, preventing stale caps from persisting across daemon
+  restarts.
+
+## v3.2.24 (versionCode 344)
+### Fixed
+- Battery stats screen-time drift: screen_on/deep_sleep/awake accumulators
+  now use real wall-clock elapsed time between samples instead of the
+  daemon's intended sleep duration, which can diverge during Doze.
+- UI jank false alarms: jank warning now compares delta frame counts
+  between samples instead of cumulative process-lifetime gfxinfo counters.
+  A single slow frame no longer triggers warnings for the rest of the
+  app's foreground lifetime.
+- Charging tier consistency: MaxSpeed/Urgent and UnderLoad 9800mA tier at
+  SoC<20% lowered to 9000mA to match the apply_limit() clamp ceiling.
+
+## v3.2.23 (versionCode 343)
+### Fixed
+- Watchdog blind spot: `write_capability()` (cpuset, GPU governor/power-level
+  writes) now feeds `LEGACY_WRITE_FAILURES` on error, so the watchdog can
+  detect sysfs write floods from the newer capability-validated path.
+- Post-game cooling diagnostic: `evaluate_post_game_cooling()` was always
+  called with peak_temp=0 because the value was zeroed before the call. Added
+  `last_session_peak_temp` to RuntimeContext to preserve the peak across the
+  zeroing boundary.
+- Frame sampler freeze: `BackgroundFrameSampler` now only refreshes its
+  slot when actual values (sample_count, janky_frames, p90, worst) change.
+  Stale dumpsys output no longer re-stamps captured_at, so the existing 12s
+  staleness guard can correctly fall back to utilization-only governor.
+- EmergencyCool fast-exit: Leaving EmergencyCool no longer rides out the
+  generic debounce window — once the thermal ladder determines the emergency
+  has passed, max-throttle is released immediately.
+- Game session timing: `game_session_started_at` and daemon stall timer
+  (`last_tick_completed`) converted from `Instant` (CLOCK_MONOTONIC, freezes
+  during Doze) to `SystemTime` for accurate wall-clock durations across
+  suspend. Game session duration, stutter grace period, and stall detection
+  now correctly account for screen-off gaps.
+- Render thread pin retry: `pin_critical_render_thread()` now retries for
+  15s after game detection instead of a single one-shot attempt, closing
+  the gap where game engines spawn RenderThread after the detection tick.
+- `drop_cache(false)` rate-limited to once per 30s to prevent forced
+  re-faulting on every Powersave tick during sustained memory pressure.
+### Changed
+- Charging tier values: MaxSpeed/Urgent tiers capped at 9800mA (was 18000)
+  to match the `apply_limit()` clamp ceiling, and the hard clamp tightened
+  from 12A to 9A for a safer single-cell 5000mAh pack rating.
+
 ## v3.2.17 (versionCode 337)
 ### Fixed
 - Mid-game policy flip-flop (7 drops in a single 20-min session on the

@@ -325,6 +325,19 @@ impl PolicyEngine {
             return desired;
         }
 
+        // EmergencyCool is a safety state, not a comfort tier — once the
+        // thermal ladder has already determined the emergency has passed,
+        // release max-throttle immediately rather than riding out a generic
+        // debounce window.
+        if self.current_policy == PolicyState::EmergencyCool
+            && desired != PolicyState::EmergencyCool
+        {
+            self.current_policy = desired.clone();
+            self.last_change_at = std::time::Instant::now();
+            self.active_debounce = self.debounce;
+            return self.current_policy.clone();
+        }
+
         // Startup grace period: hold at Balanced to prevent early instability
         if self.startup_time.elapsed().as_secs() < self.startup_grace_secs {
             self.current_policy = PolicyState::Balanced;
@@ -385,10 +398,10 @@ mod tests {
             PolicyState::EmergencyCool
         );
 
-        // Drop to cool should debounce
+        // Drop to cool should exit EmergencyCool immediately (fast-exit)
         assert_eq!(
             engine.evaluate(30, 30, 0, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30),
-            PolicyState::EmergencyCool // still emergency because time elapsed is < 10
+            PolicyState::Balanced
         );
 
         // Fast forward time

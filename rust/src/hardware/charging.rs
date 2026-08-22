@@ -45,7 +45,6 @@ pub fn probe_charging() -> ChargingProfile {
     if Path::new(qcom_root).exists() {
         profile.qcom_battery_root = Some(qcom_root.to_string());
         for name in [
-            "restrict_chg",
             "restrict_cur",
             "input_suspend",
             "night_charging",
@@ -60,6 +59,26 @@ pub fn probe_charging() -> ChargingProfile {
             };
             if writable {
                 profile.voter_nodes.push(p);
+            } else if name == "restrict_cur" {
+                // Some Xiaomi kernels reject idempotent writes (read→write
+                // same value) on restrict_cur to reduce SPMI bus traffic,
+                // falsely marking it read-only. Writing a DIFFERENT value
+                // ("0" = no cap) usually succeeds. Test this fallback and
+                // add to voter_nodes if it works so apply_voters_for_mode()
+                // can maintain it in MaxSpeed/Urgent.
+                if crate::sysfs::write_string(&p, "0").is_ok() {
+                    tracing::info!(
+                        target: "charging",
+                        "QCOM voter {} accepted write of0 (idempotent test failed, non-idempotent succeeded); adding to voters",
+                        p
+                    );
+                    profile.voter_nodes.push(p);
+                } else {
+                    tracing::info!(
+                        target: "charging",
+                        "QCOM voter {} exists but is truly read-only; skipping", p
+                    );
+                }
             } else {
                 tracing::info!(
                     target: "charging",

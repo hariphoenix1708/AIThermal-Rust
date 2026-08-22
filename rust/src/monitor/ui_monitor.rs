@@ -64,6 +64,7 @@ pub struct UiMonitor {
     last_refresh_sample: Option<Instant>,
     cached_refresh_hz: Option<f32>,
     proc_prev: HashMap<String, ProcCpu>,
+    last_gfx_totals: HashMap<String, (u64, u64, u64)>, // frames, janky, slow_ui
 }
 
 impl UiMonitor {
@@ -107,16 +108,39 @@ impl UiMonitor {
             gfx_str
         );
 
-        if let Some(g) = &gfx
-            && (g.jank_pct() > 10.0 || g.p90_ms > 16.7 || g.slow_ui > 0)
-        {
-            tracing::warn!(
-                target: "ui",
-                "UI jank detected policy={} top={} {}",
-                policy,
-                top_str,
-                g.to_compact()
-            );
+        // Jank warning on RECENT counters (delta since last sample), not
+        // cumulative process-lifetime totals. Cumulative slow_ui > 0 would
+        // fire for the rest of an app's lifetime after a single slow frame,
+        // drowning real jank in false positives.
+        if let (Some(g), Some(pkg)) = (&gfx, top_pkg) {
+            let (prev_frames, prev_janky, prev_slow) = self
+                .last_gfx_totals
+                .get(pkg)
+                .copied()
+                .unwrap_or((g.frames, g.janky, g.slow_ui));
+            let d_frames = g.frames.saturating_sub(prev_frames);
+            let d_janky = g.janky.saturating_sub(prev_janky);
+            let d_slow = g.slow_ui.saturating_sub(prev_slow);
+            self.last_gfx_totals
+                .insert(pkg.to_string(), (g.frames, g.janky, g.slow_ui));
+
+            let recent_jank_pct = if d_frames > 0 {
+                d_janky as f32 * 100.0 / d_frames as f32
+            } else {
+                0.0
+            };
+            if recent_jank_pct > 10.0 || g.p90_ms > 16.7 || d_slow > 0 {
+                tracing::warn!(
+                    target: "ui",
+                    "UI jank detected policy={} top={} {} (recent: +{} frames, +{} janky, +{} slowUI)",
+                    policy,
+                    top_str,
+                    g.to_compact(),
+                    d_frames,
+                    d_janky,
+                    d_slow
+                );
+            }
         }
 
         for a in &anim {
@@ -174,6 +198,7 @@ impl RuntimeTask for UiMonitor {
             self.last_sample = None;
             self.last_refresh_sample = None;
             self.proc_prev.clear();
+            self.last_gfx_totals.clear();
             return Ok(());
         }
 

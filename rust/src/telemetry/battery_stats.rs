@@ -53,14 +53,24 @@ impl BatteryStatsTracker {
     ) -> Option<DrainRateSample> {
         let now = chrono::Utc::now();
 
+        // Use real wall-clock elapsed time between samples for screen-time
+        // bucketing instead of the daemon's intended sleep duration. Intended
+        // sleep can diverge from actual elapsed time during Doze/deep-sleep
+        // windows, silently misattributing real elapsed time to wrong buckets.
+        let real_elapsed_secs = self
+            .last_sample
+            .as_ref()
+            .map(|prev| (now - prev.timestamp).num_seconds().max(0) as u64)
+            .unwrap_or(tick_interval_secs);
+
         if screen_on {
-            self.screen_on_secs += tick_interval_secs;
+            self.screen_on_secs += real_elapsed_secs;
         } else {
-            self.screen_off_secs += tick_interval_secs;
+            self.screen_off_secs += real_elapsed_secs;
             if is_long_idle {
-                self.deep_sleep_secs += tick_interval_secs;
+                self.deep_sleep_secs += real_elapsed_secs;
             } else {
-                self.awake_secs += tick_interval_secs;
+                self.awake_secs += real_elapsed_secs;
             }
         }
 
