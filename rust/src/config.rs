@@ -82,6 +82,24 @@ pub struct ProfilesConfig {
     // are capability-probed and idempotent — safe on non-QCOM devices.
     #[serde(default = "default_true")]
     pub advanced_tuning_enabled: bool,
+
+    // v3.2.29: enable active network quality measurement for gaming.
+    // Runs detect_network_quality.sh on gaming session start and
+    // periodically during gaming. Results feed into the daemon's
+    // network tweak decisions and bullet registration assessment.
+    #[serde(default = "default_true")]
+    pub network_diagnostics_enabled: bool,
+
+    // v3.2.29: apply gaming-specific network tweaks (WiFi power-save
+    // disable, TCP/UDP buffer tuning, DNS, IRQ affinity, fast dormancy).
+    // Shell-side script with full backup/restore semantics.
+    #[serde(default = "default_true")]
+    pub gaming_network_tweaks_enabled: bool,
+
+    // v3.2.29: interval in seconds between active network quality
+    // re-probes during gaming. 0 = only probe once on session start.
+    #[serde(default = "default_network_probe_interval")]
+    pub network_probe_interval_sec: u64,
 }
 
 fn default_false() -> bool {
@@ -162,6 +180,10 @@ fn default_adaptive_governor_enabled() -> bool {
     false
 }
 
+fn default_network_probe_interval() -> u64 {
+    30
+}
+
 fn default_disable_tweaks() -> bool {
     false
 }
@@ -196,6 +218,9 @@ impl Default for ProfilesConfig {
             watchdog_stall_threshold: default_watchdog_stall_threshold(),
             trace_markers_enabled: default_false(),
             advanced_tuning_enabled: default_true(),
+            network_diagnostics_enabled: default_true(),
+            gaming_network_tweaks_enabled: default_true(),
+            network_probe_interval_sec: default_network_probe_interval(),
         }
     }
 }

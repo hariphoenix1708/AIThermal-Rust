@@ -1,5 +1,41 @@
 # Changelog
 
+## v3.2.29 (versionCode 349)
+### Added
+- **Network quality detection**: Active RTT/jitter/packet-loss measurement
+  via `detect_network_quality.sh`. Pings Google DNS (8.8.8.8) and Cloudflare
+  (1.1.1.1) with 20-packet samples, computes jitter and loss. Outputs JSON
+  report with quality score for daemon consumption. Runs at boot and on
+  gaming session start.
+- **CODM network diagnostics**: `detect_codm_servers.sh` provides CODM-specific
+  network analysis — server ping measurement, bullet registration quality
+  assessment based on jitter vs CODM's 30Hz tick rate (33ms interval).
+  Categorizes quality as S+/S/A/B/C/D tiers.
+- **Gaming network tweaks**: `tweak_network_gaming.sh` applies ROM-conditional
+  network optimizations for online gaming. WiFi power-save disable, TCP/UDP
+  buffer tuning (256KB UDP receive, 16MB TCP max), DNS fast resolution
+  (Cloudflare+Google), NIC IRQ affinity, fast dormancy disable, TX queue
+  length 3000. Full backup/restore semantics — every original value is
+  saved before modification and restored on game exit.
+- **HyperOS vs AOSP ROM detection**: All scripts detect ROM type via
+  `getprop ro.mi.os.version.incremental` and `ro.product.brand`. ROM-conditional
+  logic for fast dormancy (AOSP sets persist property, HyperOS hints only),
+  DNS tuning, and WiFi power-save handling.
+- **Rust network diagnostics module** (`network_diag.rs`): Passive sysfs probing
+  (interface state, buffer sizes, power-save, RSSI, TX queue length), quality
+  scoring with bullet registration assessment (Excellent/Good/Fair/Poor/Bad),
+  jitter tiering (S+/S/A/B/C/D), cached quality for orchestrator consumption.
+- **Orchestrator integration**: Network quality probe on gaming session start,
+  periodic re-probe during gaming (configurable interval, default 30s), gaming
+  network tweaks applied on session start and restored on exit.
+- **Config options**: `network_diagnostics_enabled`, `gaming_network_tweaks_enabled`,
+  `network_probe_interval_sec` (default 30s).
+### Compatibility
+- All network tweaks are capability-probed and no-op on missing nodes.
+- ROM detection works across HyperOS, MIUI, and AOSP custom ROMs.
+- WiFi power-save disable uses both `iw` and sysfs fallback.
+- IRQ affinity adapts to CPU core count (big-core mask for SM8635: 0xf0).
+
 ## v3.2.28 (versionCode 348)
 ### Fixed
 - **Voter node write-failure circuit breaker**: On AOSP custom ROMs

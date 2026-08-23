@@ -57,6 +57,11 @@ prepare_binary_contexts() {
 wait_for_boot_completed
 prepare_binary_contexts
 
+# v3.2.29: Run initial network quality detection at boot
+if [ -f "$MODDIR/scripts/detect_network_quality.sh" ]; then
+    sh "$MODDIR/scripts/detect_network_quality.sh" "$STATE_DIR" "$LOG_DIR" >/dev/null 2>&1 &
+fi
+
 if [ -f "$PID_FILE" ]
 then
     OLD_PID="$(cat "$PID_FILE" 2>/dev/null)"

@@ -22,5 +22,6 @@ pub mod sysfs;
 pub mod telemetry;
 pub mod thermal;
 pub mod tuning;
+pub mod network_diag;
 pub mod watchdog;
 pub mod watcher;

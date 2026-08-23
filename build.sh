@@ -46,6 +46,9 @@ if [ -f "$SRC_PATH" ]; then
     mkdir -p "$STAGING_DIR"
     mkdir -p "$STAGING_DIR/system/bin"
     cp -R META-INF config module.prop service.sh customize.sh sepolicy.rule uninstall.sh "$STAGING_DIR/"
+    if [ -d scripts ]; then
+        cp -R scripts "$STAGING_DIR/"
+    fi
     if [ -d webroot ]; then
         cp -R webroot "$STAGING_DIR/"
     fi

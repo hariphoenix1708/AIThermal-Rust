@@ -57,6 +57,8 @@ pub struct SystemOrchestrator {
     last_telemetry_policy: Option<String>,
     last_applied_policy: Option<String>,
     last_policy_change_at: Option<std::time::Instant>,
+    last_network_probe: Option<std::time::Instant>,
+    last_network_tweaks_applied: bool,
 }
 
 impl SystemOrchestrator {
@@ -305,6 +307,8 @@ impl SystemOrchestrator {
             last_telemetry_policy: None,
             last_applied_policy: None,
             last_policy_change_at: None,
+            last_network_probe: None,
+            last_network_tweaks_applied: false,
         }
     }
 
@@ -547,6 +551,8 @@ impl SystemOrchestrator {
             last_telemetry_policy: None,
             last_applied_policy: None,
             last_policy_change_at: None,
+            last_network_probe: None,
+            last_network_tweaks_applied: false,
         }
     }
 
@@ -571,6 +577,89 @@ impl SystemOrchestrator {
 
         self.snapshot.take_snapshot(paths)?;
         Ok(())
+    }
+
+    // ─── v3.2.29: Network Diagnostics ─────────────────────────────────
+
+    /// Run the network quality detection script and cache the result.
+    fn probe_network_quality(&mut self, state_dir: &str) {
+        let module_dir = std::env::var("THERMALAI_MODULE_DIR")
+            .unwrap_or_else(|_| "/data/adb/modules/thermalai_rust".to_string());
+        let script = std::path::PathBuf::from(&module_dir)
+            .join("scripts/detect_network_quality.sh");
+
+        if script.exists() {
+            let log_dir = std::env::var("THERMALAI_LOG_DIR")
+                .unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
+            let _ = std::process::Command::new("sh")
+                .arg(script.to_string_lossy().to_string())
+                .arg(state_dir)
+                .arg(log_dir)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .and_then(|mut child| child.wait());
+
+            // Read and cache the result
+            if let Some(quality) = crate::network_diag::read_quality_report(state_dir) {
+                let summary = crate::network_diag::quality_summary(&quality);
+                tracing::info!(target: "network", "NET-PROBE {}", summary);
+                crate::network_diag::cache_quality(quality);
+            }
+        } else {
+            // Script not found: do passive probe only
+            let quality = crate::network_diag::probe_quality(state_dir);
+            let summary = crate::network_diag::quality_summary(&quality);
+            tracing::info!(target: "network", "NET-PASSIVE {}", summary);
+            crate::network_diag::cache_quality(quality);
+        }
+    }
+
+    /// Apply or restore gaming network tweaks via the shell script.
+    fn apply_gaming_network_tweaks(&mut self, enable: bool) {
+        let module_dir = std::env::var("THERMALAI_MODULE_DIR")
+            .unwrap_or_else(|_| "/data/adb/modules/thermalai_rust".to_string());
+        let script = std::path::PathBuf::from(&module_dir)
+            .join("scripts/tweak_network_gaming.sh");
+
+        if !script.exists() {
+            tracing::debug!("Network tweak script not found: {}", script.display());
+            return;
+        }
+
+        let action = if enable { "enable" } else { "disable" };
+        let state_dir = std::env::var("THERMALAI_STATE_DIR")
+            .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
+        let log_dir = std::env::var("THERMALAI_LOG_DIR")
+            .unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
+
+        let result = std::process::Command::new("sh")
+            .arg(script.to_string_lossy().to_string())
+            .arg(action)
+            .arg(&state_dir)
+            .arg(&log_dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .and_then(|mut child| child.wait());
+
+        match result {
+            Ok(status) if status.success() => {
+                self.last_network_tweaks_applied = enable;
+                tracing::info!(target: "network",
+                    "NET-TWEAK {} network tweaks {}", if enable { "Applied" } else { "Restored" },
+                    if enable { "for gaming" } else { "on game exit" }
+                );
+            }
+            Ok(status) => {
+                tracing::warn!(target: "network",
+                    "NET-TWEAK {} exited with status: {}", action, status
+                );
+            }
+            Err(e) => {
+                tracing::warn!(target: "network", "NET-TWEAK failed to run {}: {}", action, e);
+            }
+        }
     }
 }
 
@@ -696,6 +785,16 @@ impl RuntimeTask for SystemOrchestrator {
             // A stale negative calibration offset must not blind the thermal
             // model during a session: start each game with honest temps.
             self.calibration.reset_for_gaming_session();
+
+            // v3.2.29: Run network quality detection and apply gaming tweaks
+            if ctx.config.profiles.network_diagnostics_enabled {
+                self.probe_network_quality(&ctx.state_dir);
+            }
+            if ctx.config.profiles.gaming_network_tweaks_enabled {
+                self.apply_gaming_network_tweaks(true);
+            }
+            self.last_network_probe = Some(now);
+
             // Peak temp will be set below after sensors
         }
 
@@ -707,6 +806,21 @@ impl RuntimeTask for SystemOrchestrator {
             }
         } else {
             ctx.current_game = None;
+        }
+
+        // v3.2.29: Periodic network quality re-probe during gaming
+        if is_gaming && ctx.config.profiles.network_diagnostics_enabled {
+            let probe_interval = ctx.config.profiles.network_probe_interval_sec;
+            if probe_interval > 0 {
+                let should_probe = self
+                    .last_network_probe
+                    .map(|t| t.elapsed().as_secs() >= probe_interval)
+                    .unwrap_or(true);
+                if should_probe {
+                    self.probe_network_quality(&ctx.state_dir);
+                    self.last_network_probe = Some(now);
+                }
+            }
         }
 
         // 3. Sensors & Thermal
@@ -899,6 +1013,11 @@ impl RuntimeTask for SystemOrchestrator {
             ctx.game_session_peak_temp = 0;
             ctx.game_session_started_at = None;
             ctx.current_game = None;
+
+            // v3.2.29: Restore network tweaks on game exit
+            if ctx.config.profiles.gaming_network_tweaks_enabled && self.last_network_tweaks_applied {
+                self.apply_gaming_network_tweaks(false);
+            }
         }
 
         let is_cooldown = ctx.cooldown_until.is_some_and(|t| t > now);
