@@ -53,7 +53,10 @@ for f in thermalai.log \
          thermalai_thermal.log \
          thermalai_charging.log \
          thermalai_gaming.log \
-         thermalai_ui.log; do
+         thermalai_ui.log \
+         network_diag.log \
+         network_tweak.log \
+         codm_network_diag.log; do
     rm -f "$LOG_DIR/$f"
     # Log rotation may leave .1 / .gz siblings; sweep them too.
     rm -f "$LOG_DIR/${f}.1" "$LOG_DIR/${f}.gz" "$LOG_DIR/${f}.1.gz"

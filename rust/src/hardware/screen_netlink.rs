@@ -60,10 +60,10 @@ fn watch_uevent_for_screen_state(
                     } else if sub == "backlight" {
                         is_backlight_subsystem = true;
                     }
-                } else if s.starts_with("ACTION=") {
-                    action = &s["ACTION=".len()..];
-                } else if s.starts_with("POWER_ACTION=") {
-                    power_action = &s["POWER_ACTION=".len()..];
+                } else if let Some(stripped) = s.strip_prefix("ACTION=") {
+                    action = stripped;
+                } else if let Some(stripped) = s.strip_prefix("POWER_ACTION=") {
+                    power_action = stripped;
                 }
             }
         }

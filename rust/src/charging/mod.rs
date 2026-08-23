@@ -539,11 +539,10 @@ impl ChargingEngine {
 
     pub fn release_voters_on_shutdown(&self) {
         for node in &self.voter_nodes {
-            let default = if node.ends_with("/restrict_chg") {
-                "0"
-            } else if node.ends_with("/input_suspend") {
-                "0"
-            } else if node.ends_with("/night_charging") {
+            let default = if node.ends_with("/restrict_chg")
+                || node.ends_with("/input_suspend")
+                || node.ends_with("/night_charging")
+            {
                 "0"
             } else {
                 continue;

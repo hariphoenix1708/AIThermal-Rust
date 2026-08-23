@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "thermalai-daemon"
-version = "3.2.29"
+version = "3.2.30"
 dependencies = [
  "anyhow",
  "chrono",
@@ -797,6 +797,7 @@ dependencies = [
  "flate2",
  "glob",
  "lazy_static",
+ "libc",
  "netlink-sys",
  "nix 0.29.0",
  "notify",

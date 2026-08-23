@@ -1,5 +1,29 @@
 # Changelog
 
+## v3.2.30 (versionCode 350)
+### Changed
+- **Active network probing rewritten in pure Rust**: ICMP ping via raw sockets
+  (`SOCK_RAW` + `IPPROTO_ICMP`), CRC-16 checksum, jitter calculation
+  (RFC 3550 mean absolute difference), packet loss measurement. Pings both
+  8.8.8.8 and 1.1.1.1, picks the lower-latency target. DNS resolution time
+  measured via `getaddrinfo`. No shell delegation for the runtime probe path.
+- **Orchestrator no longer shells out for network probing**: `probe_network_quality()`
+  now calls `network_diag::probe_quality()` directly instead of spawning
+  `detect_network_quality.sh`.
+- **Boot-time script removed from service.sh**: `detect_network_quality.sh` is no
+  longer called at boot — the daemon runs its own probe on startup.
+- **Uninstall cleanup extended**: Network log files (`network_diag.log`,
+  `network_tweak.log`, `codm_network_diag.log`) now removed on module uninstall.
+- **Clippy clean**: 0 warnings (down from 7). Fixed `manual_abs_diff`,
+  `collapsible_if`, `manual_strip`, `if_same_then_else`, `unnecessary_map_or`,
+  `too_many_arguments` (suppressed).
+
+### Preserved
+- Shell scripts (`tweak_network_gaming.sh`, `detect_network_quality.sh`,
+  `detect_codm_servers.sh`) retained for manual diagnostics and boot-time
+  network tweaks. `tweak_network_gaming.sh` is still called by the orchestrator
+  for game-start/end network tuning (sysctl writes, interface settings).
+
 ## v3.2.29 (versionCode 349)
 ### Added
 - **Network quality detection**: Active RTT/jitter/packet-loss measurement

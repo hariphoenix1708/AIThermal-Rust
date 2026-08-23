@@ -581,38 +581,12 @@ impl SystemOrchestrator {
 
     // ─── v3.2.29: Network Diagnostics ─────────────────────────────────
 
-    /// Run the network quality detection script and cache the result.
+    /// Run the network quality probe in pure Rust (ICMP ping + sysfs).
     fn probe_network_quality(&mut self, state_dir: &str) {
-        let module_dir = std::env::var("THERMALAI_MODULE_DIR")
-            .unwrap_or_else(|_| "/data/adb/modules/thermalai_rust".to_string());
-        let script = std::path::PathBuf::from(&module_dir)
-            .join("scripts/detect_network_quality.sh");
-
-        if script.exists() {
-            let log_dir = std::env::var("THERMALAI_LOG_DIR")
-                .unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
-            let _ = std::process::Command::new("sh")
-                .arg(script.to_string_lossy().to_string())
-                .arg(state_dir)
-                .arg(log_dir)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .and_then(|mut child| child.wait());
-
-            // Read and cache the result
-            if let Some(quality) = crate::network_diag::read_quality_report(state_dir) {
-                let summary = crate::network_diag::quality_summary(&quality);
-                tracing::info!(target: "network", "NET-PROBE {}", summary);
-                crate::network_diag::cache_quality(quality);
-            }
-        } else {
-            // Script not found: do passive probe only
-            let quality = crate::network_diag::probe_quality(state_dir);
-            let summary = crate::network_diag::quality_summary(&quality);
-            tracing::info!(target: "network", "NET-PASSIVE {}", summary);
-            crate::network_diag::cache_quality(quality);
-        }
+        let quality = crate::network_diag::probe_quality(state_dir);
+        let summary = crate::network_diag::quality_summary(&quality);
+        tracing::info!(target: "network", "NET-PROBE {}", summary);
+        crate::network_diag::cache_quality(quality);
     }
 
     /// Apply or restore gaming network tweaks via the shell script.
@@ -727,14 +701,15 @@ impl RuntimeTask for SystemOrchestrator {
         // the actuation throttle (1.5 s) hasn't cleared. Every non-Suspend
         // policy uses schedutil, so restoring it here can never conflict with
         // the policy this tick settles on.
-        if just_woke && self.last_applied_cpu_gov.as_deref() == Some("powersave") {
-            if let Some(gov) = self.select_cpu_governor(&["schedutil"]) {
-                if let Err(e) = self.governors.apply_cpu_governor(&gov) {
-                    tracing::warn!("Failed to restore interactive governor on wake: {}", e);
-                } else {
-                    self.last_applied_cpu_gov = Some(gov);
-                    tracing::debug!(target: "thermal", "Restored schedutil governor on wake");
-                }
+        if just_woke
+            && self.last_applied_cpu_gov.as_deref() == Some("powersave")
+            && let Some(gov) = self.select_cpu_governor(&["schedutil"])
+        {
+            if let Err(e) = self.governors.apply_cpu_governor(&gov) {
+                tracing::warn!("Failed to restore interactive governor on wake: {}", e);
+            } else {
+                self.last_applied_cpu_gov = Some(gov);
+                tracing::debug!(target: "thermal", "Restored schedutil governor on wake");
             }
         }
 
@@ -1565,7 +1540,7 @@ impl RuntimeTask for SystemOrchestrator {
         if is_gaming {
             let stats = self.background_frame_sampler.latest_stats();
             let (jank_str, p90_str) = match stats {
-                Some(s) if s.captured_at.map_or(false, |t| t.elapsed() > std::time::Duration::from_secs(12)) => {
+                Some(s) if s.captured_at.is_some_and(|t| t.elapsed() > std::time::Duration::from_secs(12)) => {
                     // Stale stats safety net: older than 12s (sampler cadence is 5s)
                     // means the sampler is frozen/failing
                     ("n/a".to_string(), "n/a".to_string())

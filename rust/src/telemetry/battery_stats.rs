@@ -40,6 +40,7 @@ impl BatteryStatsTracker {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record_sample(
         &mut self,
         batt_temp_c: i32,
