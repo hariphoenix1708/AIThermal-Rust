@@ -1,5 +1,23 @@
 # Changelog
 
+## v3.2.28 (versionCode 348)
+### Fixed
+- **Voter node write-failure circuit breaker**: On AOSP custom ROMs
+  (where `mi_thermald` is absent and `thermal_fcc_ua` stays at 0),
+  the kernel's `qti_battery_charger.c` driver rejects non-zero
+  `restrict_cur` writes with EINVAL. BatteryCare and UnderLoad modes
+  were writing non-zero values every tick, causing WARN log spam
+  (every 2 seconds). Now tracks per-voter consecutive write failures;
+  after 3 failures the node is disabled for the rest of the session.
+  One-shot clears at session start are unaffected. On HyperOS (where
+  `mi_thermald` sets `thermal_fcc_ua` properly), non-zero writes
+  succeed and the counter never reaches the threshold — BatteryCare
+  mode works as intended.
+### Compatibility
+- Verified compatible with both HyperOS (Xiaomi stock) and AOSP-based
+  custom ROMs. Runtime capability detection adapts to each ROM's
+  kernel driver behavior without ROM-type checks.
+
 ## v3.2.27 (versionCode 347)
 ### Fixed
 - **Safety: Emergency thermal state protection**: Periodic battery cooling

@@ -1,5 +1,14 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+/// After this many consecutive write failures to a single voter node,
+/// stop writing to it for the rest of the session. This prevents log
+/// spam on ROMs where certain voter nodes reject non-zero writes
+/// (e.g. restrict_cur on AOSP where thermal_fcc_ua=0). On HyperOS
+/// where mi_thermald sets thermal_fcc_ua properly, writes succeed
+/// and the counter never reaches the threshold.
+const VOTER_DISABLE_THRESHOLD: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChargeState {
@@ -80,6 +89,15 @@ pub struct ChargingEngine {
     /// Last time we enforced battery_cooling_path = 0. Prevents
     /// re-writing every tick; re-checks every 15 seconds.
     pub last_battery_cooling_clear: Option<std::time::Instant>,
+    /// Per-voter consecutive write failure counter. When a voter node
+    /// fails VOTER_DISABLE_THRESHOLD times in a row, it is disabled
+    /// for the rest of the session. This prevents log spam on ROMs
+    /// where the kernel rejects non-zero restrict_cur writes (AOSP
+    /// where thermal_fcc_ua=0) while still allowing successful writes
+    /// on HyperOS (where mi_thermald sets thermal_fcc_ua properly).
+    voter_consecutive_failures: HashMap<String, u32>,
+    /// Set of voter nodes disabled due to repeated failures this session.
+    voter_disabled: std::collections::HashSet<String>,
 }
 
 impl ChargingEngine {
@@ -146,6 +164,8 @@ impl ChargingEngine {
             thermal_temp_hot,
             battery_cooling_path,
             last_battery_cooling_clear: None,
+            voter_consecutive_failures: HashMap::new(),
+            voter_disabled: std::collections::HashSet::new(),
         }
     }
 
@@ -400,7 +420,14 @@ impl ChargingEngine {
     /// Writes the correct voter state for the current ChargeMode.
     /// Idempotent — safe to call every tick; only writes when the
     /// desired value differs from the currently-read value.
-    fn apply_voters_for_mode(&self, mode: &ChargeMode, target_ma: i64, composite_temp: i32) {
+    ///
+    /// Tracks per-voter consecutive write failures. After
+    /// `VOTER_DISABLE_THRESHOLD` failures, the node is disabled for
+    /// the rest of the session to prevent log spam. This handles the
+    /// case where AOSP ROMs reject non-zero restrict_cur writes
+    /// (thermal_fcc_ua=0) while HyperOS accepts them (mi_thermald
+    /// sets thermal_fcc_ua properly).
+    fn apply_voters_for_mode(&mut self, mode: &ChargeMode, target_ma: i64, composite_temp: i32) {
         // Desired state per mode.
         // (restrict_chg, restrict_cur_ua, input_suspend, night_charging)
         let (restrict, cur_ua, suspend, night) = match mode {
@@ -451,7 +478,12 @@ impl ChargingEngine {
             }
         };
 
-        for node in &self.voter_nodes {
+        for node in &self.voter_nodes.clone() {
+            // Skip nodes disabled due to repeated failures this session.
+            if self.voter_disabled.contains(node) {
+                continue;
+            }
+
             let want: Option<String> = if node.ends_with("/restrict_chg") {
                 restrict.map(str::to_string)
             } else if node.ends_with("/restrict_cur") {
@@ -469,14 +501,38 @@ impl ChargingEngine {
             };
             let current = std::fs::read_to_string(node).unwrap_or_default();
             if current.trim() == want {
+                // Write succeeded or value already correct — reset failure counter.
+                self.voter_consecutive_failures.remove(node);
                 continue;
             }
 
             match crate::sysfs::write_string(node, &want) {
-                Ok(()) => tracing::info!(target: "charging",
-                    "voter {} : {} -> {}", node, current.trim(), want),
-                Err(e) => tracing::warn!(target: "charging",
-                    "voter {} write to {} failed: {}", node, want, e),
+                Ok(()) => {
+                    tracing::info!(target: "charging",
+                        "voter {} : {} -> {}", node, current.trim(), want);
+                    self.voter_consecutive_failures.remove(node);
+                }
+                Err(e) => {
+                    let count = self.voter_consecutive_failures
+                        .entry(node.clone())
+                        .or_insert(0)
+                        .checked_add(1)
+                        .unwrap_or(u32::MAX);
+                    *self.voter_consecutive_failures.get_mut(node).unwrap() = count;
+
+                    if count >= VOTER_DISABLE_THRESHOLD {
+                        self.voter_disabled.insert(node.clone());
+                        tracing::warn!(target: "charging",
+                            "voter {} write to {} failed {} times consecutively — \
+                             disabling for this session (kernel may not support this value \
+                             on this ROM; one-shot clears still work at session start)",
+                            node, want, count);
+                    } else {
+                        tracing::warn!(target: "charging",
+                            "voter {} write to {} failed: {} (attempt {}/{})",
+                            node, want, e, count, VOTER_DISABLE_THRESHOLD);
+                    }
+                }
             }
         }
     }
@@ -742,7 +798,10 @@ impl ChargingEngine {
         }
 
         self.charge_mode = Self::select_charge_mode(&inputs, &self.forced_mode);
-        self.apply_voters_for_mode(&self.charge_mode, self.learned_stable_current, inputs.composite_temp);
+        let mode_for_voters = self.charge_mode.clone();
+        let learned_for_voters = self.learned_stable_current;
+        let composite_for_voters = inputs.composite_temp;
+        self.apply_voters_for_mode(&mode_for_voters, learned_for_voters, composite_for_voters);
         let mode_clone = self.charge_mode.clone();
         let next = self.next_state(&inputs, &mode_clone);
 
@@ -782,6 +841,13 @@ impl ChargingEngine {
             self.consecutive_failures = 0;
             self.active_limit_ma = 0;
             self.previous_target = Self::soc_target_ma(soc, &self.charge_mode);
+            // Reset voter failure tracking: each session gets a fresh
+            // chance to write to all voter nodes. On AOSP where
+            // restrict_cur fails, the counter re-builds and disables
+            // it again within a few ticks. On HyperOS where writes
+            // succeed, the counter never reaches the threshold.
+            self.voter_consecutive_failures.clear();
+            self.voter_disabled.clear();
             // Reset battery cooling enforcement timer so the first
             // re-check runs immediately after the one-shot clear.
             self.last_battery_cooling_clear = None;
