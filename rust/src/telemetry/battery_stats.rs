@@ -1,5 +1,7 @@
+use std::time::Instant;
+
 pub struct BatterySample {
-    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub timestamp: Instant,
     pub batt_temp_c: i32,
     pub soc_percent: u8,
     pub current_now_ua: Option<i64>,
@@ -52,16 +54,12 @@ impl BatteryStatsTracker {
         is_long_idle: bool,
         tick_interval_secs: u64,
     ) -> Option<DrainRateSample> {
-        let now = chrono::Utc::now();
+        let now = Instant::now();
 
-        // Use real wall-clock elapsed time between samples for screen-time
-        // bucketing instead of the daemon's intended sleep duration. Intended
-        // sleep can diverge from actual elapsed time during Doze/deep-sleep
-        // windows, silently misattributing real elapsed time to wrong buckets.
         let real_elapsed_secs = self
             .last_sample
             .as_ref()
-            .map(|prev| (now - prev.timestamp).num_seconds().max(0) as u64)
+            .map(|prev| now.duration_since(prev.timestamp).as_secs())
             .unwrap_or(tick_interval_secs);
 
         if screen_on {
@@ -76,11 +74,14 @@ impl BatteryStatsTracker {
         }
 
         let drain_rate = self.last_sample.as_ref().and_then(|prev| {
-            let elapsed_secs = (now - prev.timestamp).num_seconds();
-            if elapsed_secs <= 0 {
+            let elapsed_secs = now.duration_since(prev.timestamp).as_secs();
+            if elapsed_secs == 0 {
                 return None;
             }
             let soc_delta = prev.soc_percent as i32 - soc_percent as i32;
+            if soc_delta == 0 {
+                return None;
+            }
             let percent_per_hour = (soc_delta as f64) * 3600.0 / elapsed_secs as f64;
             Some(DrainRateSample {
                 percent_per_hour,

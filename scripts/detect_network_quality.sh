@@ -26,16 +26,17 @@ detect_rom() {
     local os_version=$(getprop ro.mi.os.version.incremental 2>/dev/null)
     local hyperos=$(getprop ro.miui.build.version.incremental 2>/dev/null)
 
-    if [ -n "$os_version" ] || echo "$brand" | grep -qi "xiaomi\|poco\|redmi"; then
-        if [ -n "$miui_version" ] || [ -n "$hyperos" ]; then
-            echo "hyperos"
+    brand=$(echo "$brand" | tr '[:upper:]' '[:lower:]')
+    case "$brand" in
+        xiaomi|poco|redmi)
+            if [ -n "$os_version" ] || [ -n "$miui_version" ] || [ -n "$hyperos" ]; then
+                echo "hyperos"
+                return
+            fi
+            echo "miui"
             return
-        fi
-    fi
-    if echo "$brand" | grep -qi "xiaomi\|poco\|redmi"; then
-        echo "miui"
-        return
-    fi
+            ;;
+    esac
     echo "aosp"
 }
 

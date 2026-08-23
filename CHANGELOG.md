@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.2.31 (versionCode 351)
+### Fixed
+- **ICMP ping RTT=0 bug**: `icmp_ping_one` was using the send-time variable
+  (`now_us`) instead of capturing the receive time, making RTT always ~0.
+  Now uses `Instant`-based receive timestamp for accurate measurement.
+- **Battery drain always 0.00%/hr**: `BatteryStatsTracker` switched from
+  `chrono::Utc` (coarse clock resolution on Android) to `Instant` for
+  inter-sample timing. Also returns `None` when SOC delta is 0 instead of
+  reporting 0.00% (cleaner, avoids polluting logs with zero-noise).
+- **ROM detection mismatch**: Shell scripts used `grep -qi "xiaomi\|poco\|redmi"`
+  which fails on Android's ToyBox (no alternation support). Replaced with
+  `case` statements in all 3 scripts — now consistently detects HyperOS.
+- **Network tweak false "rejected"**: `write_if_different` now normalizes
+  whitespace (tabs→spaces) before comparing, so proc multi-value entries
+  with tabs are not falsely flagged as rejected.
+- **Network tweak IRQ failures logged as success**: `tweak_irq_affinity`
+  now checks `backup_and_write` return value and logs actual failure
+  with the real affinity value.
+- **Network tweak targeting dummy interfaces**: `tweak_txqueuelen` now only
+  tunes `wlan0` and `rmnet_data*` interfaces instead of all netdevs
+  (dummy0, erspan0, gre0, etc. were being incorrectly tuned).
+- **Network tweak DNS not restored on disable**: `tweak_dns` now saves
+  original DNS values on enable and restores them on disable.
+- **Network tweak backlog/keepalive direction**: Gaming `netdev_max_backlog`
+  kept at device default (was being lowered to 5000); gaming
+  `tcp_keepalive_time` set to 600 (was being raised to 1200).
+
 ## v3.2.30 (versionCode 350)
 ### Changed
 - **Active network probing rewritten in pure Rust**: ICMP ping via raw sockets

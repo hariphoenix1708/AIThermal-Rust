@@ -147,7 +147,11 @@ fn icmp_ping_one(
             buf[ihl + 15],
         ]);
 
-        let rtt_us = now_us.saturating_sub(reply_ts);
+        let recv_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_micros() as u64;
+        let rtt_us = recv_time.saturating_sub(reply_ts);
         return Some(PingReply {
             rtt_us,
         });
