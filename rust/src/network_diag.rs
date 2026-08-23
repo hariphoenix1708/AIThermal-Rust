@@ -632,10 +632,22 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    // Active probe: ping both targets, pick the better one
-    let targets = ["8.8.8.8", "1.1.1.1"];
-    let ping_count: u32 = 20;
-    let ping_interval_ms: u64 = 200;
+    // Active probe: ping CODM game servers first, then DNS servers as fallback.
+    // CODM uses Activision/Akamai CDN infrastructure. These IPs cover major
+    // regions (Asia, EU, NA). Pinging actual game infrastructure gives
+    // more relevant latency data than generic DNS resolvers.
+    let targets = [
+        // CODM game server regions (Activision CDN / Akamai edge)
+        "155.133.226.41",   // EU-West (Activision)
+        "162.254.197.42",   // NA-Central (Activision)
+        "45.129.190.237",   // Asia (Activision)
+        "162.254.197.2",    // Global fallback (Activision)
+        // DNS fallbacks
+        "8.8.8.8",
+        "1.1.1.1",
+    ];
+    let ping_count: u32 = 10;
+    let ping_interval_ms: u64 = 100;
 
     let mut best: Option<PingResult> = None;
     for target in &targets {

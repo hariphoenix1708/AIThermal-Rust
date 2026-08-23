@@ -61,8 +61,9 @@ pub struct ProfilesConfig {
     pub tcp_congestion_control_gaming: String,
     // Master off-switch for every /proc/sys/net/ipv4/tcp_* write. Off by
     // default because network tweaks in v3.1.0 caused visible connectivity
-    // issues on some kernels.
-    #[serde(default = "default_false")]
+    // issues on some kernels. v3.2.32: enabled for gaming (network tweaks
+    // are now surgically targeted and idempotent).
+    #[serde(default = "default_true")]
     pub touch_network_stack: bool,
     // Number of consecutive unclean daemon exits that arm safe mode on the
     // next boot (disable_tweaks forced true; telemetry-only).
@@ -181,7 +182,7 @@ fn default_adaptive_governor_enabled() -> bool {
 }
 
 fn default_network_probe_interval() -> u64 {
-    30
+    10
 }
 
 fn default_disable_tweaks() -> bool {

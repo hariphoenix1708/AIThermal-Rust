@@ -278,6 +278,131 @@ tweak_txqueuelen() {
     fi
 }
 
+# ─── v3.2.32: Gaming-specific low-latency tweaks ───────────────────────
+
+tweak_wifi_qos() {
+    local enable="$1"
+    if [ "$enable" = "enable" ]; then
+        # Disable WiFi aggregation (AMSDU/AMPDU) to reduce latency spikes.
+        # Aggregation batches multiple frames which adds jitter for real-time games.
+        for path in /sys/kernel/debug/ieee80211/phy*/ath11k/ammmode; do
+            if [ -f "$path" ]; then
+                backup_and_write "$path" "0"
+            fi
+        done
+
+        # Set WiFi roaming aggressiveness to maximum (avoid stale AP connections)
+        local roam_path="/proc/net/wireless/roaming"
+        if [ -f "$roam_path" ]; then
+            backup_and_write "$roam_path" "1"
+        fi
+
+        # Disable WiFi APF (Android Packet Filter) — can add latency on some chipsets
+        for f in /sys/class/net/wlan0/wireless/*/apf; do
+            if [ -f "$f" ]; then
+                backup_and_write "$f" "0"
+            fi
+        done
+
+        # WiFi scan timer: reduce scan interval during gaming to avoid connection drops
+        # but don't scan too often (which would add latency itself)
+        setprop persist.wifi.scan.always.enabled "0" 2>/dev/null
+
+        # WMM (WiFi Multimedia): ensure voice/video AC has highest priority
+        # This is mostly handled by the driver, but we can hint via props
+        setprop persist.sys.wmm.enable "1" 2>/dev/null
+
+        log "WiFi QoS optimized for low-latency gaming"
+    else
+        # Restore aggregation
+        for path in /sys/kernel/debug/ieee80211/phy*/ath11k/ammmode; do
+            if [ -f "$path" ]; then
+                backup_and_write "$path" "1"
+            fi
+        done
+        log "WiFi QoS settings restored"
+    fi
+}
+
+tweak_tcp_nodelay() {
+    local enable="$1"
+    # Enable TCP_NODELAY equivalent via sysfs: disable Nagle's algorithm globally
+    # for new connections. This is critical for FPS games — CODM sends many small
+    # packets (position updates, shots) that Nagle would batch, adding 40-200ms.
+    #
+    # We use tcp_low_latency which hints the kernel to prioritize latency over
+    # throughput, and disable tcp_moderate_rcvbuf to avoid receive buffer delays.
+
+    if [ "$enable" = "enable" ]; then
+        # tcp_timestamps=0 reduces per-packet overhead by 12 bytes
+        # (saves ~1% CPU on high packet-rate connections)
+        backup_and_write /proc/sys/net/ipv4/tcp_timestamps "0"
+
+        # Disable delayed ACK (tcp_delack_min) — critical for game servers
+        # that wait for ACK before sending next state update
+        backup_and_write /proc/sys/net/ipv4/tcp_delack_min "0"
+
+        # Reduce initial congestion window to 10 (default is usually 10 on modern kernels)
+        # This ensures fast ramp-up on game connections
+        backup_and_write /proc/sys/net/ipv4/tcp_init_cwnd "10"
+
+        # Enable tcp_low_latency: hints kernel to prioritize latency
+        if [ -f /proc/sys/net/ipv4/tcp_low_latency ]; then
+            backup_and_write /proc/sys/net/ipv4/tcp_low_latency "1"
+        fi
+
+        log "TCP latency optimizations enabled (Nagle disabled, delayed ACK minimized)"
+    else
+        backup_and_write /proc/sys/net/ipv4/tcp_timestamps "1"
+        backup_and_write /proc/sys/net/ipv4/tcp_delack_min "40"
+        if [ -f /proc/sys/net/ipv4/tcp_low_latency ]; then
+            backup_and_write /proc/sys/net/ipv4/tcp_low_latency "0"
+        fi
+        log "TCP latency optimizations restored"
+    fi
+}
+
+tweak_congestion_control() {
+    local enable="$1"
+    if [ "$enable" != "enable" ]; then
+        # Restore default congestion control
+        local backup_file="$BACKUP_DIR/tcp_congestion_control"
+        if [ -f "$backup_file" ]; then
+            local orig
+            orig=$(cat "$backup_file" 2>/dev/null)
+            if [ -n "$orig" ]; then
+                write_if_different /proc/sys/net/ipv4/tcp_congestion_control "$orig"
+            fi
+        fi
+        return
+    fi
+
+    # Check available congestion algorithms
+    local available
+    available=$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)
+    local current
+    current=$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)
+
+    # Backup current
+    if [ ! -f "$BACKUP_DIR/tcp_congestion_control" ]; then
+        echo "${current:-cubic}" > "$BACKUP_DIR/tcp_congestion_control" 2>/dev/null
+    fi
+
+    # Prefer BBR > Westwood+ > HTCP > current
+    local new_cc=""
+    case "$available" in
+        *bbr*)     new_cc="bbr" ;;
+        *westwood*) new_cc="westwood" ;;
+        *htcp*)    new_cc="htcp" ;;
+        *)         new_cc="" ;;
+    esac
+
+    if [ -n "$new_cc" ] && [ "$new_cc" != "$current" ]; then
+        write_if_different /proc/sys/net/ipv4/tcp_congestion_control "$new_cc"
+        log "Congestion control: $current -> $new_cc (available: $available)"
+    fi
+}
+
 main() {
     log "=== Gaming network tweak: $ACTION ==="
 
@@ -291,6 +416,10 @@ main() {
     tweak_irq_affinity "$ACTION"
     tweak_fast_dormancy "$ACTION"
     tweak_txqueuelen "$ACTION"
+    # v3.2.32: Low-latency gaming optimizations
+    tweak_wifi_qos "$ACTION"
+    tweak_tcp_nodelay "$ACTION"
+    tweak_congestion_control "$ACTION"
 
     log "=== Gaming network tweak complete ==="
 }

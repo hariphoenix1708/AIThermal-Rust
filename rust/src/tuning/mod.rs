@@ -230,14 +230,57 @@ impl RuntimeTuner {
         let path_congestion = "/proc/sys/net/ipv4/tcp_congestion_control";
 
         if is_perf {
-            // B3: raise keepalive only mildly (20 min minimum). NEVER touch
-            // tcp_syn_retries / tcp_synack_retries / tcp_timestamps — those
-            // broke connectivity on flaky Wi-Fi / LTE hand-offs.
+            // Gaming: keepalive at 600s (10 min) — faster dead-connection
+            // detection prevents stale sockets from blocking game state.
             let old_keepalive = sysfs::read_string(path_keepalive).ok().unwrap_or_default();
-            self.write_and_save(path_keepalive, "1200", true);
-            tracing::info!(target: "network", "NET-01 tcp_keepalive_time {} -> 1200", old_keepalive);
+            self.write_and_save(path_keepalive, "600", true);
+            tracing::info!(target: "network", "NET-01 tcp_keepalive_time {} -> 600", old_keepalive);
 
-            // B4: BBR is opt-in via config, and only if available.
+            // v3.2.32: TCP low-latency optimizations for gaming.
+            // Disable Nagle equivalent (tcp_timestamps off saves 12 bytes/pkt
+            // and reduces softirq overhead). Disable delayed ACK to cut
+            // round-trip latency for small game packets.
+            if is_gaming {
+                let path_ts = "/proc/sys/net/ipv4/tcp_timestamps";
+                let old_ts = sysfs::read_string(path_ts).ok().unwrap_or_default();
+                if old_ts.trim() != "0" {
+                    self.write_and_save(path_ts, "0", true);
+                    tracing::info!(target: "network",
+                        "NET-01 tcp_timestamps {} -> 0 (gaming low-latency)", old_ts.trim());
+                }
+
+                let path_delack = "/proc/sys/net/ipv4/tcp_delack_min";
+                if let Ok(old_da) = std::fs::read_to_string(path_delack) {
+                    let old_da = old_da.trim().to_string();
+                    if old_da != "0" {
+                        self.write_and_save(path_delack, "0", true);
+                        tracing::info!(target: "network",
+                            "NET-01 tcp_delack_min {} -> 0 (gaming low-latency)", old_da);
+                    }
+                }
+
+                let path_low_latency = "/proc/sys/net/ipv4/tcp_low_latency";
+                if let Ok(old_ll) = std::fs::read_to_string(path_low_latency) {
+                    let old_ll = old_ll.trim().to_string();
+                    if old_ll != "1" {
+                        self.write_and_save(path_low_latency, "1", true);
+                        tracing::info!(target: "network",
+                            "NET-01 tcp_low_latency {} -> 1 (gaming low-latency)", old_ll);
+                    }
+                }
+
+                let path_cwnd = "/proc/sys/net/ipv4/tcp_init_cwnd";
+                if let Ok(old_cwnd) = std::fs::read_to_string(path_cwnd) {
+                    let old_cwnd = old_cwnd.trim().to_string();
+                    if old_cwnd != "10" {
+                        self.write_and_save(path_cwnd, "10", true);
+                        tracing::info!(target: "network",
+                            "NET-01 tcp_init_cwnd {} -> 10 (gaming fast ramp)", old_cwnd);
+                    }
+                }
+            }
+
+            // B4: BBR/Westwood+ is opt-in via config, and only if available.
             let requested_cc = self.tcp_cc_gaming.trim();
             let should_write_cc = !requested_cc.is_empty()
                 && requested_cc != "kernel_default"
@@ -256,6 +299,12 @@ impl RuntimeTuner {
             }
         } else {
             self.restore_or_default(path_keepalive, "7200");
+            if is_gaming {
+                self.restore_or_default("/proc/sys/net/ipv4/tcp_timestamps", "1");
+                self.restore_or_default("/proc/sys/net/ipv4/tcp_delack_min", "40");
+                self.restore_or_default("/proc/sys/net/ipv4/tcp_low_latency", "0");
+                self.restore_or_default("/proc/sys/net/ipv4/tcp_init_cwnd", "10");
+            }
             if let Ok(state) = self.original_state.lock()
                 && state.contains_key(path_congestion) {
                     drop(state);

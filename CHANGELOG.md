@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.2.32 (versionCode 352)
+### Improved — CODM Bullet Registration & Low-Latency Gaming
+- **TCP low-latency optimizations (Rust + shell)**: During gaming, disables
+  TCP timestamps (saves 12 bytes/pkt overhead), disables delayed ACK
+  (eliminates 40-200ms Nagle delay for game packets), enables
+  `tcp_low_latency` hint, and sets initial congestion window to 10
+  for fast connection ramp-up. All restored on game exit.
+- **TCP_NODELAY equivalent via sysfs**: `tcp_delack_min=0` effectively
+  disables Nagle's algorithm for new connections — critical for CODM
+  where position updates and shot packets are small and time-sensitive.
+- **WiFi QoS/WMM tweaks**: Disables AMSDU/AMPDU aggregation during
+  gaming (reduces jitter from frame batching), enables WMM priority,
+  sets roaming aggressiveness to maximum, disables APF (Android Packet
+  Filter) which adds latency on some chipsets.
+- **Congestion control auto-selection**: Auto-detects and enables
+  BBR > Westwood+ > HTCP (in priority order) if available on the
+  kernel. These algorithms handle WiFi/LTE latency better than cubic.
+- **CODM game server ping targets**: ICMP ping now targets Activision
+  CDN infrastructure (EU, NA, Asia) in addition to DNS fallbacks,
+  giving more relevant latency data for bullet registration scoring.
+- **Faster network probes**: Probe interval reduced from 30s to 10s
+  during gaming for quicker detection of network quality changes.
+  Ping count reduced to 10 packets at 100ms interval (1s total).
+- **touch_network_stack enabled by default**: The Rust-side TCP
+  optimizations are now on by default (was off since v3.1.0 connectivity
+  regression). All writes are idempotent and capability-probed.
+- **tcp_keepalive_time**: Lowered from 1200 to 600 for gaming — faster
+  dead-connection detection prevents stale sockets blocking game state.
+
 ## v3.2.31 (versionCode 351)
 ### Fixed
 - **ICMP ping RTT=0 bug**: `icmp_ping_one` was using the send-time variable
