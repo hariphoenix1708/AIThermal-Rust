@@ -32,6 +32,7 @@ pub struct SystemOrchestrator {
     cpuset: CpusetManager,
     charging: ChargingEngine,
     gaming: GameDetector,
+    game_turbo: crate::game_turbo::GameTurboEngine,
     watchdog: Watchdog,
     recovery: RecoveryManager,
     calibration: CalibrationManager,
@@ -282,6 +283,7 @@ impl SystemOrchestrator {
             cpuset,
             charging,
             gaming,
+            game_turbo: crate::game_turbo::GameTurboEngine::new(),
             watchdog,
             recovery,
             calibration,
@@ -526,6 +528,7 @@ impl SystemOrchestrator {
             cpuset: CpusetManager::new(),
             charging: ChargingEngine::new(&hardware, 48, 58),
             gaming: GameDetector::new(Vec::new(), 0, 1, 1, 1),
+            game_turbo: crate::game_turbo::GameTurboEngine::new(),
             watchdog: Watchdog::with_threshold(ctx.config.profiles.poll_interval, ctx.config.profiles.watchdog_stall_threshold),
             recovery: RecoveryManager::new(),
             calibration: CalibrationManager::new(""),
@@ -639,6 +642,7 @@ impl SystemOrchestrator {
 
 impl RuntimeTask for SystemOrchestrator {
     fn cleanup(&mut self) {
+        self.game_turbo.deactivate();
         self.charging.release_voters_on_shutdown();
         self.runtime_tuner.restore_all();
         self.runtime_tuner.restore_stock_thermal();
@@ -770,7 +774,12 @@ impl RuntimeTask for SystemOrchestrator {
             }
             self.last_network_probe = Some(now);
 
-            // Peak temp will be set below after sensors
+            // v3.3.0: Activate GameTurbo engine for runtime gaming optimizations.
+            if ctx.config.profiles.game_turbo_enabled
+                && let Some(pid) = self.gaming.confirmed_pid
+            {
+                self.game_turbo.activate(pid, &ctx.config.profiles);
+            }
         }
 
         if is_gaming {
@@ -796,6 +805,13 @@ impl RuntimeTask for SystemOrchestrator {
                     self.last_network_probe = Some(now);
                 }
             }
+        }
+
+        // v3.3.0: GameTurbo per-tick refresh (re-scan newly spawned threads).
+        if is_gaming && ctx.config.profiles.game_turbo_enabled
+            && let Some(pid) = self.gaming.confirmed_pid
+        {
+            self.game_turbo.tick(pid);
         }
 
         // 3. Sensors & Thermal
@@ -928,6 +944,9 @@ impl RuntimeTask for SystemOrchestrator {
                 ctx.cooldown_source_pkg.as_deref().unwrap_or("unknown"),
                 ctx.game_session_peak_temp
             );
+
+            // v3.3.0: Deactivate GameTurbo engine — restore all runtime state.
+            self.game_turbo.deactivate();
 
             // Actively restore the normal usage profile to drop heat quickly
             self.runtime_tuner.restore_all();

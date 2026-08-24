@@ -101,6 +101,22 @@ pub struct ProfilesConfig {
     // re-probes during gaming. 0 = only probe once on session start.
     #[serde(default = "default_network_probe_interval")]
     pub network_probe_interval_sec: u64,
+
+    // v3.3.0: GameTurbo engine — runtime-only gaming optimizations.
+    #[serde(default = "default_true")]
+    pub game_turbo_enabled: bool,
+    #[serde(default = "default_true")]
+    pub game_turbo_thread_affinity: bool,
+    #[serde(default = "default_true")]
+    pub game_turbo_priority_elevator: bool,
+    #[serde(default = "default_true")]
+    pub game_turbo_background_lockdown: bool,
+    #[serde(default = "default_true")]
+    pub game_turbo_wifi_ps_disable: bool,
+    #[serde(default = "default_true")]
+    pub game_turbo_touch_boost: bool,
+    #[serde(default = "default_big_core_mask")]
+    pub game_turbo_big_core_mask: u64,
 }
 
 fn default_false() -> bool {
@@ -185,6 +201,12 @@ fn default_network_probe_interval() -> u64 {
     10
 }
 
+/// SM8635 peridot: cores 4-7 are performance (A720+A720+X4+X4), 0-3 are efficiency (A520x4).
+/// Bitmask 0b11110000 = 0xF0.
+fn default_big_core_mask() -> u64 {
+    0xF0
+}
+
 fn default_disable_tweaks() -> bool {
     false
 }
@@ -222,6 +244,13 @@ impl Default for ProfilesConfig {
             network_diagnostics_enabled: default_true(),
             gaming_network_tweaks_enabled: default_true(),
             network_probe_interval_sec: default_network_probe_interval(),
+            game_turbo_enabled: default_true(),
+            game_turbo_thread_affinity: default_true(),
+            game_turbo_priority_elevator: default_true(),
+            game_turbo_background_lockdown: default_true(),
+            game_turbo_wifi_ps_disable: default_true(),
+            game_turbo_touch_boost: default_true(),
+            game_turbo_big_core_mask: default_big_core_mask(),
         }
     }
 }
@@ -266,6 +295,9 @@ impl ProfilesConfig {
         }
         if self.game_latch_sec == 0 {
             return Err("game_latch_sec == 0");
+        }
+        if self.game_turbo_big_core_mask == 0 {
+            return Err("game_turbo_big_core_mask == 0");
         }
         Ok(())
     }

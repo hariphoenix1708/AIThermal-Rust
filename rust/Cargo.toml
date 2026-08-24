@@ -1,6 +1,6 @@
 [package]
 name = "thermalai-daemon"
-version = "3.2.34"
+version = "3.3.0"
 edition = "2024"
 
 [dependencies]
@@ -15,7 +15,7 @@ thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "local-time"] }
 regex = "1.10"
-nix = { version = "0.29", features = ["signal"] }
+nix = { version = "0.29", features = ["signal", "process", "sched"] }
 libc = "0.2"
 parking_lot = "0.12"
 tracing-appender = "0.2"

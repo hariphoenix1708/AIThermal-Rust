@@ -4,6 +4,7 @@ pub mod charging;
 pub mod config;
 pub mod cpuset;
 pub mod daemon;
+pub mod game_turbo;
 pub mod gaming;
 pub mod governors;
 pub mod hardware;
