@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.2.34 (versionCode 354)
+### Fixed — Network probe targets and battery drain calculation
+- **RTT regression fix**: Reordered ICMP ping targets — DNS resolvers
+  (8.8.8.8, 1.1.1.1) first, CODM Activision CDN IPs after. DNS servers
+  are anycast and return nearest PoP, giving true network RTT from user's
+  location. Activision IPs are region-specific (EU-West, NA-Central) and
+  gave ~200ms RTT from India — now DNS servers give ~10-30ms.
+- **Early exit threshold**: Changed from `targets_tried >= 3` (hard cap)
+  to `avg_rtt < 80ms && targets_tried >= 2`. Only exits early on genuinely
+  good RTT, allowing more targets to be tried on slow connections.
+- **Battery drain always showing `?%/hr`**: Added `last_drain_sample` field
+  to `BatteryStatsTracker`. Drain is now computed between samples where
+  SOC actually changed (every few minutes), not between consecutive 1-second
+  ticks where SOC almost never changes. Cached drain rate is displayed
+  between SOC changes.
+- **Quality score now factors in jitter tier**: Score formula now adds
+  bonus for excellent jitter (+30 for S+, +20 for S, +10 for A) and
+  penalizes very high RTT (>200ms: -20, >150ms: -10). A connection with
+  SPlus jitter (0.5ms) but 195ms RTT now scores 70 instead of 40.
+- Fixed stale doc comment on `probe_quality`.
+
 ## v3.2.33 (versionCode 353)
 ### Fixed — Critical bugs from v3.2.32 device log analysis
 - **Tick loop stall (32s) caused by ICMP ping blocking**: Reduced ICMP

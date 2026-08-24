@@ -649,8 +649,8 @@ pub fn probe_passive() -> PassiveNetworkState {
     state
 }
 
-/// Run full quality probe: passive sysfs + active ICMP ping to both
-/// 8.8.8.8 and 1.1.1.1, DNS resolution, then score.
+/// Run full quality probe: passive sysfs + active ICMP ping to DNS
+/// resolvers and CODM game servers, DNS resolution, then score.
 pub fn probe_quality(state_dir: &str) -> NetworkQuality {
     let passive = probe_passive();
     let rom = RomType::detect();
@@ -659,19 +659,19 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    // Active probe: ping CODM game servers first, then DNS servers as fallback.
-    // CODM uses Activision/Akamai CDN infrastructure. These IPs cover major
-    // regions (Asia, EU, NA). Pinging actual game infrastructure gives
-    // more relevant latency data than generic DNS resolvers.
+    // Active probe: ping DNS resolvers first (anycast, nearest to user),
+    // then CODM game server regions. DNS servers give the true baseline
+    // network RTT from the user's location. CODM Activision CDN IPs are
+    // region-specific and may be far away (e.g. EU servers from Asia).
     let targets = [
-        // CODM game server regions (Activision CDN / Akamai edge)
-        "155.133.226.41",   // EU-West (Activision)
-        "162.254.197.42",   // NA-Central (Activision)
-        "45.129.190.237",   // Asia (Activision)
-        "162.254.197.2",    // Global fallback (Activision)
-        // DNS fallbacks
+        // DNS resolvers (anycast — returns nearest PoP)
         "8.8.8.8",
         "1.1.1.1",
+        // CODM game server regions (Activision CDN / Akamai edge)
+        "45.129.190.237",   // Asia (Activision)
+        "155.133.226.41",   // EU-West (Activision)
+        "162.254.197.42",   // NA-Central (Activision)
+        "162.254.197.2",    // Global fallback (Activision)
     ];
     let ping_count: u32 = 5;
     let ping_interval_ms: u64 = 100;
@@ -691,11 +691,13 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
                 }
             }
         }
-        // Early exit: if we have a working target with decent RTT (< 50ms),
-        // don't waste time probing more targets. This keeps the total probe
-        // under 2s instead of 15s+ with all 6 targets.
+        // Early exit: if we have a working target with good RTT (< 80ms),
+        // no need to probe more targets. Higher threshold than before to
+        // avoid false exits on slow connections where the first target
+        // responds but with mediocre latency.
         if let Some(ref b) = best
-            && (b.avg_rtt_ms < 50.0 || targets_tried >= 3)
+            && b.avg_rtt_ms < 80.0
+            && targets_tried >= 2
         {
             break;
         }
@@ -718,6 +720,26 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
         let br = BulletRegQuality::from_jitter_ms(a.jitter_ms, a.avg_rtt_ms, a.loss_pct);
         let jt = JitterTier::from_jitter_ms(a.jitter_ms);
         let mut score = br.score();
+
+        // Boost score when jitter is excellent despite high RTT.
+        // High RTT to DNS servers doesn't necessarily mean bad game
+        // latency (game servers may be closer). Excellent jitter
+        // indicates a stable connection which matters more for gaming.
+        let jitter_bonus: i64 = match jt {
+            JitterTier::SPlus => 30,
+            JitterTier::S => 20,
+            JitterTier::A => 10,
+            _ => 0,
+        };
+        // Also penalize very high RTT (> 200ms) more aggressively
+        let rtt_penalty: i64 = if a.avg_rtt_ms > 200.0 {
+            20
+        } else if a.avg_rtt_ms > 150.0 {
+            10
+        } else {
+            0
+        };
+        score = (score as i64 + jitter_bonus - rtt_penalty).clamp(0, 100) as u32;
 
         // Degrade for packet loss
         let loss_int = a.loss_pct as i64;
