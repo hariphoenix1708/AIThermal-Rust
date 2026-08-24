@@ -1,5 +1,18 @@
 # Changelog
 
+## v3.2.33 (versionCode 353)
+### Fixed — Critical bugs from v3.2.32 device log analysis
+- **Tick loop stall (32s) caused by ICMP ping blocking**: Reduced ICMP
+  timeout from 2s to 500ms per packet, reduced ping count from 10 to 5,
+  and added early termination (stops after first working target or 3
+  targets tried). Worst-case probe time: ~7.5s (was ~60s+). Typical: <2s.
+- **Empty interface name in probe**: Interface detection now also checks
+  `/sys/class/net/*/carrier` (value=1) as fallback when `operstate`
+  is not "up". Some kernels show "unknown" during WiFi association
+  even though the interface is functionally usable.
+- **WiFi reads used hardcoded wlan0**: Now uses the detected interface
+  name for RSSI, frequency, and power_save sysfs reads.
+
 ## v3.2.32 (versionCode 352)
 ### Improved — CODM Bullet Registration & Low-Latency Gaming
 - **TCP low-latency optimizations (Rust + shell)**: During gaming, disables

@@ -216,10 +216,10 @@ pub fn icmp_ping(target: &str, count: u32, interval_ms: u64) -> PingResult {
         };
     }
 
-    // Set receive timeout to 2 seconds
+    // Set receive timeout to 500ms per packet (was 2s — caused tick stalls)
     let timeout_val = libc::timeval {
-        tv_sec: 2,
-        tv_usec: 0,
+        tv_sec: 0,
+        tv_usec: 500_000,
     };
     unsafe {
         libc::setsockopt(
@@ -235,7 +235,7 @@ pub fn icmp_ping(target: &str, count: u32, interval_ms: u64) -> PingResult {
     let mut received = 0u32;
 
     for seq in 0..count {
-        let reply = icmp_ping_one(sock_fd, &target_addr, seq as u16, ident, Duration::from_secs(2));
+        let reply = icmp_ping_one(sock_fd, &target_addr, seq as u16, ident, Duration::from_millis(500));
         if let Some(r) = reply {
             rtts.push(r.rtt_us);
             received += 1;
@@ -525,12 +525,24 @@ static QUALITY_CACHE: OnceLock<Mutex<Option<NetworkQuality>>> = OnceLock::new();
 pub fn probe_passive() -> PassiveNetworkState {
     let mut state = PassiveNetworkState::default();
 
-    // Detect active interface
-    for iface in &["wlan0", "rmnet_data0"] {
-        let path = format!("/sys/class/net/{}/operstate", iface);
-        if let Ok(content) = fs::read_to_string(&path)
-            && content.trim() == "up"
-        {
+    // Detect active interface via operstate (primary) and carrier (fallback).
+    // On some kernels, operstate stays "unknown" during WiFi association
+    // even though the interface is functionally usable.
+    let interfaces = ["wlan0", "rmnet_data0", "rmnet_data1"];
+    for iface in &interfaces {
+        let operstate_path = format!("/sys/class/net/{}/operstate", iface);
+        let carrier_path = format!("/sys/class/net/{}/carrier", iface);
+
+        let is_up = fs::read_to_string(&operstate_path)
+            .ok()
+            .map(|c| c.trim() == "up")
+            .unwrap_or(false);
+        let has_carrier = fs::read_to_string(&carrier_path)
+            .ok()
+            .map(|c| c.trim() == "1")
+            .unwrap_or(false);
+
+        if is_up || has_carrier {
             state.interface = iface.to_string();
             state.network_type = if iface.starts_with("wlan") {
                 "wifi".to_string()
@@ -541,6 +553,7 @@ pub fn probe_passive() -> PassiveNetworkState {
         }
     }
 
+    // Fallback: scan /sys/class/net for any interface with carrier
     if state.interface.is_empty()
         && let Ok(entries) = fs::read_dir("/sys/class/net")
     {
@@ -550,10 +563,17 @@ pub fn probe_passive() -> PassiveNetworkState {
             if name == "lo" {
                 continue;
             }
-            let path = entry.path().join("operstate");
-            if let Ok(content) = fs::read_to_string(&path)
-                && content.trim() == "up"
-            {
+            let operstate = entry.path().join("operstate");
+            let carrier = entry.path().join("carrier");
+            let is_up = fs::read_to_string(&operstate)
+                .ok()
+                .map(|c| c.trim() == "up")
+                .unwrap_or(false);
+            let has_carrier = fs::read_to_string(&carrier)
+                .ok()
+                .map(|c| c.trim() == "1")
+                .unwrap_or(false);
+            if is_up || has_carrier {
                 state.interface = name.to_string();
                 state.network_type = if name.starts_with("wlan") {
                     "wifi".to_string()
@@ -568,16 +588,23 @@ pub fn probe_passive() -> PassiveNetworkState {
     }
 
     // WiFi-specific
-    if state.network_type == "wifi" {
-        state.wifi_rssi = fs::read_to_string("/sys/class/net/wlan0/wireless/link/level")
-            .ok()
-            .map(|s| s.trim().to_string());
-        state.wifi_freq = fs::read_to_string("/sys/class/net/wlan0/wireless/freq")
-            .ok()
-            .map(|s| s.trim().to_string());
-        state.wifi_power_save = fs::read_to_string("/sys/class/net/wlan0/power_save")
-            .ok()
-            .map(|s| s.trim().to_string());
+    if state.network_type == "wifi" && !state.interface.is_empty() {
+        let iface = &state.interface;
+        state.wifi_rssi = fs::read_to_string(format!(
+            "/sys/class/net/{}/wireless/link/level", iface
+        ))
+        .ok()
+        .map(|s| s.trim().to_string());
+        state.wifi_freq = fs::read_to_string(format!(
+            "/sys/class/net/{}/wireless/freq", iface
+        ))
+        .ok()
+        .map(|s| s.trim().to_string());
+        state.wifi_power_save = fs::read_to_string(format!(
+            "/sys/class/net/{}/power_save", iface
+        ))
+        .ok()
+        .map(|s| s.trim().to_string());
     }
 
     // TCP/UDP buffers
@@ -646,11 +673,13 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
         "8.8.8.8",
         "1.1.1.1",
     ];
-    let ping_count: u32 = 10;
+    let ping_count: u32 = 5;
     let ping_interval_ms: u64 = 100;
 
     let mut best: Option<PingResult> = None;
+    let mut targets_tried = 0u32;
     for target in &targets {
+        targets_tried += 1;
         let result = icmp_ping(target, ping_count, ping_interval_ms);
         if result.packets_received > 0 {
             match &best {
@@ -661,6 +690,14 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
                     }
                 }
             }
+        }
+        // Early exit: if we have a working target with decent RTT (< 50ms),
+        // don't waste time probing more targets. This keeps the total probe
+        // under 2s instead of 15s+ with all 6 targets.
+        if let Some(ref b) = best
+            && (b.avg_rtt_ms < 50.0 || targets_tried >= 3)
+        {
+            break;
         }
     }
 
