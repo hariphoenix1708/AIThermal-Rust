@@ -72,6 +72,9 @@ if (Test-Path $srcPath) {
         New-Item -ItemType Directory -Force -Path (Join-Path $StagingDir "system\bin") | Out-Null
 
         Copy-Item -Path "META-INF", "config", "module.prop", "service.sh", "customize.sh", "sepolicy.rule", "uninstall.sh" -Destination $StagingDir -Recurse -Force
+        if (Test-Path "scripts") {
+            Copy-Item -Path "scripts" -Destination $StagingDir -Recurse -Force
+        }
         if (Test-Path "webroot") {
             Copy-Item -Path "webroot" -Destination $StagingDir -Recurse -Force
         }
