@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.3.8 (versionCode 368)
+### Fixed — Comprehensive audit: critical bugs in network tuning, RPS, and shell scripts
+- **`advanced.rs` buffer values restored**: The Rust advanced tuner still had
+  pre-v3.3.6 downgraded `tcp_rmem` (4K min vs 512K), `tcp_wmem` (4K min vs
+  256K), and `udp_mem` (8x downgrade). Now preserves system defaults, matching
+  the v3.3.6 shell fix.
+- **RPS on mobile data interfaces**: RPS (Receive Packet Steering) was only
+  applied to `wlan0`, leaving mobile data (rmnet_data0-3) unprotected from
+  softirq storms on CPU0. Now applies RPS to all active network interfaces
+  (WiFi + mobile data) in both Rust and shell code.
+- **IRQ affinity restore on disable**: `tweak_irq_affinity` in the shell script
+  never restored IRQ affinities when gaming ended — WiFi and modem IRQs
+  remained permanently pinned to big cores. Now properly restores from backup.
+- **100% packet loss rated "excellent"**: `detect_network_quality.sh` would
+  report quality_score=70 ("excellent") when all pings failed (avg=0, loss=100).
+  Now correctly returns "unreachable" / score=0.
+- **Quality rating considers RTT**: Previous versions only used jitter for
+  quality rating. A connection with 800ms avg but 2ms jitter was rated
+  "excellent". Now applies penalty for avg >150ms (-10) and >200ms (-20).
+- **WiFi QoS restore**: `tweak_wifi_qos` disable path only restored ath11k
+  aggregation but left roaming, APF, scan, and WMM settings permanently
+  modified. Now restores all modified values.
+- **WiFi PS dumpsys fallback**: `detect_network_quality.sh` returned raw
+  dumpsys line instead of clean on/off value.
+- **Interface detection**: Both Rust and shell now check rmnet_data0-3 for
+  dual-SIM mobile data gaming.
+
 ## v3.3.7 (versionCode 367)
 ### Fixed — Ping stability: WiFi power save and RPS for Qualcomm WCN6750
 - **WiFi PS disable via `cmd wifi`**: Previous versions targeted

@@ -125,23 +125,42 @@ tweak_wifi_power_save() {
     fi
 }
 
-# v3.3.7: RPS (Receive Packet Steering) distributes WiFi packet processing
-# across all CPUs instead of CPU0 only. On SM8635, all WLAN interrupts land
-# on CPU0 — without RPS this causes softirq storms and ping spikes.
+# v3.3.7: RPS (Receive Packet Steering) distributes network packet processing
+# across all CPUs instead of CPU0 only. On SM8635, all WLAN and modem
+# interrupts land on CPU0 — without RPS this causes softirq storms and ping spikes.
+# v3.3.8: Also applies RPS to mobile data (rmnet) interfaces.
 tweak_rps() {
     local enable="$1"
-    local iface="wlan0"
     local cpus_all="ff"
 
+    # v3.3.8: Apply RPS to all active interfaces (WiFi + mobile data)
+    local ifaces=""
+    for iface in wlan0 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3; do
+        local operstate="/sys/class/net/$iface/operstate"
+        if [ -f "$operstate" ] && [ "$(cat "$operstate" 2>/dev/null)" = "up" ]; then
+            ifaces="$ifaces $iface"
+        fi
+    done
+
     if [ "$enable" = "enable" ]; then
-        # Save originals if not already saved
-        for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
-            [ -f "$q" ] || continue
-            local key=$(echo "$q" | tr '/' '_')
-            if [ ! -f "$BACKUP_DIR/$key" ]; then
-                cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "00" > "$BACKUP_DIR/$key"
-            fi
-            write_if_different "$q" "$cpus_all"
+        for iface in $ifaces; do
+            for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
+                [ -f "$q" ] || continue
+                local key=$(echo "$q" | tr '/' '_')
+                if [ ! -f "$BACKUP_DIR/$key" ]; then
+                    cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "00" > "$BACKUP_DIR/$key"
+                fi
+                write_if_different "$q" "$cpus_all"
+            done
+
+            for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
+                [ -f "$q" ] || continue
+                local key=$(echo "$q" | tr '/' '_')
+                if [ ! -f "$BACKUP_DIR/$key" ]; then
+                    cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "0" > "$BACKUP_DIR/$key"
+                fi
+                write_if_different "$q" "4096"
+            done
         done
 
         # Enable flow-based steering so packets from same connection
@@ -152,25 +171,28 @@ tweak_rps() {
         fi
         write_if_different /proc/sys/net/core/rps_sock_flow_entries "32768"
 
-        for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
-            [ -f "$q" ] || continue
-            local key=$(echo "$q" | tr '/' '_')
-            if [ ! -f "$BACKUP_DIR/$key" ]; then
-                cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "0" > "$BACKUP_DIR/$key"
-            fi
-            write_if_different "$q" "4096"
-        done
-
-        log "RPS enabled: distribute network processing across all CPUs"
+        log "RPS enabled on interfaces:$ifaces (distribute network processing across all CPUs)"
     else
-        for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
-            [ -f "$q" ] || continue
-            local key=$(echo "$q" | tr '/' '_')
-            if [ -f "$BACKUP_DIR/$key" ]; then
-                local orig
-                orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
-                write_if_different "$q" "$orig"
-            fi
+        for iface in $ifaces; do
+            for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
+                [ -f "$q" ] || continue
+                local key=$(echo "$q" | tr '/' '_')
+                if [ -f "$BACKUP_DIR/$key" ]; then
+                    local orig
+                    orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
+                    write_if_different "$q" "$orig"
+                fi
+            done
+
+            for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
+                [ -f "$q" ] || continue
+                local key=$(echo "$q" | tr '/' '_')
+                if [ -f "$BACKUP_DIR/$key" ]; then
+                    local orig
+                    orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
+                    write_if_different "$q" "$orig"
+                fi
+            done
         done
 
         local flow_key="_proc_sys_net_core_rps_sock_flow_entries"
@@ -179,16 +201,6 @@ tweak_rps() {
             orig=$(cat "$BACKUP_DIR/$flow_key" 2>/dev/null)
             write_if_different /proc/sys/net/core/rps_sock_flow_entries "$orig"
         fi
-
-        for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
-            [ -f "$q" ] || continue
-            local key=$(echo "$q" | tr '/' '_')
-            if [ -f "$BACKUP_DIR/$key" ]; then
-                local orig
-                orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
-                write_if_different "$q" "$orig"
-            fi
-        done
 
         log "RPS restored to defaults"
     fi
@@ -270,7 +282,6 @@ tweak_dns() {
 
 tweak_irq_affinity() {
     local enable="$1"
-    if [ "$enable" != "enable" ]; then return; fi
 
     local big_mask="f0"
     local num_cores
@@ -281,35 +292,54 @@ tweak_irq_affinity() {
 
     local wlan_irq
     wlan_irq=$(grep -r "wlan" /proc/interrupts 2>/dev/null | head -1 | awk '{print $1}' | tr -d ':')
-    if [ -n "$wlan_irq" ]; then
-        local irq_path="/proc/irq/$wlan_irq/smp_affinity"
-        if [ -f "$irq_path" ]; then
-            if backup_and_write "$irq_path" "$big_mask"; then
-                log "WiFi IRQ $wlan_irq pinned to big cores ($big_mask)"
-            else
-                local actual
-                actual=$(cat "$irq_path" 2>/dev/null)
-                log "WiFi IRQ $wlan_irq affinity write failed (wanted=$big_mask got=$actual)"
-            fi
-        fi
-    fi
 
-    for pattern in rmnet ccci qmi geni; do
-        local modem_irq
-        modem_irq=$(grep -r "$pattern" /proc/interrupts 2>/dev/null | head -1 | awk '{print $1}' | tr -d ':')
-        if [ -n "$modem_irq" ]; then
-            local irq_path="/proc/irq/$modem_irq/smp_affinity"
+    if [ "$enable" = "enable" ]; then
+        if [ -n "$wlan_irq" ]; then
+            local irq_path="/proc/irq/$wlan_irq/smp_affinity"
             if [ -f "$irq_path" ]; then
                 if backup_and_write "$irq_path" "$big_mask"; then
-                    log "Modem IRQ $modem_irq pinned to big cores ($big_mask)"
+                    log "WiFi IRQ $wlan_irq pinned to big cores ($big_mask)"
                 else
                     local actual
                     actual=$(cat "$irq_path" 2>/dev/null)
-                    log "Modem IRQ $modem_irq affinity write failed (wanted=$big_mask got=$actual)"
+                    log "WiFi IRQ $wlan_irq affinity write failed (wanted=$big_mask got=$actual)"
                 fi
             fi
         fi
-    done
+
+        for pattern in rmnet ccci qmi geni; do
+            local modem_irq
+            modem_irq=$(grep -r "$pattern" /proc/interrupts 2>/dev/null | head -1 | awk '{print $1}' | tr -d ':')
+            if [ -n "$modem_irq" ]; then
+                local irq_path="/proc/irq/$modem_irq/smp_affinity"
+                if [ -f "$irq_path" ]; then
+                    if backup_and_write "$irq_path" "$big_mask"; then
+                        log "Modem IRQ $modem_irq pinned to big cores ($big_mask)"
+                    else
+                        local actual
+                        actual=$(cat "$irq_path" 2>/dev/null)
+                        log "Modem IRQ $modem_irq affinity write failed (wanted=$big_mask got=$actual)"
+                    fi
+                fi
+            fi
+        done
+    else
+        # v3.3.8: Restore IRQ affinities from backup on disable.
+        # Previous versions left IRQs permanently pinned after gaming.
+        if [ -n "$wlan_irq" ]; then
+            backup_and_write "/proc/irq/$wlan_irq/smp_affinity" ""
+            log "WiFi IRQ $wlan_irq affinity restored"
+        fi
+
+        for pattern in rmnet ccci qmi geni; do
+            local modem_irq
+            modem_irq=$(grep -r "$pattern" /proc/interrupts 2>/dev/null | head -1 | awk '{print $1}' | tr -d ':')
+            if [ -n "$modem_irq" ]; then
+                backup_and_write "/proc/irq/$modem_irq/smp_affinity" ""
+                log "Modem IRQ $modem_irq affinity restored"
+            fi
+        done
+    fi
 }
 
 tweak_fast_dormancy() {
@@ -399,6 +429,15 @@ tweak_wifi_qos() {
                 backup_and_write "$path" "1"
             fi
         done
+
+        # v3.3.8: Restore roaming, APF, scan, and WMM settings
+        backup_and_write "/proc/net/wireless/roaming" ""
+        for f in /sys/class/net/wlan0/wireless/*/apf; do
+            if [ -f "$f" ]; then
+                backup_and_write "$f" ""
+            fi
+        done
+
         log "WiFi QoS settings restored"
     fi
 }

@@ -42,8 +42,8 @@ detect_rom() {
 
 # ─── Network Interface Detection ─────────────────────────────────────
 detect_active_interface() {
-    # Priority: wlan0 > rmnet_data0 > any other up interface
-    for iface in wlan0 rmnet_data0; do
+    # v3.3.8: Priority: wlan0 > rmnet_data0/1/2/3 (dual-SIM) > any other up interface
+    for iface in wlan0 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3; do
         local state=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null)
         if [ "$state" = "up" ]; then
             echo "$iface"
@@ -197,9 +197,10 @@ get_wifi_power_save() {
         return
     fi
     # v3.3.7: Qualcomm WCN6750 — no sysfs PS node. Check via dumpsys.
+    # v3.3.8: Return clean on/off value instead of raw dumpsys line.
     local ll=$(dumpsys wifi 2>/dev/null | grep -i "low.latency\|power.save\|mLowLatency" | head -1)
     if [ -n "$ll" ]; then
-        echo "$ll"
+        echo "$ll" | grep -qi "enabled\|on\|true" && echo "off" || echo "on"
         return
     fi
     echo "unknown"
@@ -289,44 +290,66 @@ main() {
     local best_avg=$g_avg
     local best_jitter=$g_jitter
     local best_loss=$g_loss
-    if [ "$(echo "$c_avg < $g_avg" | bc 2>/dev/null)" = "1" ] 2>/dev/null; then
+    local best_max=$g_max
+    if [ -n "$c_avg" ] && [ "$(echo "$c_avg < $g_avg" | bc 2>/dev/null)" = "1" ] 2>/dev/null; then
         best_avg=$c_avg
         best_jitter=$c_jitter
         best_loss=$c_loss
+        best_max=$c_max
     fi
 
-    # ── Quality Rating ──
-    local quality="excellent"
-    local quality_score=100
-
-    # Jitter is the most important metric for CODM bullet registration
-    local jitter_int=$(echo "$best_jitter" | cut -d'.' -f1)
-    jitter_int=${jitter_int:-0}
-
-    if [ "$jitter_int" -le 3 ] 2>/dev/null; then
-        quality="excellent"
-        quality_score=100
-    elif [ "$jitter_int" -le 8 ] 2>/dev/null; then
-        quality="good"
-        quality_score=80
-    elif [ "$jitter_int" -le 15 ] 2>/dev/null; then
-        quality="fair"
-        quality_score=60
-    elif [ "$jitter_int" -le 30 ] 2>/dev/null; then
-        quality="poor"
-        quality_score=40
-    else
-        quality="terrible"
-        quality_score=20
-    fi
-
-    # Degrade if packet loss detected
+    # v3.3.8: If both pings failed (avg=0 or loss=100), mark unreachable
+    # instead of incorrectly rating as "excellent" with 0 jitter.
+    local best_avg_int=$(echo "$best_avg" | cut -d'.' -f1)
+    best_avg_int=${best_avg_int:-0}
     local loss_int=$(echo "$best_loss" | cut -d'.' -f1)
     loss_int=${loss_int:-0}
-    if [ "$loss_int" -gt 5 ] 2>/dev/null; then
-        quality_score=$(( quality_score - 30 ))
-    elif [ "$loss_int" -gt 0 ] 2>/dev/null; then
-        quality_score=$(( quality_score - 15 ))
+
+    if [ "$best_avg_int" -eq 0 ] 2>/dev/null || [ "$loss_int" -ge 100 ] 2>/dev/null; then
+        quality="unreachable"
+        quality_score=0
+    else
+        # ── Quality Rating ──
+        # v3.3.8: Consider both jitter AND RTT for quality rating.
+        # High RTT (>100ms) is bad for gaming even with low jitter.
+
+        local quality="excellent"
+        local quality_score=100
+
+        # Jitter is the most important metric for CODM bullet registration
+        local jitter_int=$(echo "$best_jitter" | cut -d'.' -f1)
+        jitter_int=${jitter_int:-0}
+
+        if [ "$jitter_int" -le 3 ] 2>/dev/null; then
+            quality="excellent"
+            quality_score=100
+        elif [ "$jitter_int" -le 8 ] 2>/dev/null; then
+            quality="good"
+            quality_score=80
+        elif [ "$jitter_int" -le 15 ] 2>/dev/null; then
+            quality="fair"
+            quality_score=60
+        elif [ "$jitter_int" -le 30 ] 2>/dev/null; then
+            quality="poor"
+            quality_score=40
+        else
+            quality="terrible"
+            quality_score=20
+        fi
+
+        # RTT penalty: high latency hurts gaming even with low jitter
+        if [ "$best_avg_int" -gt 200 ] 2>/dev/null; then
+            quality_score=$(( quality_score - 20 ))
+        elif [ "$best_avg_int" -gt 150 ] 2>/dev/null; then
+            quality_score=$(( quality_score - 10 ))
+        fi
+
+        # Degrade if packet loss detected
+        if [ "$loss_int" -gt 5 ] 2>/dev/null; then
+            quality_score=$(( quality_score - 30 ))
+        elif [ "$loss_int" -gt 0 ] 2>/dev/null; then
+            quality_score=$(( quality_score - 15 ))
+        fi
     fi
 
     # Clamp

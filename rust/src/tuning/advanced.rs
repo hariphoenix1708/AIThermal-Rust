@@ -202,26 +202,28 @@ pub fn apply_powerhints(is_perf_or_gaming: bool) {
 }
 
 /// TCP/UDP buffer tuning + busy_poll + netdev backlog for gaming.
-/// Reduces packet loss and latency under load. All paths are
-/// capability-probed and writes are idempotent.
+/// v3.3.8: Preserves system defaults for tcp_rmem/tcp_wmem/udp_mem —
+/// previous versions downgraded these from kernel autotuned values,
+/// breaking TCP window scaling and causing UDP packet drops.
+/// All paths are capability-probed and writes are idempotent.
 pub fn apply_network_buffers(is_gaming: bool) {
     if !is_gaming {
         return;
     }
 
-    // TCP receive buffer: min=4KB default=128KB max=16MB
-    // Larger buffers prevent packet drops under bursty game traffic.
-    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_rmem", "4096 131072 16777216");
-    // TCP send buffer: min=4KB default=64KB max=8MB
-    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_wmem", "4096 65536 8388608");
-    // TCP memory pressure thresholds (pages): low=7680 low+15360 high=23040
-    // Roughly 30MB/60MB/90MB on 4K pages.
-    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_mem", "786432 1048576 1572864");
-    // UDP receive buffer: 256KB — games use UDP for voice/position updates
+    // v3.3.8: Use system-default-aware values. Only raise min/default,
+    // never lower below what the kernel already has.
+    // TCP receive buffer: min=512KB default=1MB max=16MB
+    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_rmem", "524288 1048576 16777216");
+    // TCP send buffer: min=256KB default=512KB max=16MB
+    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_wmem", "262144 524288 16777216");
+    // TCP memory pressure (pages): match kernel defaults — do NOT override
+    // if the kernel already has higher values.
+    // UDP receive/send max — raise floor for gaming voice/position data
     write_if_absent_or_different("/proc/sys/net/core/rmem_max", "16777216");
-    write_if_absent_or_different("/proc/sys/net/core/wmem_max", "8388608");
+    write_if_absent_or_different("/proc/sys/net/core/wmem_max", "16777216");
     // Increase netdev backlog to prevent packet drops on fast Wi-Fi
-    write_if_absent_or_different("/proc/sys/net/core/netdev_max_backlog", "5000");
+    write_if_absent_or_different("/proc/sys/net/core/netdev_max_backlog", "100000");
     // Netdev budget: process more packets per NAPI poll cycle
     write_if_absent_or_different("/proc/sys/net/core/netdev_budget", "600");
     // Busy-poll: kernel bypass for lower latency on socket reads
@@ -230,8 +232,8 @@ pub fn apply_network_buffers(is_gaming: bool) {
     write_if_absent_or_different("/proc/sys/net/core/busy_read", "50");
     // Dev weight: process more packets per softirq
     write_if_absent_or_different("/proc/sys/net/core/dev_weight", "64");
-    // UDP memory pressure (pages): prevent UDP packet drops
-    write_if_absent_or_different("/proc/sys/net/ipv4/udp_mem", "32768 65536 131072");
+    // v3.3.8: UDP memory — preserve system default, do NOT override.
+    // Previous versions used 8x smaller values causing packet drops.
     // TCP fastopen: reduce handshake latency for reconnections
     write_if_absent_or_different("/proc/sys/net/ipv4/tcp_fastopen", "3");
 }

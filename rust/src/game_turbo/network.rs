@@ -117,37 +117,86 @@ impl NetworkState {
         self.wifi_ps_path = None;
     }
 
-    /// v3.3.7: Enable RPS (Receive Packet Steering) to distribute WiFi packet
-    /// processing across all CPUs. On SM8635, all WLAN interrupts land on
-    /// CPU0 — without RPS this causes softirq storms and ping spikes.
+    /// v3.3.8: Enable RPS (Receive Packet Steering) on all active network
+    /// interfaces. On SM8635, all WLAN and modem interrupts land on CPU0 —
+    /// without RPS this causes softirq storms and ping spikes.
+    /// v3.3.8: Also enables RPS on mobile data (rmnet) interfaces.
     pub fn activate_rps(&mut self) {
-        let iface = "wlan0";
         let cpus_all = "ff";
-        let rx_queues_dir = format!("/sys/class/net/{}/queues", iface);
+        let mut ifaces: Vec<String> = Vec::new();
 
-        if let Ok(entries) = fs::read_dir(&rx_queues_dir) {
+        // Discover active interfaces: wlan0 + all up rmnet_data*
+        for name in &["wlan0"] {
+            if std::path::Path::new(&format!("/sys/class/net/{}/operstate", name)).exists() {
+                ifaces.push(name.to_string());
+            }
+        }
+        // Also check all rmnet_data* interfaces for mobile data gaming
+        if let Ok(entries) = fs::read_dir("/sys/class/net") {
             for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if !name_str.starts_with("rx-") {
-                    continue;
-                }
-                let rps_path = format!("{}/{}/rps_cpus", rx_queues_dir, name_str);
-                if !std::path::Path::new(&rps_path).exists() {
-                    continue;
-                }
-                if !self.rps_saved.contains_key(&rps_path)
-                    && let Ok(orig) = fs::read_to_string(&rps_path)
-                {
-                    self.rps_saved
-                        .insert(rps_path.clone(), orig.trim().to_string());
-                }
-                if write_file(&rps_path, cpus_all) {
-                    tracing::debug!(target: "game_turbo", "RPS {} -> {}", rps_path, cpus_all);
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("rmnet_data") {
+                    let operstate = format!("/sys/class/net/{}/operstate", name);
+                    if std::path::Path::new(&operstate).exists() {
+                        ifaces.push(name);
+                    }
                 }
             }
         }
 
+        let mut total_rps_cpus = 0usize;
+
+        for iface in &ifaces {
+            let rx_queues_dir = format!("/sys/class/net/{}/queues", iface);
+
+            // Pass 1: Set rps_cpus on each rx queue
+            if let Ok(entries) = fs::read_dir(&rx_queues_dir) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if !name_str.starts_with("rx-") {
+                        continue;
+                    }
+                    let rps_path = format!("{}/{}/rps_cpus", rx_queues_dir, name_str);
+                    if !std::path::Path::new(&rps_path).exists() {
+                        continue;
+                    }
+                    if !self.rps_saved.contains_key(&rps_path)
+                        && let Ok(orig) = fs::read_to_string(&rps_path)
+                    {
+                        self.rps_saved
+                            .insert(rps_path.clone(), orig.trim().to_string());
+                    }
+                    if write_file(&rps_path, cpus_all) {
+                        total_rps_cpus += 1;
+                        tracing::debug!(target: "game_turbo", "RPS {} -> {}", rps_path, cpus_all);
+                    }
+                }
+            }
+
+            // Pass 2: Set rps_flow_cnt on each rx queue
+            if let Ok(entries) = fs::read_dir(&rx_queues_dir) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if !name_str.starts_with("rx-") {
+                        continue;
+                    }
+                    let flow_cnt_path = format!("{}/{}/rps_flow_cnt", rx_queues_dir, name_str);
+                    if std::path::Path::new(&flow_cnt_path).exists() {
+                        if !self.rps_saved.contains_key(&flow_cnt_path)
+                            && let Ok(orig) = fs::read_to_string(&flow_cnt_path)
+                        {
+                            self.rps_saved
+                                .insert(flow_cnt_path.clone(), orig.trim().to_string());
+                        }
+                        write_file(&flow_cnt_path, "4096");
+                    }
+                }
+            }
+        }
+
+        // Set global RPS sock flow entries
         let flow_path = "/proc/sys/net/core/rps_sock_flow_entries";
         if std::path::Path::new(flow_path).exists() {
             if let Ok(orig) = fs::read_to_string(flow_path) {
@@ -156,31 +205,11 @@ impl NetworkState {
             write_file(flow_path, "32768");
         }
 
-        if let Ok(entries) = fs::read_dir(&rx_queues_dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if !name_str.starts_with("rx-") {
-                    continue;
-                }
-                let flow_cnt_path = format!("{}/{}/rps_flow_cnt", rx_queues_dir, name_str);
-                if std::path::Path::new(&flow_cnt_path).exists() {
-                    if !self.rps_saved.contains_key(&flow_cnt_path)
-                        && let Ok(orig) = fs::read_to_string(&flow_cnt_path)
-                    {
-                        self.rps_saved
-                            .insert(flow_cnt_path.clone(), orig.trim().to_string());
-                    }
-                    write_file(&flow_cnt_path, "4096");
-                }
-            }
-        }
-
         if !self.rps_saved.is_empty() {
             tracing::info!(
                 target: "game_turbo",
-                "RPS: enabled across all CPUs ({} sysfs nodes)",
-                self.rps_saved.len()
+                "RPS: enabled across {} interfaces ({} rx queues, cpus={})",
+                ifaces.len(), total_rps_cpus, cpus_all
             );
         }
     }
