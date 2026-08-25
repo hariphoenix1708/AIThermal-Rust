@@ -73,7 +73,7 @@ impl TouchState {
     /// Restore all saved scheduling parameters.
     pub fn deactivate(&mut self) {
         for tid in &self.boosted_tids {
-            let policy = self.saved_policy.get(tid).copied().unwrap_or(libc::SCHED_OTHER);
+            let policy = self.saved_policy.get(tid).copied().unwrap_or(libc::SCHED_NORMAL);
             let prio = self.saved_priority.get(tid).copied().unwrap_or(0);
             restore_scheduler(*tid, policy, prio);
         }
