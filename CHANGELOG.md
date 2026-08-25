@@ -1,5 +1,29 @@
 # Changelog
 
+## v3.3.2 (versionCode 362)
+### Fixed — Critical bugs from v3.3.1 on-device log analysis
+- **Network buffer downgrade (CRITICAL)**: GameTurbo's `GAMING_NET_TUNABLES`
+  wrote `rmem_max=256KB` and `wmem_max=256KB`, overwriting the shell script's
+  optimal values (16MB and 8MB respectively). Removed all entries from
+  GameTurbo that conflict with `tweak_network_gaming.sh` — the shell script
+  handles network buffer tuning correctly with full backup/restore.
+- **I/O scheduler tuning ram devices**: `ram0`-`ram15` (RAM disk block
+  devices) were being set to `none` I/O scheduler. Added `"ram"` to
+  `SKIP_PREFIXES` so only real storage is tuned.
+- **`uclamp.max` ERANGE on SM8635**: Writing `"512"` to
+  `/dev/cpuctl/background/cpu.uclamp.max` failed with errno 34 (ERANGE) on
+  some Qualcomm kernels that use 0-100 percentage range instead of 0-1024.
+  Added automatic fallback: tries `"512"` first, then `"50"` if ERANGE.
+- **Battery drain stuck at -360%/hr at 100% SOC**: When battery reached 100%
+  and stopped charging, the cached drain rate from the charge-up phase
+  persisted indefinitely. Now returns `None` when SOC=100% and not charging.
+- **Game profile stats always zero**: `avg_session_peak_temp`,
+  `last_jank_pct`, and `last_p90_ms` in per-game profiles were never updated
+  because the orchestrator passed hardcoded 0.0 values. Added session-level
+  worst-case tracking via `RuntimeContext` (`game_session_worst_jank_pct`,
+  `game_session_worst_p90_ms`) and wired it to `record_game_turbo_session`.
+  `avg_session_peak_temp` now computed from all sessions (not just GameTurbo).
+
 ## v3.2.34 (versionCode 354)
 ### Fixed — Network probe targets and battery drain calculation
 - **RTT regression fix**: Reordered ICMP ping targets — DNS resolvers

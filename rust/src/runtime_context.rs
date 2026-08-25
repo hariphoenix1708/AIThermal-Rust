@@ -23,4 +23,8 @@ pub struct RuntimeContext {
     pub last_gaming_state: bool,
     pub plugged_in_at: Option<std::time::Instant>,
     pub screen_off_since: Option<std::time::Instant>,
+    /// Worst jank percentage observed during current game session.
+    pub game_session_worst_jank_pct: f64,
+    /// Worst p90 frame time (ms) observed during current game session.
+    pub game_session_worst_p90_ms: f64,
 }

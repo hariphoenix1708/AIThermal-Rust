@@ -14,7 +14,7 @@ const GAMING_SCHEDULER: &str = "mq-deadline";
 const GAMING_READ_AHEAD: &str = "2048";
 
 /// Block devices to skip (virtual / not real storage).
-const SKIP_PREFIXES: &[&str] = &["dm-", "loop", "zram"];
+const SKIP_PREFIXES: &[&str] = &["dm-", "loop", "zram", "ram"];
 
 pub struct IoSchedulerState {
     /// dev_name -> original scheduler name.

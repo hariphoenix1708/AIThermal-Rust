@@ -141,7 +141,15 @@ impl BatteryStatsTracker {
 
         // Return drain_rate if SOC changed, otherwise return cached drain
         // so the log always shows the most recent known rate.
-        drain_rate.or(self.cached_drain)
+        //
+        // When at 100% SOC and not charging, the cached drain is stale
+        // (it was computed during the charge-up phase). Return None to
+        // avoid showing misleading negative drain values.
+        if soc_percent >= 100 && !is_charging {
+            None
+        } else {
+            drain_rate.or(self.cached_drain)
+        }
     }
 
     pub fn summary_line(&self) -> String {

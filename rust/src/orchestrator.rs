@@ -515,6 +515,8 @@ impl SystemOrchestrator {
             last_gaming_state: false,
             plugged_in_at: None,
             screen_off_since: None,
+            game_session_worst_jank_pct: 0.0,
+            game_session_worst_p90_ms: 0.0,
         };
         Self {
             sensors: SensorManager::new(),
@@ -1020,14 +1022,16 @@ impl RuntimeTask for SystemOrchestrator {
                 &pkg,
                 turbo_throttled,
                 ctx.game_session_peak_temp,
-                0.0, // jank_pct — filled from frame stats if available
-                0.0, // p90_ms — filled from frame stats if available
+                ctx.game_session_worst_jank_pct,
+                ctx.game_session_worst_p90_ms,
             ) {
                 tracing::warn!("Failed to record GameTurbo stats for {}: {}", pkg, e);
             }
 
             ctx.last_session_peak_temp = ctx.game_session_peak_temp;
             ctx.game_session_peak_temp = 0;
+            ctx.game_session_worst_jank_pct = 0.0;
+            ctx.game_session_worst_p90_ms = 0.0;
             ctx.game_session_started_at = None;
             ctx.current_game = None;
 
@@ -1592,9 +1596,20 @@ impl RuntimeTask for SystemOrchestrator {
                         && s.p90_frame_ns < 500_000_000  // 500 ms sanity cap
                         && s.frame_count() >= 5 =>
                 {
+                    let jank_pct = s.jank_ratio() as f64 * 100.0;
+                    let p90_ms = s.p90_frame_ns as f64 / 1_000_000.0;
+
+                    // Track worst jank/p90 for the session.
+                    if jank_pct > ctx.game_session_worst_jank_pct {
+                        ctx.game_session_worst_jank_pct = jank_pct;
+                    }
+                    if p90_ms > ctx.game_session_worst_p90_ms {
+                        ctx.game_session_worst_p90_ms = p90_ms;
+                    }
+
                     (
-                        format!("{:.2}", s.jank_ratio() * 100.0),
-                        format!("{:.1}ms", s.p90_frame_ns as f64 / 1_000_000.0),
+                        format!("{:.2}", jank_pct),
+                        format!("{:.1}ms", p90_ms),
                     )
                 }
                 Some(s) if s.frame_count() < 5 => {

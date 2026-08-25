@@ -16,19 +16,11 @@ const WIFI_PS_PATHS: &[&str] = &[
 /// /proc/sys/net tunables to boost for gaming network performance.
 /// (path, gaming_value, description)
 const GAMING_NET_TUNABLES: &[(&str, &str, &str)] = &[
-    // UDP receive buffer: game packets (voice, position updates) are UDP.
-    // 256 KB prevents kernel drops during burst traffic.
-    (
-        "/proc/sys/net/core/rmem_max",
-        "262144",
-        "UDP/TCP max receive buffer",
-    ),
-    (
-        "/proc/sys/net/core/wmem_max",
-        "262144",
-        "UDP/TCP max send buffer",
-    ),
     // Default buffers: raise baseline so new sockets inherit larger buffers.
+    // NOTE: rmem_max/wmem_max are intentionally NOT tuned here — the shell
+    // script already sets optimal values via the ROM-specific path. Tuning
+    // them in the daemon would conflict and potentially downgrade the system
+    // values (e.g. from 16MB to 256KB).
     (
         "/proc/sys/net/core/rmem_default",
         "262144",
@@ -38,24 +30,6 @@ const GAMING_NET_TUNABLES: &[(&str, &str, &str)] = &[
         "/proc/sys/net/core/wmem_default",
         "262144",
         "UDP/TCP default send buffer",
-    ),
-    // Increase the max socket receive buffer size for game sockets.
-    (
-        "/proc/sys/net/core/optmem_max",
-        "4096",
-        "ancillary buffer max",
-    ),
-    // Increase UDP memory pressure threshold (pages).
-    (
-        "/proc/sys/net/ipv4/udp_mem",
-        "65536 131072 262144",
-        "UDP memory pressure",
-    ),
-    // Increase the max datagram queue length to prevent drops.
-    (
-        "/proc/sys/net/core/netdev_max_backlog",
-        "4096",
-        "netdev backlog",
     ),
 ];
 

@@ -83,6 +83,8 @@ impl Daemon {
             last_gaming_state: false,
             plugged_in_at: None,
             screen_off_since: None,
+            game_session_worst_jank_pct: 0.0,
+            game_session_worst_p90_ms: 0.0,
         };
 
         let now = std::time::SystemTime::now()

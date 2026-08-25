@@ -186,6 +186,13 @@ impl GameProfileManager {
         profile.avg_peak_temp =
             (profile.avg_peak_temp * (n - 1.0) + peak_temp as f64) / n;
 
+        // Running average across ALL sessions (not just GameTurbo ones).
+        let total_n = profile.session_count as f64;
+        if total_n > 0.0 {
+            profile.avg_session_peak_temp =
+                (profile.avg_session_peak_temp * (total_n - 1.0) + peak_temp as f64) / total_n;
+        }
+
         self.save()
     }
 

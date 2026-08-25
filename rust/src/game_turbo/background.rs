@@ -14,6 +14,9 @@ const BG_UCLAMP_MAX: &str = "512";
 const BG_UCLAMP_MIN: &str = "0";
 const UCLAMP_MAX_DEFAULT: &str = "max";
 
+/// Fallback value if the kernel uses 0-100 range instead of 0-1024.
+const BG_UCLAMP_MAX_PCT: &str = "50";
+
 const CGROUP_PATHS: &[&str] = &[
     "/dev/cpuctl/background",
     "/dev/cpuctl/sys-background",
@@ -52,12 +55,18 @@ impl BackgroundState {
                     .insert(uclamp_max_path.clone(), UCLAMP_MAX_DEFAULT.to_string());
             }
 
-            // Clamp max.
+            // Clamp max — try 0-1024 range first, fall back to 0-100% if ERANGE.
             if write_str(&uclamp_max_path, BG_UCLAMP_MAX) {
                 tracing::debug!(
                     target: "game_turbo",
                     "Background lockdown: {} -> {}",
                     uclamp_max_path, BG_UCLAMP_MAX
+                );
+            } else if write_str(&uclamp_max_path, BG_UCLAMP_MAX_PCT) {
+                tracing::debug!(
+                    target: "game_turbo",
+                    "Background lockdown: {} -> {} (percentage fallback)",
+                    uclamp_max_path, BG_UCLAMP_MAX_PCT
                 );
             }
 
