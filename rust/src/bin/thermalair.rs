@@ -253,26 +253,154 @@ fn show_policy() {
 }
 
 fn show_gaming() {
-    let state_file = std::env::var("THERMALAI_STATE_DIR")
-        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string())
-        + "/thermalai_state.json";
-    match std::fs::read_to_string(&state_file) {
+    let state_dir = std::env::var("THERMALAI_STATE_DIR")
+        .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
+
+    let state_file = format!("{}/thermalai_state.json", state_dir);
+    let profile_file = format!("{}/game_profiles.json", state_dir);
+
+    // --- GameTurbo status from daemon state ---
+    match fs::read_to_string(&state_file) {
         Err(_) => println!("Daemon not running (no state file found)"),
         Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
             Err(_) => println!("State file present but unreadable"),
             Ok(json) => {
-                if json.get("gaming").is_none()
-                    && json.get("status").and_then(|s| s.as_str()) == Some("starting")
-                {
-                    println!("Daemon running, waiting for first tick to complete");
-                } else {
-                    println!(
-                        "Gaming: {:?}",
-                        json.get("gaming").unwrap_or(&serde_json::Value::Null)
-                    );
+                let gaming = json.get("gaming");
+                let turbo = json.get("game_turbo_active");
+                let is_gaming = gaming
+                    .and_then(|g| g.get("is_gaming"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let pkg = gaming
+                    .and_then(|g| g.get("package"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("—");
+                let pid = gaming
+                    .and_then(|g| g.get("game_pid"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let jitter = gaming
+                    .and_then(|g| g.get("avg_jitter_ms"))
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let rtt = gaming
+                    .and_then(|g| g.get("avg_rtt_ms"))
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let fps = gaming
+                    .and_then(|g| g.get("fps"))
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let loss = gaming
+                    .and_then(|g| g.get("packet_loss"))
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+
+                let turbo_active = turbo.and_then(|v| v.as_bool()).unwrap_or(false);
+
+                println!("=== Gaming Status ===");
+                println!(
+                    "  Gaming:   {}",
+                    if is_gaming {
+                        format!("ACTIVE  ({})", pkg)
+                    } else {
+                        "inactive".to_string()
+                    }
+                );
+                if is_gaming {
+                    println!("  PID:      {}", pid);
+                    println!("  FPS:      {:.1}", fps);
+                }
+                println!(
+                    "  GameTurbo: {}",
+                    if turbo_active {
+                        "ACTIVE (8 features)"
+                    } else {
+                        "inactive"
+                    }
+                );
+                if is_gaming {
+                    println!("  Network:  RTT {:.1}ms | Jitter {:.1}ms | Loss {:.2}%", rtt, jitter, loss);
+                }
+
+                if !is_gaming && !turbo_active {
+                    // Show last session data
+                    let peak = json
+                        .get("last_session_peak_temp")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
+                    if peak > 0 {
+                        println!("  Last session peak: {}C", peak);
+                    }
                 }
             }
         },
+    }
+
+    // --- Per-game profiles ---
+    match fs::read_to_string(&profile_file) {
+        Err(_) => {
+            println!("\n  No game profiles recorded yet.");
+        }
+        Ok(content) => {
+            if let Ok(profiles) =
+                serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(obj) = profiles.as_object()
+            {
+                if obj.is_empty() {
+                    println!("\n  No game profiles recorded yet.");
+                    return;
+                }
+
+                // Sort by last_seen descending.
+                let mut entries: Vec<_> = obj.iter().collect();
+                entries.sort_by(|a, b| {
+                    let a_seen = a.1.get("last_seen").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let b_seen = b.1.get("last_seen").and_then(|v| v.as_u64()).unwrap_or(0);
+                    b_seen.cmp(&a_seen)
+                });
+
+                println!("\n=== Game Profiles ===");
+                println!(
+                    "  {:<35} {:>5} {:>6} {:>5} {:>5} {:>6}",
+                    "Package", "Sess", "MaxT", "Hot", "GTur", "AvgT"
+                );
+                println!("  {}", "-".repeat(65));
+
+                for (pkg, p) in entries.iter().take(15) {
+                    let sessions = p.get("session_count").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let max_t = p.get("max_temp").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let hot = if p.get("known_hot").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        "Y"
+                    } else {
+                        " "
+                    };
+                    let gt_sessions = p
+                        .get("game_turbo_sessions")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    let avg_t = p
+                        .get("avg_peak_temp")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
+
+                    let short_pkg = if pkg.len() > 34 {
+                        format!("{}…", &pkg[..33])
+                    } else {
+                        pkg.to_string()
+                    };
+
+                    println!(
+                        "  {:<35} {:>5} {:>5}C {:>5} {:>5} {:>5.1}C",
+                        short_pkg, sessions, max_t, hot, gt_sessions, avg_t
+                    );
+                }
+
+                if entries.len() > 15 {
+                    println!("  ... and {} more", entries.len() - 15);
+                }
+            }
+        }
     }
 }
 

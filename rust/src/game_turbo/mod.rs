@@ -83,6 +83,11 @@ impl GameTurboEngine {
         self.active
     }
 
+    /// Returns true if the engine entered thermal-throttle mode during this session.
+    pub fn was_thermally_throttled(&self) -> bool {
+        self.thermal_throttled
+    }
+
     /// Activate all enabled GameTurbo features for the given game PID.
     pub fn activate(&mut self, game_pid: u32, profiles: &ProfilesConfig) {
         if self.active {

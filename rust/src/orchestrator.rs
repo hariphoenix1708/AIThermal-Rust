@@ -1014,6 +1014,18 @@ impl RuntimeTask for SystemOrchestrator {
                 tracing::warn!("Failed to save game profile for {}: {}", pkg, e);
             }
 
+            // Record GameTurbo-specific session stats for per-game learning.
+            let turbo_throttled = self.game_turbo.was_thermally_throttled();
+            if let Err(e) = self.game_profiles.record_game_turbo_session(
+                &pkg,
+                turbo_throttled,
+                ctx.game_session_peak_temp,
+                0.0, // jank_pct — filled from frame stats if available
+                0.0, // p90_ms — filled from frame stats if available
+            ) {
+                tracing::warn!("Failed to record GameTurbo stats for {}: {}", pkg, e);
+            }
+
             ctx.last_session_peak_temp = ctx.game_session_peak_temp;
             ctx.game_session_peak_temp = 0;
             ctx.game_session_started_at = None;
