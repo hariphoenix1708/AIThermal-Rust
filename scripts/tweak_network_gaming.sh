@@ -122,34 +122,38 @@ tweak_wifi_power_save() {
 tweak_network_buffers() {
     local enable="$1"
     if [ "$enable" = "enable" ]; then
-        backup_and_write /proc/sys/net/ipv4/tcp_rmem "4096 131072 16777216"
-        backup_and_write /proc/sys/net/ipv4/tcp_wmem "4096 65536 8388608"
-        backup_and_write /proc/sys/net/ipv4/tcp_mem "786432 1048576 1572864"
+        # v3.3.6: Use values >= system defaults. Previous versions downgraded
+        # tcp_rmem/tcp_wmem/udp_mem from the kernel's well-tuned 12GB defaults,
+        # causing TCP window scaling issues (game opening) and UDP packet drops
+        # (in-match). The kernel autotuning on SM8635 is already optimal.
+        backup_and_write /proc/sys/net/ipv4/tcp_rmem "524288 1048576 16777216"
+        backup_and_write /proc/sys/net/ipv4/tcp_wmem "262144 524288 16777216"
+        backup_and_write /proc/sys/net/ipv4/tcp_mem "134106 178808 268212"
+        backup_and_write /proc/sys/net/ipv4/udp_mem "268212 357617 536424"
         backup_and_write /proc/sys/net/core/rmem_max "16777216"
-        backup_and_write /proc/sys/net/core/wmem_max "8388608"
-        backup_and_write /proc/sys/net/ipv4/udp_mem "32768 65536 131072"
+        backup_and_write /proc/sys/net/core/wmem_max "16777216"
         backup_and_write /proc/sys/net/core/netdev_max_backlog "100000"
         backup_and_write /proc/sys/net/core/netdev_budget "600"
         backup_and_write /proc/sys/net/core/busy_poll "50"
         backup_and_write /proc/sys/net/core/busy_read "50"
         backup_and_write /proc/sys/net/core/dev_weight "64"
-        backup_and_write /proc/sys/net/ipv4/tcp_fastopen "3"
         backup_and_write /proc/sys/net/ipv4/tcp_keepalive_time "600"
+        backup_and_write /proc/sys/net/ipv4/tcp_fastopen "3"
         log "Network buffers tuned for gaming"
     else
-        backup_and_write /proc/sys/net/ipv4/tcp_rmem "4096 131072 6291456"
-        backup_and_write /proc/sys/net/ipv4/tcp_wmem "4096 16384 4194304"
-        backup_and_write /proc/sys/net/ipv4/tcp_mem "383508 511344 767016"
-        backup_and_write /proc/sys/net/core/rmem_max "212992"
-        backup_and_write /proc/sys/net/core/wmem_max "212992"
-        backup_and_write /proc/sys/net/ipv4/udp_mem "768 1024 1536"
-        backup_and_write /proc/sys/net/core/netdev_max_backlog "1000"
+        backup_and_write /proc/sys/net/ipv4/tcp_rmem "524288 1048576 16777216"
+        backup_and_write /proc/sys/net/ipv4/tcp_wmem "262144 524288 16777216"
+        backup_and_write /proc/sys/net/ipv4/tcp_mem "134106 178808 268212"
+        backup_and_write /proc/sys/net/ipv4/udp_mem "268212 357617 536424"
+        backup_and_write /proc/sys/net/core/rmem_max "16777216"
+        backup_and_write /proc/sys/net/core/wmem_max "16777216"
+        backup_and_write /proc/sys/net/core/netdev_max_backlog "10000"
         backup_and_write /proc/sys/net/core/netdev_budget "300"
         backup_and_write /proc/sys/net/core/busy_poll "0"
         backup_and_write /proc/sys/net/core/busy_read "0"
-        backup_and_write /proc/sys/net/core/dev_weight "64"
-        backup_and_write /proc/sys/net/ipv4/tcp_fastopen "1"
+        backup_and_write /proc/sys/net/core/dev_weight "1"
         backup_and_write /proc/sys/net/ipv4/tcp_keepalive_time "7200"
+        backup_and_write /proc/sys/net/ipv4/tcp_fastopen "1"
         log "Network buffers restored to defaults"
     fi
 }
@@ -326,35 +330,23 @@ tweak_wifi_qos() {
 
 tweak_tcp_nodelay() {
     local enable="$1"
-    # Enable TCP_NODELAY equivalent via sysfs: disable Nagle's algorithm globally
-    # for new connections. This is critical for FPS games — CODM sends many small
-    # packets (position updates, shots) that Nagle would batch, adding 40-200ms.
-    #
-    # We use tcp_low_latency which hints the kernel to prioritize latency over
-    # throughput, and disable tcp_moderate_rcvbuf to avoid receive buffer delays.
+    # v3.3.6: Simplified TCP latency tweaks.
+    # REMOVED: tcp_timestamps=0 — disables TCP window scaling (limited to 64KB),
+    # breaks RTTM accuracy, and causes game server connections to fail/stall.
+    # REMOVED: tcp_delack_min=0 — doubles TCP packet rate on WiFi, causing
+    # airtime contention and increased latency. Also __UNWRITABLE__ on SM8635.
+    # REMOVED: tcp_init_cwnd=10 — default is already 10 on modern kernels,
+    # and setting cwnd>3 during SYN can break some game servers.
 
     if [ "$enable" = "enable" ]; then
-        # tcp_timestamps=0 reduces per-packet overhead by 12 bytes
-        # (saves ~1% CPU on high packet-rate connections)
-        backup_and_write /proc/sys/net/ipv4/tcp_timestamps "0"
-
-        # Disable delayed ACK (tcp_delack_min) — critical for game servers
-        # that wait for ACK before sending next state update
-        backup_and_write /proc/sys/net/ipv4/tcp_delack_min "0"
-
-        # Reduce initial congestion window to 10 (default is usually 10 on modern kernels)
-        # This ensures fast ramp-up on game connections
-        backup_and_write /proc/sys/net/ipv4/tcp_init_cwnd "10"
-
-        # Enable tcp_low_latency: hints kernel to prioritize latency
+        # tcp_low_latency: hints kernel to prioritize latency over throughput.
+        # Reduces bufferbloat by trimming TCP receive buffer growth.
         if [ -f /proc/sys/net/ipv4/tcp_low_latency ]; then
             backup_and_write /proc/sys/net/ipv4/tcp_low_latency "1"
         fi
 
-        log "TCP latency optimizations enabled (Nagle disabled, delayed ACK minimized)"
+        log "TCP latency optimizations enabled"
     else
-        backup_and_write /proc/sys/net/ipv4/tcp_timestamps "1"
-        backup_and_write /proc/sys/net/ipv4/tcp_delack_min "40"
         if [ -f /proc/sys/net/ipv4/tcp_low_latency ]; then
             backup_and_write /proc/sys/net/ipv4/tcp_low_latency "0"
         fi

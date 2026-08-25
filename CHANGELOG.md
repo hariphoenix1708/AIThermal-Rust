@@ -1,5 +1,28 @@
 # Changelog
 
+## v3.3.6 (versionCode 366)
+### Fixed — Network connectivity during game opening and in-match
+- **Removed `tcp_timestamps=0`** (shell + Rust): This was disabling TCP window
+  scaling (limited to 64KB windows), breaking RTTM accuracy, and causing game
+  server connections to fail/stall during game opening. TCP timestamps are
+  required for window scaling on Linux — the 12-byte savings per packet was
+  negligible compared to the throughput loss.
+- **Removed `tcp_delack_min=0`** (shell + Rust): This doubled the TCP packet
+  rate on WiFi (every packet gets immediate ACK), causing airtime contention
+  and increased latency. On SM8635 this sysctl is `__UNWRITABLE__` anyway.
+- **Removed `tcp_init_cwnd=10`** (shell + Rust): Default is already 10 on
+  modern kernels. Setting cwnd>3 during SYN can break some game servers.
+- **Fixed `tcp_rmem` downgrade**: Gaming value was `4096 131072 16777216`
+  (min=4K, default=128K) — 32x smaller than system default (512K/1MB). Now
+  preserves system defaults: `524288 1048576 16777216`.
+- **Fixed `tcp_wmem` downgrade**: Gaming value was `4096 65536 8388608`
+  (default=64K, max=8MB) —8x smaller default, max halved. Now preserves
+  system defaults: `262144 524288 16777216`.
+- **Fixed `udp_mem` 8x downgrade**: Gaming value was `32768 65536 131072`
+  (~512MB) vs system default `268212 357617 536424` (~2GB). CODM uses UDP
+  for real-time game data — reduced memory caused packet drops during matches.
+  Now preserves system defaults.
+
 ## v3.3.5 (versionCode 365)
 ### Added — GameTurbo Phase 3: Display & GPU optimizations
 - **GPU frequency floor during gaming**: New `gpu_freq` submodule in
