@@ -59,12 +59,19 @@ impl IoSchedulerState {
                     self.saved_schedulers
                         .insert(dev_str.to_string(), orig_str);
                     let path_str = sched_path.to_string_lossy().to_string();
-                    write_str(&path_str, GAMING_SCHEDULER);
-                    tracing::debug!(
-                        target: "game_turbo",
-                        "I/O scheduler: {} -> {} (gaming)",
-                        dev_str, GAMING_SCHEDULER
-                    );
+                    if write_str(&path_str, GAMING_SCHEDULER) {
+                        tracing::debug!(
+                            target: "game_turbo",
+                            "I/O scheduler: {} -> {} (gaming)",
+                            dev_str, GAMING_SCHEDULER
+                        );
+                    } else {
+                        tracing::warn!(
+                            target: "game_turbo",
+                            "I/O scheduler: {} write failed, keeping {}",
+                            dev_str, GAMING_SCHEDULER
+                        );
+                    }
                 }
             }
 
@@ -76,12 +83,19 @@ impl IoSchedulerState {
                 self.saved_read_ahead
                     .insert(dev_str.to_string(), orig_val);
                 let path_str = ra_path.to_string_lossy().to_string();
-                write_str(&path_str, GAMING_READ_AHEAD);
-                tracing::debug!(
-                    target: "game_turbo",
-                    "Read-ahead: {} {} -> {} (gaming)",
-                    dev_str, orig_val, GAMING_READ_AHEAD
-                );
+                if write_str(&path_str, GAMING_READ_AHEAD) {
+                    tracing::debug!(
+                        target: "game_turbo",
+                        "Read-ahead: {} {} -> {} (gaming)",
+                        dev_str, orig_val, GAMING_READ_AHEAD
+                    );
+                } else {
+                    tracing::warn!(
+                        target: "game_turbo",
+                        "Read-ahead: {} write failed, keeping {}",
+                        dev_str, orig_val
+                    );
+                }
             }
         }
 

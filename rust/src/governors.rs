@@ -37,9 +37,8 @@ impl GovernorManager {
         }
     }
 
-    pub fn discover_hardware(&mut self, hw_profile: &HardwareProfile) -> Result<()> {
+    pub fn discover_hardware(&mut self, hw_profile: &HardwareProfile) {
         self.hardware = hw_profile.clone();
-        Ok(())
     }
 
     pub fn apply_cpu_governor(&self, governor: &str) -> Result<(), BackendError> {
@@ -164,7 +163,7 @@ mod tests {
         profile.gpu_profile.is_kgsl = true;
 
         let mut manager = GovernorManager::new();
-        manager.discover_hardware(&profile).unwrap();
+        manager.discover_hardware(&profile);
         assert_eq!(manager.hardware.cpu_topology.clusters.len(), 1);
         assert_eq!(
             manager.hardware.cpu_topology.clusters[0].policy_path,

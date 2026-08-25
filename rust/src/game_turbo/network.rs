@@ -60,12 +60,18 @@ impl NetworkState {
                 if orig == "0" {
                     return; // Already disabled.
                 }
-                self.wifi_ps_original = Some(orig);
-                self.wifi_ps_path = Some(path.to_string());
                 if write_file(path, "0") {
+                    self.wifi_ps_original = Some(orig);
+                    self.wifi_ps_path = Some(path.to_string());
                     tracing::info!(
                         target: "game_turbo",
                         "WiFi PS: {} -> 0 (disabled for gaming)",
+                        path
+                    );
+                } else {
+                    tracing::debug!(
+                        target: "game_turbo",
+                        "WiFi PS: write to {} failed, not tracking",
                         path
                     );
                 }

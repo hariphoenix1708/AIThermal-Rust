@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.3.4 (versionCode 364)
+### Fixed — Silent error drops and incomplete error handling from codebase audit
+- **GPU power level writes silently discarded**: `apply_gpu_power_level()` return
+  was discarded via `let _ =` in two critical paths (game exit heat-shed and main
+  policy actuation). Now logs `WARN` on failure so GPU power state issues are visible.
+- **WiFi PS state inconsistency**: If the sysfs write to disable WiFi power-save
+  failed, the state still recorded it as modified. On deactivate, a "restore" would
+  write the original value to a setting that was never changed. Now only tracks the
+  path/original when the write succeeds.
+- **I/O scheduler writes silently ignored**: `write_str()` return values in
+  `io_scheduler.rs` were discarded during activation. Now logs `WARN` on failure
+  so blocked scheduler boosts are visible.
+- **Touch IRQ restore ignoring failure**: `restore_scheduler()` called
+  `set_scheduler()` but ignored the bool return. If restoring an IRQ thread's
+  scheduling policy fails, it stayed at SCHED_FIFO permanently with no log. Now
+  logs `DEBUG` on failure.
+- **PID race skipping entire GameTurbo session**: If `confirmed_pid` was `None`
+  at game detection (common with Zygote-forked games), GameTurbo activation was
+  skipped for the entire session. Now retries activation on subsequent ticks when
+  the PID becomes available.
+- **Unnecessary `Vec::clone()` in charging voter iteration**: Three
+  `for node in &self.voter_nodes.clone()` patterns cloned the entire voter list
+  just to iterate. Changed to `for node in &self.voter_nodes`.
+- **Magic battery thermal thresholds**: Hardcoded temperature values (42, 44, 46,
+  48, 50°C) replaced with named constants (`BATTERY_TEMP_HOT_THRESHOLD`,
+  `BATTERY_TEMP_THERMAL_STEP_1` through `_4`).
+- **GovernorManager::discover_hardware**: Changed return type from `Result<()>`
+  (which could never fail) to `()` to avoid misleading error handling at call site.
+
 ## v3.3.3 (versionCode 363)
 ### Fixed — Log noise and uclamp diagnostics from v3.3.2 on-device logs
 - **uclamp.max ERANGE logging**: Both `"512"` and `"50"` fail on

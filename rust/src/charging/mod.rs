@@ -10,6 +10,15 @@ use std::path::Path;
 /// and the counter never reaches the threshold.
 const VOTER_DISABLE_THRESHOLD: u32 = 3;
 
+/// Battery temperature thresholds for charging thermal caps (°C).
+/// These represent Xiaomi/Qualcomm battery safety boundaries where
+/// the kernel starts negotiating lower charge rates.
+const BATTERY_TEMP_HOT_THRESHOLD: i32 = 42;
+const BATTERY_TEMP_THERMAL_STEP_1: i32 = 44;
+const BATTERY_TEMP_THERMAL_STEP_2: i32 = 46;
+const BATTERY_TEMP_THERMAL_STEP_3: i32 = 48;
+const BATTERY_TEMP_THERMAL_STEP_4: i32 = 50;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChargeState {
     Disconnected,
@@ -205,12 +214,12 @@ impl ChargingEngine {
                 tracing::info!(target: "charging", "  {} = {}", path, v.trim());
             }
         }
-        for node in &self.voter_nodes.clone() {
+        for node in &self.voter_nodes {
             if let Ok(v) = std::fs::read_to_string(node) {
                 tracing::info!(target: "charging", "  {} = {}  (writable)", node, v.trim());
             }
         }
-        for node in &self.voter_nodes.clone() {
+        for node in &self.voter_nodes {
             if node.ends_with("/restrict_cur")
                 && let Ok(v) = std::fs::read_to_string(node)
                 && let Ok(ua) = v.trim().parse::<i64>()
@@ -392,7 +401,7 @@ impl ChargingEngine {
         // temperature the kernel's own battery thermal mitigation is a
         // safety backstop — clearing it would suppress the kernel-side
         // emergency charge throttle before any AIThermal state check runs.
-        if bat_temp >= 44 {
+        if bat_temp >= BATTERY_TEMP_THERMAL_STEP_1 {
             tracing::info!(target: "charging",
                 "Battery cooling device clear skipped (bat_temp={}°C ≥ 44°C) — kernel thermal mitigation preserved",
                 bat_temp);
@@ -478,7 +487,7 @@ impl ChargingEngine {
             }
         };
 
-        for node in &self.voter_nodes.clone() {
+        for node in &self.voter_nodes {
             // Skip nodes disabled due to repeated failures this session.
             if self.voter_disabled.contains(node) {
                 continue;
@@ -614,7 +623,7 @@ impl ChargingEngine {
         // Never let MaxSpeed / Urgent stand if the battery is already hot.
         // 42°C is the point where Xiaomi's own kernel starts
         // negotiating down to 5V·3A anyway.
-        let hot = inputs.battery_temp >= 42;
+        let hot = inputs.battery_temp >= BATTERY_TEMP_HOT_THRESHOLD;
 
         let chosen = if !inputs.is_plugged && inputs.plug_state_reliable {
             ChargeMode::Adaptive
@@ -761,14 +770,14 @@ impl ChargingEngine {
             return ChargeState::Disconnected;
         }
 
-        if inputs.battery_temp >= 50
+        if inputs.battery_temp >= BATTERY_TEMP_THERMAL_STEP_4
             || inputs.charger_temp >= 70
             || inputs.usb_temp >= 65
             || inputs.pmic_temp >= 70
         {
             ChargeState::Emergency
-        } else if (inputs.battery_temp >= 44 && *mode != ChargeMode::Urgent)
-            || (inputs.battery_temp >= 48 && *mode == ChargeMode::Urgent)
+        } else if (inputs.battery_temp >= BATTERY_TEMP_THERMAL_STEP_1 && *mode != ChargeMode::Urgent)
+            || (inputs.battery_temp >= BATTERY_TEMP_THERMAL_STEP_3 && *mode == ChargeMode::Urgent)
             || inputs.charger_temp >= 60
             || inputs.usb_temp >= 55
             || inputs.pmic_temp >= 60
@@ -969,13 +978,13 @@ impl ChargingEngine {
 
         let base_target = Self::soc_target_ma(soc, &self.charge_mode);
 
-        let thermal_cap = if bat_temp >= 50 {
+        let thermal_cap = if bat_temp >= BATTERY_TEMP_THERMAL_STEP_4 {
             2000
-        } else if bat_temp >= 48 {
+        } else if bat_temp >= BATTERY_TEMP_THERMAL_STEP_3 {
             4000
-        } else if bat_temp >= 46 {
+        } else if bat_temp >= BATTERY_TEMP_THERMAL_STEP_2 {
             7000
-        } else if bat_temp >= 44 {
+        } else if bat_temp >= BATTERY_TEMP_THERMAL_STEP_1 {
             9000
         } else {
             base_target

@@ -229,7 +229,7 @@ impl SystemOrchestrator {
         sensors.discover_hardware(&hardware);
 
         let mut governors = GovernorManager::new();
-        let _ = governors.discover_hardware(&hardware);
+        governors.discover_hardware(&hardware);
 
         let mut cpuset = CpusetManager::new();
         cpuset.discover_hardware(&hardware);
@@ -810,9 +810,14 @@ impl RuntimeTask for SystemOrchestrator {
         }
 
         // v3.3.0: GameTurbo per-tick refresh (re-scan newly spawned threads).
+        // Also handles deferred activation when PID was unavailable at game detection.
         if is_gaming && ctx.config.profiles.game_turbo_enabled
             && let Some(pid) = self.gaming.confirmed_pid
         {
+            if !self.game_turbo.is_active() {
+                // Deferred activation — PID became available after initial detection.
+                self.game_turbo.activate(pid, &ctx.config.profiles);
+            }
             self.game_turbo.tick(pid);
         }
 
@@ -986,9 +991,15 @@ impl RuntimeTask for SystemOrchestrator {
                 .unwrap_or(0)
                 .max(self.hardware.gpu_profile.max_power_level.unwrap_or(4));
             if self.hardware.gpu_profile.max_power_level.is_some() {
-                let _ = self
+                if let Err(e) = self
                     .governors
-                    .apply_gpu_power_level(gpu_worst_at_exit.saturating_sub(1));
+                    .apply_gpu_power_level(gpu_worst_at_exit.saturating_sub(1))
+                {
+                    tracing::warn!(
+                        "GPU power level write failed at game exit: {}",
+                        e
+                    );
+                }
                 self.last_applied_gpu_level = Some(gpu_worst_at_exit.saturating_sub(1));
             }
 
@@ -1221,7 +1232,9 @@ impl RuntimeTask for SystemOrchestrator {
             && can_actuate {
                 self.last_actuation_at = Some(std::time::Instant::now());
 
-                let _ = self.governors.apply_gpu_power_level(gpu_level);
+                if let Err(e) = self.governors.apply_gpu_power_level(gpu_level) {
+                    tracing::warn!("GPU power level write failed: {}", e);
+                }
                 self.last_applied_gpu_level = Some(gpu_level);
 
                 match final_policy {

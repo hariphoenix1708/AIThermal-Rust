@@ -226,7 +226,13 @@ fn set_scheduler(tid: u32, policy: i32, priority: i32) -> bool {
 }
 
 fn restore_scheduler(tid: u32, policy: i32, priority: i32) {
-    set_scheduler(tid, policy, priority);
+    if !set_scheduler(tid, policy, priority) {
+        tracing::debug!(
+            target: "game_turbo",
+            "Touch restore: failed to restore tid {} to policy {} prio {}",
+            tid, policy, priority
+        );
+    }
 }
 
 #[cfg(test)]
