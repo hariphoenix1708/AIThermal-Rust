@@ -851,6 +851,17 @@ impl RuntimeTask for SystemOrchestrator {
             } else {
                 ctx.game_session_peak_temp = ctx.game_session_peak_temp.max(adj_temp);
             }
+
+            // v3.3.0: Thermal-aware GameTurbo — ease constraints when hot.
+            if ctx.config.profiles.game_turbo_enabled
+                && let Some(pid) = self.gaming.confirmed_pid
+            {
+                self.game_turbo.thermal_adjust(
+                    adj_temp,
+                    ctx.config.profiles.temp_hot,
+                    pid,
+                );
+            }
         }
         let is_cooling = self.thermal.is_cooling();
         // Calibration shifts offset only on a genuine rising ramp, not on
@@ -1799,6 +1810,7 @@ impl RuntimeTask for SystemOrchestrator {
                     _            => 0.85,
                 }
             }).unwrap_or(1.0),
+            "game_turbo_active": self.game_turbo.is_active(),
         });
 
         let policy_now = Self::policy_state_name(&final_policy).to_string();

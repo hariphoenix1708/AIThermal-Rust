@@ -117,6 +117,21 @@ impl AffinityState {
         self.pinned_tids.clear();
     }
 
+    /// Re-pin all currently pinned threads to a new affinity mask.
+    /// Used by thermal-aware mode to expand (big→all) or contract
+    /// (all→big) the allowed core set without losing track of originals.
+    pub fn update_mask(&self, _game_pid: u32, new_mask: u64) {
+        for tid in self.pinned_tids.keys() {
+            if write_affinity(*tid, new_mask) {
+                tracing::debug!(
+                    target: "game_turbo",
+                    "Re-pinned tid {} to mask {:#x}",
+                    tid, new_mask
+                );
+            }
+        }
+    }
+
     fn pin_thread(&mut self, tid: u32, big_mask: u64) {
         if self.pinned_tids.contains_key(&tid) {
             return;

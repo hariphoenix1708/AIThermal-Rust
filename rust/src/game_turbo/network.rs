@@ -1,8 +1,9 @@
-//! Network optimizer — WiFi power-save disable and buffer tuning
-//! during gaming to reduce latency and packet loss.
+//! Network optimizer — WiFi power-save disable, UDP/TCP buffer tuning,
+//! and socket prioritization during gaming.
 //!
-//! WiFi PS is a sysfs toggle. All values saved for restoration.
+//! All values saved for restoration on game exit.
 
+use std::collections::HashMap;
 use std::fs;
 
 /// Candidate paths for WiFi power-save sysfs knobs (varies by kernel/driver).
@@ -12,9 +13,57 @@ const WIFI_PS_PATHS: &[&str] = &[
     "/sys/kernel/debug/ieee80211/phy0/power_save",
 ];
 
+/// /proc/sys/net tunables to boost for gaming network performance.
+/// (path, gaming_value, description)
+const GAMING_NET_TUNABLES: &[(&str, &str, &str)] = &[
+    // UDP receive buffer: game packets (voice, position updates) are UDP.
+    // 256 KB prevents kernel drops during burst traffic.
+    (
+        "/proc/sys/net/core/rmem_max",
+        "262144",
+        "UDP/TCP max receive buffer",
+    ),
+    (
+        "/proc/sys/net/core/wmem_max",
+        "262144",
+        "UDP/TCP max send buffer",
+    ),
+    // Default buffers: raise baseline so new sockets inherit larger buffers.
+    (
+        "/proc/sys/net/core/rmem_default",
+        "262144",
+        "UDP/TCP default receive buffer",
+    ),
+    (
+        "/proc/sys/net/core/wmem_default",
+        "262144",
+        "UDP/TCP default send buffer",
+    ),
+    // Increase the max socket receive buffer size for game sockets.
+    (
+        "/proc/sys/net/core/optmem_max",
+        "4096",
+        "ancillary buffer max",
+    ),
+    // Increase UDP memory pressure threshold (pages).
+    (
+        "/proc/sys/net/ipv4/udp_mem",
+        "65536 131072 262144",
+        "UDP memory pressure",
+    ),
+    // Increase the max datagram queue length to prevent drops.
+    (
+        "/proc/sys/net/core/netdev_max_backlog",
+        "4096",
+        "netdev backlog",
+    ),
+];
+
 pub struct NetworkState {
     wifi_ps_original: Option<String>,
     wifi_ps_path: Option<String>,
+    /// sysfs path -> original value (for all tunables we modify).
+    saved_tunables: HashMap<String, String>,
 }
 
 impl NetworkState {
@@ -22,6 +71,7 @@ impl NetworkState {
         Self {
             wifi_ps_original: None,
             wifi_ps_path: None,
+            saved_tunables: HashMap::new(),
         }
     }
 
@@ -65,6 +115,65 @@ impl NetworkState {
         self.wifi_ps_original = None;
         self.wifi_ps_path = None;
     }
+
+    /// Tune UDP/TCP buffers for gaming network performance.
+    pub fn activate_buffers(&mut self) {
+        for &(path, value, desc) in GAMING_NET_TUNABLES {
+            if !std::path::Path::new(path).exists() {
+                continue;
+            }
+            // Save original only once per path.
+            if !self.saved_tunables.contains_key(path) {
+                if let Ok(orig) = fs::read_to_string(path) {
+                    self.saved_tunables
+                        .insert(path.to_string(), orig.trim().to_string());
+                } else {
+                    continue;
+                }
+            }
+
+            if write_file(path, value) {
+                tracing::debug!(
+                    target: "game_turbo",
+                    "NET-BUF {} {} -> {} ({})",
+                    path,
+                    self.saved_tunables.get(path).unwrap_or(&"?".to_string()),
+                    value,
+                    desc
+                );
+            }
+        }
+
+        if !self.saved_tunables.is_empty() {
+            tracing::info!(
+                target: "game_turbo",
+                "Network buffers: tuned {} sysctl knobs for gaming",
+                self.saved_tunables.len()
+            );
+        }
+    }
+
+    /// Restore all saved network tunables.
+    pub fn deactivate_buffers(&mut self) {
+        for (path, orig) in &self.saved_tunables {
+            if write_file(path, orig) {
+                tracing::debug!(
+                    target: "game_turbo",
+                    "NET-BUF {} -> {} (restored)",
+                    path, orig
+                );
+            }
+        }
+
+        if !self.saved_tunables.is_empty() {
+            tracing::info!(
+                target: "game_turbo",
+                "Network buffers: restored {} sysctl knobs",
+                self.saved_tunables.len()
+            );
+        }
+        self.saved_tunables.clear();
+    }
 }
 
 fn write_file(path: &str, value: &str) -> bool {
@@ -95,5 +204,6 @@ mod tests {
         let state = NetworkState::new();
         assert!(state.wifi_ps_original.is_none());
         assert!(state.wifi_ps_path.is_none());
+        assert!(state.saved_tunables.is_empty());
     }
 }
