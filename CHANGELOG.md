@@ -1,5 +1,18 @@
 # Changelog
 
+## v3.3.3 (versionCode 363)
+### Fixed — Log noise and uclamp diagnostics from v3.3.2 on-device logs
+- **uclamp.max ERANGE logging**: Both `"512"` and `"50"` fail on
+  `/dev/cpuctl/background/cpu.uclamp.max` on SM8635. Now reads the current
+  value before writing and logs a `WARN` with the current value and attempted
+  values when the kernel rejects both. Cgroups where the write fails are
+  excluded from the "clamped N cgroups" count (tracked separately as
+  "skipped").
+- **Thread affinity restore log spam**: Game exit tried to restore affinity
+  for ~29 threads that had already been killed by the game engine, producing
+  29 individual `DEBUG` "No such process" messages. Now batches failures
+  into a single summary line: `"restored 0/29 threads, 29 dead (skipped)"`.
+
 ## v3.3.2 (versionCode 362)
 ### Fixed — Critical bugs from v3.3.1 on-device log analysis
 - **Network buffer downgrade (CRITICAL)**: GameTurbo's `GAMING_NET_TUNABLES`

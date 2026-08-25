@@ -104,15 +104,31 @@ impl AffinityState {
 
     /// Restore all saved affinities.
     pub fn deactivate(&mut self) {
+        let mut restored = 0u32;
+        let mut failed = 0u32;
+        let mut not_found = 0u32;
+
         for (tid, orig_mask) in &self.saved_affinities {
-            restore_affinity(*tid, *orig_mask);
+            match restore_affinity(*tid, *orig_mask) {
+                RestoreResult::Ok => restored += 1,
+                RestoreResult::NoProcess => not_found += 1,
+                RestoreResult::WriteFailed => failed += 1,
+            }
         }
 
-        tracing::info!(
-            target: "game_turbo",
-            "Thread affinity: restored {} threads",
-            self.saved_affinities.len()
+        let total = self.saved_affinities.len();
+        let mut msg = format!(
+            "Thread affinity: restored {}/{} threads",
+            restored, total
         );
+        if not_found > 0 {
+            msg.push_str(&format!(", {} dead (skipped)", not_found));
+        }
+        if failed > 0 {
+            msg.push_str(&format!(", {} write failures", failed));
+        }
+        tracing::info!(target: "game_turbo", "{}", msg);
+
         self.saved_affinities.clear();
         self.pinned_tids.clear();
     }
@@ -122,7 +138,7 @@ impl AffinityState {
     /// (all→big) the allowed core set without losing track of originals.
     pub fn update_mask(&self, _game_pid: u32, new_mask: u64) {
         for tid in self.pinned_tids.keys() {
-            if write_affinity(*tid, new_mask) {
+            if write_affinity(*tid, new_mask).is_ok() {
                 tracing::debug!(
                     target: "game_turbo",
                     "Re-pinned tid {} to mask {:#x}",
@@ -142,7 +158,7 @@ impl AffinityState {
             self.saved_affinities.insert(tid, orig);
         }
 
-        if write_affinity(tid, big_mask) {
+        if write_affinity(tid, big_mask).is_ok() {
             self.pinned_tids.insert(tid, ());
             tracing::debug!(
                 target: "game_turbo",
@@ -172,7 +188,7 @@ fn read_affinity(tid: u32) -> Option<u64> {
 }
 
 /// Write a CPU affinity bitmask to a thread using sched_setaffinity.
-fn write_affinity(tid: u32, mask: u64) -> bool {
+fn write_affinity(tid: u32, mask: u64) -> Result<(), AffinityError> {
     unsafe {
         let mut cpu_set: libc::cpu_set_t = std::mem::zeroed();
         for bit in 0..64u32 {
@@ -187,25 +203,38 @@ fn write_affinity(tid: u32, mask: u64) -> bool {
         );
         if ret != 0 {
             let err = std::io::Error::last_os_error();
+            let err_code = err.raw_os_error().unwrap_or(0);
+            if err_code == libc::ESRCH {
+                return Err(AffinityError::NoProcess);
+            }
             tracing::debug!(
                 target: "game_turbo",
                 "sched_setaffinity failed for tid {}: {}",
                 tid, err
             );
-            return false;
+            return Err(AffinityError::WriteFailed);
         }
-        true
+        Ok(())
     }
 }
 
+enum AffinityError {
+    NoProcess,
+    WriteFailed,
+}
+
+enum RestoreResult {
+    Ok,
+    NoProcess,
+    WriteFailed,
+}
+
 /// Restore a thread's CPU affinity from a saved bitmask.
-fn restore_affinity(tid: u32, mask: u64) {
-    if write_affinity(tid, mask) {
-        tracing::debug!(
-            target: "game_turbo",
-            "Restored affinity for tid {} to {:#x}",
-            tid, mask
-        );
+fn restore_affinity(tid: u32, mask: u64) -> RestoreResult {
+    match write_affinity(tid, mask) {
+        Ok(()) => RestoreResult::Ok,
+        Err(AffinityError::NoProcess) => RestoreResult::NoProcess,
+        Err(AffinityError::WriteFailed) => RestoreResult::WriteFailed,
     }
 }
 

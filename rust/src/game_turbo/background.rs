@@ -38,6 +38,9 @@ impl BackgroundState {
 
     /// Activate: clamp all discovered background cgroups.
     pub fn activate(&mut self, _game_pid: u32) {
+        let mut clamped = 0u32;
+        let mut skipped = 0u32;
+
         for base in CGROUP_PATHS {
             let uclamp_max_path = format!("{}/cpu.uclamp.max", base);
             let uclamp_min_path = format!("{}/cpu.uclamp.min", base);
@@ -46,40 +49,60 @@ impl BackgroundState {
                 continue;
             }
 
-            // Save original value.
-            if let Ok(orig) = fs::read_to_string(&uclamp_max_path) {
-                let orig = orig.trim().to_string();
-                self.saved_uclamp_max.insert(uclamp_max_path.clone(), orig);
-            } else {
-                self.saved_uclamp_max
-                    .insert(uclamp_max_path.clone(), UCLAMP_MAX_DEFAULT.to_string());
-            }
+            // Read the current value before writing — needed for restoration
+            // and to diagnose ERANGE issues.
+            let orig_val = fs::read_to_string(&uclamp_max_path)
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|_| UCLAMP_MAX_DEFAULT.to_string());
 
-            // Clamp max — try 0-1024 range first, fall back to 0-100% if ERANGE.
-            if write_str(&uclamp_max_path, BG_UCLAMP_MAX) {
+            self.saved_uclamp_max
+                .insert(uclamp_max_path.clone(), orig_val.clone());
+
+            // If current value is "max" (unlimited), a numerical clamp may not
+            // be supported by this kernel. Try anyway but handle ERANGE.
+            let wrote = if write_str(&uclamp_max_path, BG_UCLAMP_MAX) {
                 tracing::debug!(
                     target: "game_turbo",
-                    "Background lockdown: {} -> {}",
-                    uclamp_max_path, BG_UCLAMP_MAX
+                    "Background lockdown: {} '{}' -> {}",
+                    uclamp_max_path, orig_val, BG_UCLAMP_MAX
                 );
+                true
             } else if write_str(&uclamp_max_path, BG_UCLAMP_MAX_PCT) {
                 tracing::debug!(
                     target: "game_turbo",
-                    "Background lockdown: {} -> {} (percentage fallback)",
-                    uclamp_max_path, BG_UCLAMP_MAX_PCT
+                    "Background lockdown: {} '{}' -> {} (pct fallback)",
+                    uclamp_max_path, orig_val, BG_UCLAMP_MAX_PCT
                 );
-            }
+                true
+            } else {
+                false
+            };
 
-            // Also set min to 0 to allow full dynamic range down to zero.
-            let _ = write_str(&uclamp_min_path, BG_UCLAMP_MIN);
+            if wrote {
+                clamped += 1;
+                // Also set min to 0 to allow full dynamic range down to zero.
+                let _ = write_str(&uclamp_min_path, BG_UCLAMP_MIN);
+            } else {
+                // Kernel rejected both values — don't count this cgroup.
+                // The uclamp controller may not be available or the kernel
+                // uses a non-standard range.
+                tracing::warn!(
+                    target: "game_turbo",
+                    "Background lockdown: {} current='{}' — kernel rejected both {} and {}. Skipping.",
+                    uclamp_max_path, orig_val, BG_UCLAMP_MAX, BG_UCLAMP_MAX_PCT
+                );
+                skipped += 1;
+                // Remove from saved map since we didn't actually change it.
+                self.saved_uclamp_max.remove(&uclamp_max_path);
+            }
         }
 
-        if !self.saved_uclamp_max.is_empty() {
-            tracing::info!(
-                target: "game_turbo",
-                "Background lockdown: clamped {} cgroups",
-                self.saved_uclamp_max.len()
-            );
+        if clamped > 0 || skipped > 0 {
+            let mut msg = format!("Background lockdown: clamped {} cgroups", clamped);
+            if skipped > 0 {
+                msg.push_str(&format!(", skipped {} (kernel rejected uclamp writes)", skipped));
+            }
+            tracing::info!(target: "game_turbo", "{}", msg);
         }
     }
 
