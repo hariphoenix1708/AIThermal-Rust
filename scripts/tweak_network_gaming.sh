@@ -94,9 +94,13 @@ detect_rom() {
 tweak_wifi_power_save() {
     local enable="$1"
     if [ "$enable" = "enable" ]; then
-        if command -v iw >/dev/null 2>&1; then
+        # v3.3.7: Qualcomm WCN6750 has no /sys/class/net/wlan0/power_save.
+        # Use Android framework command to set low-latency mode which disables PS.
+        if su -c 'cmd wifi force-low-latency-mode enabled' >/dev/null 2>&1; then
+            log "WiFi PS disabled via cmd wifi force-low-latency-mode"
+        elif command -v iw >/dev/null 2>&1; then
             iw wlan0 set power_save off 2>/dev/null
-            log "WiFi power save disabled via iw"
+            log "WiFi PS disabled via iw"
         fi
         local ps_file="/sys/class/net/wlan0/power_save"
         if [ -f "$ps_file" ]; then
@@ -108,14 +112,85 @@ tweak_wifi_power_save() {
             fi
         done
     else
-        if command -v iw >/dev/null 2>&1; then
+        if su -c 'cmd wifi force-low-latency-mode disabled' >/dev/null 2>&1; then
+            log "WiFi PS restored via cmd wifi force-low-latency-mode"
+        elif command -v iw >/dev/null 2>&1; then
             iw wlan0 set power_save on 2>/dev/null
-            log "WiFi power save re-enabled via iw"
+            log "WiFi PS re-enabled via iw"
         fi
         local ps_file="/sys/class/net/wlan0/power_save"
         if [ -f "$ps_file" ]; then
             backup_and_write "$ps_file" "1"
         fi
+    fi
+}
+
+# v3.3.7: RPS (Receive Packet Steering) distributes WiFi packet processing
+# across all CPUs instead of CPU0 only. On SM8635, all WLAN interrupts land
+# on CPU0 — without RPS this causes softirq storms and ping spikes.
+tweak_rps() {
+    local enable="$1"
+    local iface="wlan0"
+    local cpus_all="ff"
+
+    if [ "$enable" = "enable" ]; then
+        # Save originals if not already saved
+        for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
+            [ -f "$q" ] || continue
+            local key=$(echo "$q" | tr '/' '_')
+            if [ ! -f "$BACKUP_DIR/$key" ]; then
+                cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "00" > "$BACKUP_DIR/$key"
+            fi
+            write_if_different "$q" "$cpus_all"
+        done
+
+        # Enable flow-based steering so packets from same connection
+        # go to the same CPU (reduces lock contention)
+        local flow_key="_proc_sys_net_core_rps_sock_flow_entries"
+        if [ ! -f "$BACKUP_DIR/$flow_key" ]; then
+            cat /proc/sys/net/core/rps_sock_flow_entries > "$BACKUP_DIR/$flow_key" 2>/dev/null || echo "0" > "$BACKUP_DIR/$flow_key"
+        fi
+        write_if_different /proc/sys/net/core/rps_sock_flow_entries "32768"
+
+        for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
+            [ -f "$q" ] || continue
+            local key=$(echo "$q" | tr '/' '_')
+            if [ ! -f "$BACKUP_DIR/$key" ]; then
+                cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "0" > "$BACKUP_DIR/$key"
+            fi
+            write_if_different "$q" "4096"
+        done
+
+        log "RPS enabled: distribute network processing across all CPUs"
+    else
+        for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
+            [ -f "$q" ] || continue
+            local key=$(echo "$q" | tr '/' '_')
+            if [ -f "$BACKUP_DIR/$key" ]; then
+                local orig
+                orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
+                write_if_different "$q" "$orig"
+            fi
+        done
+
+        local flow_key="_proc_sys_net_core_rps_sock_flow_entries"
+        if [ -f "$BACKUP_DIR/$flow_key" ]; then
+            local orig
+            orig=$(cat "$BACKUP_DIR/$flow_key" 2>/dev/null)
+            write_if_different /proc/sys/net/core/rps_sock_flow_entries "$orig"
+        fi
+
+        for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
+            [ -f "$q" ] || continue
+            local key=$(echo "$q" | tr '/' '_')
+            if [ -f "$BACKUP_DIR/$key" ]; then
+                local orig
+                orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
+                write_if_different "$q" "$orig"
+            fi
+        done
+
+        log "RPS restored to defaults"
     fi
 }
 
@@ -403,6 +478,7 @@ main() {
     log "ROM=$rom"
 
     tweak_wifi_power_save "$ACTION"
+    tweak_rps "$ACTION"
     tweak_network_buffers "$ACTION"
     tweak_dns "$ACTION"
     tweak_irq_affinity "$ACTION"

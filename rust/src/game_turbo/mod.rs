@@ -152,6 +152,7 @@ impl GameTurboEngine {
         if self.config_snapshot.wifi_ps_disable {
             self.network.activate_wifi_ps();
         }
+        self.network.activate_rps();
         if self.config_snapshot.network_buffers {
             self.network.activate_buffers();
         }
@@ -251,6 +252,7 @@ impl GameTurboEngine {
         self.touch.deactivate();
         self.io_scheduler.deactivate();
         self.network.deactivate_buffers();
+        self.network.deactivate_rps();
         self.network.deactivate_wifi_ps();
         self.background.deactivate();
         self.priority.deactivate();

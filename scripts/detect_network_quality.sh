@@ -196,6 +196,12 @@ get_wifi_power_save() {
         cat "$ps_file" 2>/dev/null
         return
     fi
+    # v3.3.7: Qualcomm WCN6750 — no sysfs PS node. Check via dumpsys.
+    local ll=$(dumpsys wifi 2>/dev/null | grep -i "low.latency\|power.save\|mLowLatency" | head -1)
+    if [ -n "$ll" ]; then
+        echo "$ll"
+        return
+    fi
     echo "unknown"
 }
 

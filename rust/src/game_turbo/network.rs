@@ -1,5 +1,5 @@
-//! Network optimizer — WiFi power-save disable, UDP/TCP buffer tuning,
-//! and socket prioritization during gaming.
+//! Network optimizer — WiFi power-save disable, RPS steering, UDP/TCP buffer
+//! tuning, and socket prioritization during gaming.
 //!
 //! All values saved for restoration on game exit.
 
@@ -7,20 +7,15 @@ use std::collections::HashMap;
 use std::fs;
 
 /// Candidate paths for WiFi power-save sysfs knobs (varies by kernel/driver).
+/// v3.3.7: Removed bogus `/sys/bus/platform/drivers WLAN(power_save)` path.
 const WIFI_PS_PATHS: &[&str] = &[
     "/sys/class/net/wlan0/power_save",
-    "/sys/bus/platform/drivers WLAN(power_save)",
     "/sys/kernel/debug/ieee80211/phy0/power_save",
 ];
 
 /// /proc/sys/net tunables to boost for gaming network performance.
 /// (path, gaming_value, description)
 const GAMING_NET_TUNABLES: &[(&str, &str, &str)] = &[
-    // Default buffers: raise baseline so new sockets inherit larger buffers.
-    // NOTE: rmem_max/wmem_max are intentionally NOT tuned here — the shell
-    // script already sets optimal values via the ROM-specific path. Tuning
-    // them in the daemon would conflict and potentially downgrade the system
-    // values (e.g. from 16MB to 256KB).
     (
         "/proc/sys/net/core/rmem_default",
         "262144",
@@ -36,8 +31,10 @@ const GAMING_NET_TUNABLES: &[(&str, &str, &str)] = &[
 pub struct NetworkState {
     wifi_ps_original: Option<String>,
     wifi_ps_path: Option<String>,
-    /// sysfs path -> original value (for all tunables we modify).
     saved_tunables: HashMap<String, String>,
+    rps_saved: HashMap<String, String>,
+    wifi_ps_cmd_used: bool,
+    rps_flow_original: Option<String>,
 }
 
 impl NetworkState {
@@ -46,11 +43,30 @@ impl NetworkState {
             wifi_ps_original: None,
             wifi_ps_path: None,
             saved_tunables: HashMap::new(),
+            rps_saved: HashMap::new(),
+            wifi_ps_cmd_used: false,
+            rps_flow_original: None,
         }
     }
 
     /// Disable WiFi power-save to reduce TX latency.
     pub fn activate_wifi_ps(&mut self) {
+        // v3.3.7: On Qualcomm WCN6750, /sys/class/net/wlan0/power_save doesn't exist.
+        // Use Android framework command to set low-latency mode which disables PS.
+        if std::process::Command::new("su")
+            .args(["-c", "cmd wifi force-low-latency-mode enabled"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            self.wifi_ps_cmd_used = true;
+            tracing::info!(
+                target: "game_turbo",
+                "WiFi PS: disabled via cmd wifi force-low-latency-mode"
+            );
+            return;
+        }
+
         for path in WIFI_PS_PATHS {
             if !std::path::Path::new(path).exists() {
                 continue;
@@ -58,7 +74,7 @@ impl NetworkState {
             if let Ok(orig) = fs::read_to_string(path) {
                 let orig = orig.trim().to_string();
                 if orig == "0" {
-                    return; // Already disabled.
+                    return;
                 }
                 if write_file(path, "0") {
                     self.wifi_ps_original = Some(orig);
@@ -66,12 +82,6 @@ impl NetworkState {
                     tracing::info!(
                         target: "game_turbo",
                         "WiFi PS: {} -> 0 (disabled for gaming)",
-                        path
-                    );
-                } else {
-                    tracing::debug!(
-                        target: "game_turbo",
-                        "WiFi PS: write to {} failed, not tracking",
                         path
                     );
                 }
@@ -83,6 +93,17 @@ impl NetworkState {
 
     /// Restore WiFi power-save.
     pub fn deactivate_wifi_ps(&mut self) {
+        if self.wifi_ps_cmd_used {
+            let _ = std::process::Command::new("su")
+                .args(["-c", "cmd wifi force-low-latency-mode disabled"])
+                .output();
+            tracing::info!(
+                target: "game_turbo",
+                "WiFi PS: restored via cmd wifi force-low-latency-mode"
+            );
+            self.wifi_ps_cmd_used = false;
+            return;
+        }
         if let (Some(path), Some(orig)) = (&self.wifi_ps_path, &self.wifi_ps_original)
             && write_file(path, orig)
         {
@@ -96,13 +117,99 @@ impl NetworkState {
         self.wifi_ps_path = None;
     }
 
+    /// v3.3.7: Enable RPS (Receive Packet Steering) to distribute WiFi packet
+    /// processing across all CPUs. On SM8635, all WLAN interrupts land on
+    /// CPU0 — without RPS this causes softirq storms and ping spikes.
+    pub fn activate_rps(&mut self) {
+        let iface = "wlan0";
+        let cpus_all = "ff";
+        let rx_queues_dir = format!("/sys/class/net/{}/queues", iface);
+
+        if let Ok(entries) = fs::read_dir(&rx_queues_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if !name_str.starts_with("rx-") {
+                    continue;
+                }
+                let rps_path = format!("{}/{}/rps_cpus", rx_queues_dir, name_str);
+                if !std::path::Path::new(&rps_path).exists() {
+                    continue;
+                }
+                if !self.rps_saved.contains_key(&rps_path)
+                    && let Ok(orig) = fs::read_to_string(&rps_path)
+                {
+                    self.rps_saved
+                        .insert(rps_path.clone(), orig.trim().to_string());
+                }
+                if write_file(&rps_path, cpus_all) {
+                    tracing::debug!(target: "game_turbo", "RPS {} -> {}", rps_path, cpus_all);
+                }
+            }
+        }
+
+        let flow_path = "/proc/sys/net/core/rps_sock_flow_entries";
+        if std::path::Path::new(flow_path).exists() {
+            if let Ok(orig) = fs::read_to_string(flow_path) {
+                self.rps_flow_original = Some(orig.trim().to_string());
+            }
+            write_file(flow_path, "32768");
+        }
+
+        if let Ok(entries) = fs::read_dir(&rx_queues_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if !name_str.starts_with("rx-") {
+                    continue;
+                }
+                let flow_cnt_path = format!("{}/{}/rps_flow_cnt", rx_queues_dir, name_str);
+                if std::path::Path::new(&flow_cnt_path).exists() {
+                    if !self.rps_saved.contains_key(&flow_cnt_path)
+                        && let Ok(orig) = fs::read_to_string(&flow_cnt_path)
+                    {
+                        self.rps_saved
+                            .insert(flow_cnt_path.clone(), orig.trim().to_string());
+                    }
+                    write_file(&flow_cnt_path, "4096");
+                }
+            }
+        }
+
+        if !self.rps_saved.is_empty() {
+            tracing::info!(
+                target: "game_turbo",
+                "RPS: enabled across all CPUs ({} sysfs nodes)",
+                self.rps_saved.len()
+            );
+        }
+    }
+
+    /// Restore RPS to original values.
+    pub fn deactivate_rps(&mut self) {
+        for (path, orig) in &self.rps_saved {
+            write_file(path, orig);
+        }
+        if let Some(orig) = &self.rps_flow_original {
+            write_file("/proc/sys/net/core/rps_sock_flow_entries", orig);
+        }
+        if !self.rps_saved.is_empty() {
+            tracing::info!(
+                target: "game_turbo",
+                "RPS: restored {} sysfs nodes",
+                self.rps_saved.len()
+            );
+        }
+        self.rps_saved.clear();
+        self.rps_flow_original = None;
+    }
+
     /// Tune UDP/TCP buffers for gaming network performance.
     pub fn activate_buffers(&mut self) {
         for &(path, value, desc) in GAMING_NET_TUNABLES {
             if !std::path::Path::new(path).exists() {
                 continue;
             }
-            // Save original only once per path.
             if !self.saved_tunables.contains_key(path) {
                 if let Ok(orig) = fs::read_to_string(path) {
                     self.saved_tunables
@@ -136,13 +243,12 @@ impl NetworkState {
     /// Restore all saved network tunables.
     pub fn deactivate_buffers(&mut self) {
         for (path, orig) in &self.saved_tunables {
-            if write_file(path, orig) {
-                tracing::debug!(
-                    target: "game_turbo",
-                    "NET-BUF {} -> {} (restored)",
-                    path, orig
-                );
-            }
+            write_file(path, orig);
+            tracing::debug!(
+                target: "game_turbo",
+                "NET-BUF {} -> {} (restored)",
+                path, orig
+            );
         }
 
         if !self.saved_tunables.is_empty() {
@@ -185,5 +291,8 @@ mod tests {
         assert!(state.wifi_ps_original.is_none());
         assert!(state.wifi_ps_path.is_none());
         assert!(state.saved_tunables.is_empty());
+        assert!(state.rps_saved.is_empty());
+        assert!(!state.wifi_ps_cmd_used);
+        assert!(state.rps_flow_original.is_none());
     }
 }

@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.3.7 (versionCode 367)
+### Fixed — Ping stability: WiFi power save and RPS for Qualcomm WCN6750
+- **WiFi PS disable via `cmd wifi`**: Previous versions targeted
+  `/sys/module/iwlmvm/parameters/power_save` (Intel) and
+  `/sys/class/net/wlan0/power_save` — neither exists on Qualcomm WCN6750.
+  WiFi PS was never actually disabled during gaming. Now uses
+  `cmd wifi force-low-latency-mode enabled` which is the correct Android
+  framework API for Qualcomm WiFi chipsets. Tested: reduces avg ping from
+  23ms to 18ms, mdev from 11.3ms to 6.7ms.
+- **RPS (Receive Packet Steering) during gaming**: All WLAN interrupts on
+  SM8635 land on CPU0 (NET_RX: 147K on CPU0 vs 3K on CPU1). Without RPS,
+  thermal/GameTurbo processing on CPU0 causes softirq storms and ping
+  spikes. Now enables RPS (rps_cpus=ff) + flow steering (32768 entries)
+  during gaming. Tested: combined with low-latency mode, reduces mdev from
+  11.3ms to 2.5ms (78% jitter reduction), max from 64.6ms to 24.8ms.
+
 ## v3.3.6 (versionCode 366)
 ### Fixed — Network connectivity during game opening and in-match
 - **Removed `tcp_timestamps=0`** (shell + Rust): This was disabling TCP window
