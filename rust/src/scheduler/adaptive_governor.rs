@@ -52,13 +52,13 @@ impl AdaptiveGovernorState {
     }
 
     /// Core decision logic. Called once per sample_interval with fresh
-    /// FrameStats (if available) and current cluster utilization (always
-    /// available as a fallback signal). Returns the tier to apply until the
-    /// next sample.
+    /// FrameStats (if available), current cluster utilization, and GPU load.
+    /// Returns the tier to apply until the next sample.
     pub fn decide_tier(
         &mut self,
         frame_stats: Option<&crate::monitor::frame_sampler::FrameStats>,
         cluster_utilization: f32,
+        gpu_load: f32,
     ) -> FrequencyTier {
         self.last_sample_at = Some(Instant::now());
 
@@ -90,6 +90,17 @@ impl AdaptiveGovernorState {
             }
         } else {
             FrequencyTier::Max
+        };
+
+        // GPU load override: if the GPU is the bottleneck, CPU frequency
+        // demotion won't help rendering. Force Max when GPU is saturated,
+        // and block Eco/Balanced when GPU load is high.
+        let raw_next_tier = if gpu_load > 0.90 {
+            FrequencyTier::Max
+        } else if gpu_load > 0.80 && matches!(raw_next_tier, FrequencyTier::Eco | FrequencyTier::Balanced) {
+            FrequencyTier::High
+        } else {
+            raw_next_tier
         };
 
         let next_tier = if self.current_tier == FrequencyTier::Eco
@@ -197,35 +208,30 @@ mod tests {
 
         // Step down logic requires TWO consecutive good samples where tier_rank(next) < tier_rank(current).
         // Current: Max, Util: 0.8 -> Next: High.
-        let tier = gov.decide_tier(None, 0.8);
+        let tier = gov.decide_tier(None, 0.8, 0.0);
         assert_eq!(tier, FrequencyTier::Max); // 1st good sample, stays Max
 
-        let tier = gov.decide_tier(None, 0.8);
+        let tier = gov.decide_tier(None, 0.8, 0.0);
         assert_eq!(tier, FrequencyTier::Max); // 2nd good sample, stays Max
 
         // Update struct's current tier as the orchestrator would.
         gov.current_tier = tier;
 
         // Med util -> Next is Balanced.
-        let tier = gov.decide_tier(None, 0.6);
+        let tier = gov.decide_tier(None, 0.6, 0.0);
         assert_eq!(tier, FrequencyTier::Max); // 1st good sample, stays Max
 
-        let tier = gov.decide_tier(None, 0.6);
+        let tier = gov.decide_tier(None, 0.6, 0.0);
         assert_eq!(tier, FrequencyTier::Max); // 2nd good sample, stays Max
 
         gov.current_tier = tier;
 
         // Low util (< 0.55) -> Next is Eco.
-        // Demotion streak from Balanced to Eco requires 2 hits (demotion_streak >= 2).
-        // After demotion_streak >= 2, next_tier = Eco.
-        // Then step-down logic requires 2 consecutive good samples where next_tier = Eco to actually step down.
-        // Total = 3 hits of low util.
-
-        let tier = gov.decide_tier(None, 0.5);
+        let tier = gov.decide_tier(None, 0.5, 0.0);
         assert_eq!(tier, FrequencyTier::Max); // no signal -> Max, not Eco
         gov.current_tier = tier;
 
-        let tier = gov.decide_tier(None, 0.5);
+        let tier = gov.decide_tier(None, 0.5, 0.0);
         assert_eq!(tier, FrequencyTier::Max);
         gov.current_tier = tier;
 
@@ -238,8 +244,10 @@ mod tests {
         crate::monitor::frame_sampler::FrameStats {
             sample_count: n,
             janky_frames: janky,
+            p50_frame_ns: 8_000_000,
             p90_frame_ns: 8_000_000,
             worst_frame_ns: 12_000_000,
+            max_consecutive_jank: 0,
             captured_at: None,
         }
     }
@@ -253,26 +261,26 @@ mod tests {
         // down after two consecutive good samples.
         let clean = frame_stats(8, 0);
 
-        let tier = gov.decide_tier(Some(&clean), 0.6);
+        let tier = gov.decide_tier(Some(&clean), 0.6, 0.0);
         assert_eq!(tier, FrequencyTier::Max); // 1st good sample, holds Max
         gov.current_tier = tier;
 
-        let tier = gov.decide_tier(Some(&clean), 0.6);
+        let tier = gov.decide_tier(Some(&clean), 0.6, 0.0);
         assert_eq!(tier, FrequencyTier::High); // 2nd good sample, step to High
         gov.current_tier = tier;
 
-        let tier = gov.decide_tier(Some(&clean), 0.6);
+        let tier = gov.decide_tier(Some(&clean), 0.6, 0.0);
         assert_eq!(tier, FrequencyTier::High); // 1st good sample from High
         gov.current_tier = tier;
 
-        let tier = gov.decide_tier(Some(&clean), 0.6);
+        let tier = gov.decide_tier(Some(&clean), 0.6, 0.0);
         assert_eq!(tier, FrequencyTier::Balanced); // 2nd good sample, step to Balanced
         gov.current_tier = tier;
 
         // A noisy few-frame window (3-4 samples, under the threshold) cannot
         // demote from Balanced; it escalates to Max instead of trusting jank.
         let noisy = frame_stats(3, 1);
-        let tier = gov.decide_tier(Some(&noisy), 0.6);
+        let tier = gov.decide_tier(Some(&noisy), 0.6, 0.0);
         assert_eq!(tier, FrequencyTier::Max);
     }
 }

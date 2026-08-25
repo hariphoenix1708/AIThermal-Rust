@@ -13,8 +13,10 @@ pub fn last_parse_ok() -> bool {
 pub struct FrameStats {
     pub sample_count: usize,
     pub janky_frames: usize, // frames that missed their deadline
+    pub p50_frame_ns: u64,   // median total frame duration
     pub p90_frame_ns: u64,   // 90th percentile total frame duration
     pub worst_frame_ns: u64,
+    pub max_consecutive_jank: usize, // longest streak of consecutive janky frames
     pub captured_at: Option<Instant>,
 }
 
@@ -108,23 +110,41 @@ fn detect_frame_budget_ns() -> u64 {
     DEFAULT_FRAME_BUDGET_NS
 }
 
-fn compute_stats_from_durations(mut durations: Vec<u64>, frame_budget_ns: u64) -> Option<FrameStats> {
+fn compute_stats_from_durations(durations: Vec<u64>, frame_budget_ns: u64) -> Option<FrameStats> {
     if durations.is_empty() {
         return None;
     }
 
-    durations.sort_unstable();
-    let sample_count = durations.len();
-    let janky_frames = durations.iter().filter(|&&d| d > frame_budget_ns).count();
+    // Keep original order for consecutive-jank calculation.
+    let mut sorted = durations.clone();
+    sorted.sort_unstable();
+    let sample_count = sorted.len();
+    let janky_frames = sorted.iter().filter(|&&d| d > frame_budget_ns).count();
+    let p50_idx = sample_count / 2;
+    let p50_frame_ns = sorted[p50_idx];
     let p90_idx = ((sample_count as f32) * 0.9) as usize;
-    let p90_frame_ns = durations[p90_idx.min(sample_count - 1)];
-    let worst_frame_ns = *durations.last().unwrap();
+    let p90_frame_ns = sorted[p90_idx.min(sample_count - 1)];
+    let worst_frame_ns = *sorted.last().unwrap();
+
+    // Max consecutive jank: scan in original presentation order.
+    let mut max_streak = 0usize;
+    let mut cur_streak = 0usize;
+    for &d in &durations {
+        if d > frame_budget_ns {
+            cur_streak += 1;
+            max_streak = max_streak.max(cur_streak);
+        } else {
+            cur_streak = 0;
+        }
+    }
 
     Some(FrameStats {
         sample_count,
         janky_frames,
+        p50_frame_ns,
         p90_frame_ns,
         worst_frame_ns,
+        max_consecutive_jank: max_streak,
         captured_at: Some(Instant::now()),
     })
 }
@@ -285,18 +305,36 @@ fn parse_framestats(text: &str, frame_budget_ns: u64) -> Option<FrameStats> {
         return None;
     }
 
+    // Keep original order for consecutive-jank calculation.
+    let original_order = durations.clone();
     durations.sort_unstable();
     let sample_count = durations.len();
     let janky_frames = durations.iter().filter(|&&d| d > frame_budget_ns).count();
+    let p50_idx = sample_count / 2;
+    let p50_frame_ns = durations[p50_idx];
     let p90_idx = ((sample_count as f32) * 0.9) as usize;
     let p90_frame_ns = durations[p90_idx.min(sample_count - 1)];
     let worst_frame_ns = *durations.last().unwrap();
 
+    // Max consecutive jank in original presentation order.
+    let mut max_streak = 0usize;
+    let mut cur_streak = 0usize;
+    for &d in &original_order {
+        if d > frame_budget_ns {
+            cur_streak += 1;
+            max_streak = max_streak.max(cur_streak);
+        } else {
+            cur_streak = 0;
+        }
+    }
+
     Some(FrameStats {
         sample_count,
         janky_frames,
+        p50_frame_ns,
         p90_frame_ns,
         worst_frame_ns,
+        max_consecutive_jank: max_streak,
         captured_at: Some(Instant::now()),
     })
 }
@@ -342,6 +380,7 @@ impl BackgroundFrameSampler {
                                         && prev.janky_frames == new.janky_frames
                                         && prev.p90_frame_ns == new.p90_frame_ns
                                         && prev.worst_frame_ns == new.worst_frame_ns
+                                        && prev.max_consecutive_jank == new.max_consecutive_jank
                             );
                             if !unchanged {
                                 *slot = result;

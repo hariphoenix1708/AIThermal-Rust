@@ -120,6 +120,8 @@ pub struct ProfilesConfig {
     #[serde(default = "default_true")]
     pub game_turbo_io_scheduler: bool,
     #[serde(default = "default_true")]
+    pub game_turbo_gpu_freq_boost: bool,
+    #[serde(default = "default_true")]
     pub game_turbo_thermal_throttle: bool,
     #[serde(default = "default_big_core_mask")]
     pub game_turbo_big_core_mask: u64,
@@ -258,6 +260,7 @@ impl Default for ProfilesConfig {
             game_turbo_touch_boost: default_true(),
             game_turbo_network_buffers: default_true(),
             game_turbo_io_scheduler: default_true(),
+            game_turbo_gpu_freq_boost: default_true(),
             game_turbo_thermal_throttle: default_true(),
             game_turbo_big_core_mask: default_big_core_mask(),
         }

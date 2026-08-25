@@ -780,6 +780,12 @@ impl RuntimeTask for SystemOrchestrator {
             if ctx.config.profiles.game_turbo_enabled
                 && let Some(pid) = self.gaming.confirmed_pid
             {
+                let gpu = &self.hardware.gpu_profile;
+                self.game_turbo.set_gpu_power_info(
+                    gpu.power_level_path.clone(),
+                    gpu.current_power_level,
+                    gpu.min_power_level.unwrap_or(0),
+                );
                 self.game_turbo.activate(pid, &ctx.config.profiles);
             }
         }
@@ -816,6 +822,12 @@ impl RuntimeTask for SystemOrchestrator {
         {
             if !self.game_turbo.is_active() {
                 // Deferred activation — PID became available after initial detection.
+                let gpu = &self.hardware.gpu_profile;
+                self.game_turbo.set_gpu_power_info(
+                    gpu.power_level_path.clone(),
+                    gpu.current_power_level,
+                    gpu.min_power_level.unwrap_or(0),
+                );
                 self.game_turbo.activate(pid, &ctx.config.profiles);
             }
             self.game_turbo.tick(pid);
@@ -1433,7 +1445,7 @@ impl RuntimeTask for SystemOrchestrator {
 
                 let tier = self
                     .adaptive_governor
-                    .decide_tier(frame_stats.as_ref(), utilization);
+                    .decide_tier(frame_stats.as_ref(), utilization, gpu_load as f32 / 100.0);
 
                 if can_actuate {
                     self.last_actuation_at = Some(std::time::Instant::now());
@@ -1830,6 +1842,10 @@ impl RuntimeTask for SystemOrchestrator {
             "runtime_health": ctx.runtime_health,
             "legacy_write_failures": crate::tuning::backend::TuningBackend::legacy_write_failure_count(),
             "frame_stats_parse_ok": crate::monitor::frame_sampler::last_parse_ok(),
+            "frame_p50_us": self.background_frame_sampler.latest_stats().as_ref().map(|s| s.p50_frame_ns / 1000),
+            "frame_p90_us": self.background_frame_sampler.latest_stats().as_ref().map(|s| s.p90_frame_ns / 1000),
+            "frame_worst_us": self.background_frame_sampler.latest_stats().as_ref().map(|s| s.worst_frame_ns / 1000),
+            "frame_max_consecutive_jank": self.background_frame_sampler.latest_stats().as_ref().map(|s| s.max_consecutive_jank),
             "recovery_phase": format!("{:?}", self.recovery.phase),
             "adaptive_tier": format!("{:?}", self.adaptive_governor.current_tier),
             "last_applied_policy": self.last_applied_policy.clone().unwrap_or_else(|| "None".to_string()),

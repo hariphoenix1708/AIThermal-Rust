@@ -129,7 +129,9 @@ impl UiMonitor {
             } else {
                 0.0
             };
-            if recent_jank_pct > 10.0 || g.p90_ms > 16.7 || d_slow > 0 {
+            // Dynamic jank threshold based on display refresh rate.
+            let frame_budget_ms = refresh_hz.map(|h| 1000.0 / h).unwrap_or(16.7);
+            if recent_jank_pct > 10.0 || g.p90_ms > frame_budget_ms || d_slow > 0 {
                 tracing::warn!(
                     target: "ui",
                     "UI jank detected policy={} top={} {} (recent: +{} frames, +{} janky, +{} slowUI)",

@@ -16,6 +16,7 @@ mod background;
 mod network;
 mod touch;
 mod io_scheduler;
+mod gpu_freq;
 
 use crate::config::ProfilesConfig;
 
@@ -28,8 +29,13 @@ pub struct GameTurboEngine {
     network: network::NetworkState,
     touch: touch::TouchState,
     io_scheduler: io_scheduler::IoSchedulerState,
+    gpu_freq: gpu_freq::GpuFreqState,
     /// Whether we've entered thermal-throttle mode (eased constraints).
     thermal_throttled: bool,
+    /// Pending GPU power info (set by orchestrator before activate).
+    pending_gpu_power_level_path: Option<String>,
+    pending_gpu_current_level: Option<u32>,
+    pending_gpu_best_level: u32,
 }
 
 #[derive(Clone)]
@@ -41,6 +47,7 @@ struct GameTurboSnapshot {
     network_buffers: bool,
     touch_boost: bool,
     io_scheduler_boost: bool,
+    gpu_freq_boost: bool,
     thermal_throttle_enabled: bool,
     big_core_mask: u64,
     /// Fallback big-core mask when thermal-throttled (allows some small cores).
@@ -65,6 +72,7 @@ impl GameTurboEngine {
                 network_buffers: true,
                 touch_boost: true,
                 io_scheduler_boost: true,
+                gpu_freq_boost: true,
                 thermal_throttle_enabled: true,
                 big_core_mask: 0xF0,
                 thermal_throttle_mask: 0xFF,
@@ -75,8 +83,24 @@ impl GameTurboEngine {
             network: network::NetworkState::new(),
             touch: touch::TouchState::new(),
             io_scheduler: io_scheduler::IoSchedulerState::new(),
+            gpu_freq: gpu_freq::GpuFreqState::new(),
             thermal_throttled: false,
+            pending_gpu_power_level_path: None,
+            pending_gpu_current_level: None,
+            pending_gpu_best_level: 0,
         }
+    }
+
+    /// Provide GPU power info before activation (called by orchestrator).
+    pub fn set_gpu_power_info(
+        &mut self,
+        power_level_path: Option<String>,
+        current_level: Option<u32>,
+        best_level: u32,
+    ) {
+        self.pending_gpu_power_level_path = power_level_path;
+        self.pending_gpu_current_level = current_level;
+        self.pending_gpu_best_level = best_level;
     }
 
     pub fn is_active(&self) -> bool {
@@ -102,6 +126,7 @@ impl GameTurboEngine {
             network_buffers: profiles.game_turbo_network_buffers,
             touch_boost: profiles.game_turbo_touch_boost,
             io_scheduler_boost: profiles.game_turbo_io_scheduler,
+            gpu_freq_boost: profiles.game_turbo_gpu_freq_boost,
             thermal_throttle_enabled: profiles.game_turbo_thermal_throttle,
             big_core_mask: profiles.game_turbo_big_core_mask,
             // When thermally throttled, expand to all 8 cores (0xFF)
@@ -135,6 +160,13 @@ impl GameTurboEngine {
         }
         if self.config_snapshot.touch_boost {
             self.touch.activate();
+        }
+        if self.config_snapshot.gpu_freq_boost {
+            self.gpu_freq.activate(
+                self.pending_gpu_power_level_path.as_deref(),
+                self.pending_gpu_current_level,
+                self.pending_gpu_best_level,
+            );
         }
 
         self.active = true;
@@ -215,6 +247,7 @@ impl GameTurboEngine {
 
         tracing::info!(target: "game_turbo", "Deactivating GameTurbo — restoring all state");
 
+        self.gpu_freq.deactivate();
         self.touch.deactivate();
         self.io_scheduler.deactivate();
         self.network.deactivate_buffers();

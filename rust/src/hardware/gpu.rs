@@ -59,6 +59,7 @@ pub fn probe_gpu() -> GpuProfile {
             profile.has_force_clk_on = true;
         }
 
+        // Discover max frequency from available_frequencies.
         if profile.has_devfreq {
             profile.devfreq_path = format!("{}/devfreq", profile.path);
             let mut gov_node = CapabilityNode::new(
@@ -92,6 +93,14 @@ pub fn probe_gpu() -> GpuProfile {
                     .map(|f| f.to_string())
                     .collect();
             }
+            // Populate max_freq from the highest available frequency.
+            profile.max_freq = profile.available_frequencies.iter().copied().max().unwrap_or(0);
+
+            // Try to read current frequency for runtime monitoring.
+            if let Ok(cur) = fs::read_to_string(format!("{}/cur_freq", profile.devfreq_path)) {
+                profile.current_frequency = cur.trim().parse().unwrap_or(0);
+            }
+
             profile.devfreq_governor_node = gov_node;
             profile.devfreq_freq_node = freq_node;
         }
@@ -136,6 +145,12 @@ pub fn probe_gpu() -> GpuProfile {
                             .map(|f| f.to_string())
                             .collect();
                     }
+                    profile.max_freq = profile.available_frequencies.iter().copied().max().unwrap_or(0);
+
+                    if let Ok(cur) = fs::read_to_string(format!("{}/cur_freq", profile.path)) {
+                        profile.current_frequency = cur.trim().parse().unwrap_or(0);
+                    }
+
                     profile.devfreq_governor_node = gov_node;
                     profile.devfreq_freq_node = freq_node;
                     break;
@@ -145,4 +160,21 @@ pub fn probe_gpu() -> GpuProfile {
     }
 
     profile
+}
+
+/// Read the current GPU frequency in Hz. Returns None if unavailable.
+pub fn gpu_cur_freq() -> Option<u64> {
+    // KGSL devfreq cur_freq
+    if let Ok(v) = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq")
+        && let Ok(freq) = v.trim().parse::<u64>()
+    {
+        return Some(freq);
+    }
+    // Fallback: gpuclk (some Adreno variants)
+    if let Ok(v) = fs::read_to_string("/sys/class/kgsl/kgsl-3d0/gpuclk")
+        && let Ok(freq) = v.trim().parse::<u64>()
+    {
+        return Some(freq);
+    }
+    None
 }

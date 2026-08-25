@@ -1,5 +1,25 @@
 # Changelog
 
+## v3.3.5 (versionCode 365)
+### Added — GameTurbo Phase 3: Display & GPU optimizations
+- **GPU frequency floor during gaming**: New `gpu_freq` submodule in
+  `game_turbo/` saves current GPU power level on game entry and sets to
+  best (lowest latency) level. Restored on game exit. Configured via
+  `game_turbo_gpu_freq_boost` (default: true).
+- **GPU load-aware adaptive governor**: `decide_tier()` now accepts GPU
+  load as input. When GPU load > 90%, forces Max tier. When GPU load >
+  80%, blocks Eco/Balanced demotion — prevents CPU frequency scaling from
+  starving a GPU-bound game.
+- **Refresh-rate-aware jank threshold**: `UiMonitor` jank warning now
+  uses dynamic frame budget (1000/refresh_hz) instead of hardcoded 16.7ms,
+  correctly detecting jank on 60/90/120Hz displays.
+- **Frame time histogram in telemetry**: New fields `frame_p50_us`,
+  `frame_p90_us`, `frame_worst_us`, `frame_max_consecutive_jank` in JSON
+  telemetry output for richer frame pacing visibility.
+- **Frame pacing metrics in FrameStats**: Added `p50_frame_ns` and
+  `max_consecutive_jank` to `FrameStats` struct. `compute_stats_from_durations`
+  now tracks consecutive jank in presentation order.
+
 ## v3.3.4 (versionCode 364)
 ### Fixed — Silent error drops and incomplete error handling from codebase audit
 - **GPU power level writes silently discarded**: `apply_gpu_power_level()` return
