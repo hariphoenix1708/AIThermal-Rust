@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.3.11 (versionCode 371)
+### Fixed — WiFi/mobile-data handoff stability
+- **Handoff-aware RPS refresh**: GameTurbo now rechecks active WiFi and rmnet
+  RX queues during an active game. A switch after game entry no longer leaves
+  the new transport without RPS, avoiding CPU0 softirq-driven ping spikes.
+- **WiFi low-latency follows the transport**: The framework WiFi low-latency
+  mode is now acquired only while WiFi is active and released on cellular,
+  avoiding unnecessary scan/roam suppression during a mobile-data session.
+- **Removed unsafe shell network mutations**: The legacy wrapper no longer
+  changes Android-managed DNS properties, persistent radio fast-dormancy flags,
+  IRQ affinity, TX queue length, congestion control, or global TCP/core sysctls.
+  Those writes could race ConnectivityService/netd during a transport handoff.
+  It retains a backup-based one-time migration restore for settings written by
+  v3.3.10 and earlier.
+- **Preserve kernel socket buffer defaults**: GameTurbo no longer overrides
+  global `rmem_default` / `wmem_default`; per-network socket policy remains
+  with the kernel and Android network stack.
+- **Accurate diagnostics**: ICMP probes now reject delayed replies from a prior
+  sequence and calculate jitter in packet-arrival order instead of sorted RTT
+  order, so handoff instability is no longer hidden in telemetry.
+
 ## v3.3.10 (versionCode 370)
 ### Fixed — Network tuning backup race condition and deconfliction
 - **Removed `apply_network_buffers()` from `advanced.rs`**: Was writing

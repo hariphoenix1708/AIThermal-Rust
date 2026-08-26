@@ -23,7 +23,7 @@ AIThermal-Rust replaces legacy shell-based orchestration with a memory-safe, det
 *   **Advanced Game Detection**: Hardened game detection relying on exact full-string matching of process names, supplemented by a secondary `top-app` cgroup-based confirmation to prevent false positives from background processes that share package names.
 *   **Battery Telemetry**: Tracks detailed battery and power statistics—including temperature, charge current, drain rate (%/hr), and screen-on/off/deep-sleep times—logged to an isolated `thermalai_battery.log` file.
 *   **Dynamic Policy Stability**: Incorporates policy engine hysteresis to prevent rapid governor flapping near threshold boundaries, and a startup grace period to stabilize initial daemon evaluation.
-*   **Intelligent Tuning**: Reversibly applies network, VM, touch, and IO scheduler tweaks dynamically; extracts game PIDs to pin rendering threads into the `top-app` cpuset for extreme rendering latency optimization.
+*   **Intelligent Tuning**: Reversibly applies safe runtime network (WiFi low-latency mode and handoff-aware RPS), VM, touch, and IO scheduler tweaks dynamically; it leaves Android's DNS, modem, routes, IRQ placement, and queue policy under platform control. Extracts game PIDs to pin rendering threads into the `top-app` cpuset for extreme rendering latency optimization.
 *   **PSI-aware policy scoring**: Incorporates CPU, memory, and I/O pressure metrics directly into policy evaluation to improve stability.
 *   **Battery cycle-count-aware charge tapering**: Softens the fast-charge limit progressively based on the battery's cycle count to preserve long-term health.
 *   **cgroup v1 + v2 cpuset detection**: Detects unified hierarchy on AOSP 14-17 + HyperOS devices automatically.

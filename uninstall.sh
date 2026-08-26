@@ -30,26 +30,13 @@ for node in /sys/class/qcom-battery/restrict_chg \
     [ -w "$node" ] && echo 0 > "$node" 2>/dev/null
 done
 
-# v3.3.10: Belt and braces for network sysctl restoration.
-# If the daemon didn't restore cleanly, restore kernel defaults here.
-# These are benign on reboot (kernel resets them) but correct between
-# uninstall and reboot.
-[ -w /proc/sys/net/core/netdev_budget ] && echo 300 > /proc/sys/net/core/netdev_budget 2>/dev/null
-[ -w /proc/sys/net/core/busy_poll ] && echo 0 > /proc/sys/net/core/busy_poll 2>/dev/null
-[ -w /proc/sys/net/core/busy_read ] && echo 0 > /proc/sys/net/core/busy_read 2>/dev/null
-[ -w /proc/sys/net/ipv4/tcp_low_latency ] && echo 0 > /proc/sys/net/ipv4/tcp_low_latency 2>/dev/null
-[ -w /proc/sys/net/core/rps_sock_flow_entries ] && echo 0 > /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null
-# Restore WiFi power-save (the daemon's GameTurbo disables it during gaming)
-su -c 'cmd wifi force-low-latency-mode disabled' >/dev/null 2>&1
-# Restore RPS to defaults on all interfaces
-for iface in /sys/class/net/wlan0 /sys/class/net/rmnet_data*; do
-    for q in "$iface"/queues/rx-*/rps_cpus; do
-        [ -w "$q" ] && echo 0 > "$q" 2>/dev/null
-    done
-    for q in "$iface"/queues/rx-*/rps_flow_cnt; do
-        [ -w "$q" ] && echo 0 > "$q" 2>/dev/null
-    done
-done
+# v3.3.11 migration: restore only values recorded by the legacy wrapper.
+# Never assume a generic kernel default here: custom ROMs and kernels may use
+# different queue/RPS/sysctl policy. Clean daemon shutdown already restores the
+# in-memory GameTurbo state, including WiFi low-latency mode and RPS.
+if [ -x "$MODDIR/scripts/tweak_network_gaming.sh" ]; then
+    "$MODDIR/scripts/tweak_network_gaming.sh" disable "$STATE_DIR" "$LOG_DIR" >/dev/null 2>&1
+fi
 
 # Stop the periodic Joyose suppressor spawned by service.sh. It also
 # self-exits once the module directory is removed, but kill it now so

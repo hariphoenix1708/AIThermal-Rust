@@ -126,9 +126,12 @@ fn icmp_ping_one(
 
         let icmp_type = buf[ihl];
         let reply_id = u16::from_be_bytes([buf[ihl + 4], buf[ihl + 5]]);
+        let reply_seq = u16::from_be_bytes([buf[ihl + 6], buf[ihl + 7]]);
 
-        // Filter: only accept echo reply matching our ident
-        if icmp_type != ICMP_ECHO_REPLY || reply_id != ident {
+        // Filter delayed/unrelated replies as well as packets from other raw
+        // socket users. A reply from the prior sequence must never be counted
+        // for the current sample after a transport handoff.
+        if icmp_type != ICMP_ECHO_REPLY || reply_id != ident || reply_seq != seq {
             continue;
         }
 
@@ -152,9 +155,7 @@ fn icmp_ping_one(
             .unwrap_or_default()
             .as_micros() as u64;
         let rtt_us = recv_time.saturating_sub(reply_ts);
-        return Some(PingReply {
-            rtt_us,
-        });
+        return Some(PingReply { rtt_us });
     }
 }
 
@@ -192,18 +193,14 @@ pub fn icmp_ping(target: &str, count: u32, interval_ms: u64) -> PingResult {
     let target_addr = libc::sockaddr_in {
         sin_family: libc::AF_INET as u16,
         sin_port: 0,
-        sin_addr: libc::in_addr { s_addr: target_ip.to_be() },
+        sin_addr: libc::in_addr {
+            s_addr: target_ip.to_be(),
+        },
         sin_zero: [0; 8],
     };
 
     // Create raw ICMP socket
-    let sock_fd = unsafe {
-        libc::socket(
-            libc::AF_INET,
-            libc::SOCK_RAW,
-            libc::IPPROTO_ICMP,
-        )
-    };
+    let sock_fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_RAW, libc::IPPROTO_ICMP) };
     if sock_fd < 0 {
         return PingResult {
             avg_rtt_ms: 0.0,
@@ -235,7 +232,13 @@ pub fn icmp_ping(target: &str, count: u32, interval_ms: u64) -> PingResult {
     let mut received = 0u32;
 
     for seq in 0..count {
-        let reply = icmp_ping_one(sock_fd, &target_addr, seq as u16, ident, Duration::from_millis(500));
+        let reply = icmp_ping_one(
+            sock_fd,
+            &target_addr,
+            seq as u16,
+            ident,
+            Duration::from_millis(500),
+        );
         if let Some(r) = reply {
             rtts.push(r.rtt_us);
             received += 1;
@@ -262,23 +265,22 @@ pub fn icmp_ping(target: &str, count: u32, interval_ms: u64) -> PingResult {
         };
     }
 
-    rtts.sort_unstable();
-    let min_us = *rtts.first().unwrap();
-    let max_us = *rtts.last().unwrap();
-    let sum_us: u64 = rtts.iter().sum();
-    let avg_us = sum_us / rtts.len() as u64;
-
-    // Jitter: mean of absolute differences between consecutive RTTs (RFC 3550 style)
+    // Jitter is an arrival-order metric. Sorting first made the old code report
+    // an artificially low jitter value and could mask an unstable handoff.
     let mut jitter_sum: u64 = 0;
-    for w in rtts.windows(2) {
-        let diff = w[0].abs_diff(w[1]);
-        jitter_sum += diff;
+    for window in rtts.windows(2) {
+        jitter_sum += window[0].abs_diff(window[1]);
     }
     let jitter_us = if rtts.len() > 1 {
         jitter_sum / (rtts.len() - 1) as u64
     } else {
         0
     };
+
+    let min_us = *rtts.iter().min().unwrap();
+    let max_us = *rtts.iter().max().unwrap();
+    let sum_us: u64 = rtts.iter().sum();
+    let avg_us = sum_us / rtts.len() as u64;
 
     let loss_pct = ((count - received) as f64 / count as f64) * 100.0;
 
@@ -307,14 +309,7 @@ fn resolve_ip(host: &str) -> Option<u32> {
     hints.ai_socktype = libc::SOCK_DGRAM;
 
     let mut result: *mut libc::addrinfo = std::ptr::null_mut();
-    let rc = unsafe {
-        libc::getaddrinfo(
-            c_host.as_ptr(),
-            std::ptr::null(),
-            &hints,
-            &mut result,
-        )
-    };
+    let rc = unsafe { libc::getaddrinfo(c_host.as_ptr(), std::ptr::null(), &hints, &mut result) };
     if rc != 0 || result.is_null() {
         return None;
     }
@@ -353,12 +348,7 @@ pub fn dns_resolution_ms(host: &str) -> u64 {
 
     let mut result: *mut libc::addrinfo = std::ptr::null_mut();
     unsafe {
-        libc::getaddrinfo(
-            c_host.as_ptr(),
-            std::ptr::null(),
-            &hints,
-            &mut result,
-        );
+        libc::getaddrinfo(c_host.as_ptr(), std::ptr::null(), &hints, &mut result);
         if !result.is_null() {
             libc::freeaddrinfo(result);
         }
@@ -382,7 +372,9 @@ impl RomType {
         let miui_ver = prop("ro.miui.ui.version.name");
 
         let brand_lower = brand.to_lowercase();
-        if (brand_lower.contains("xiaomi") || brand_lower.contains("poco") || brand_lower.contains("redmi"))
+        if (brand_lower.contains("xiaomi")
+            || brand_lower.contains("poco")
+            || brand_lower.contains("redmi"))
             && (!os_ver.is_empty() || !miui_ver.is_empty())
         {
             return Self::HyperOS;
@@ -590,21 +582,16 @@ pub fn probe_passive() -> PassiveNetworkState {
     // WiFi-specific
     if state.network_type == "wifi" && !state.interface.is_empty() {
         let iface = &state.interface;
-        state.wifi_rssi = fs::read_to_string(format!(
-            "/sys/class/net/{}/wireless/link/level", iface
-        ))
-        .ok()
-        .map(|s| s.trim().to_string());
-        state.wifi_freq = fs::read_to_string(format!(
-            "/sys/class/net/{}/wireless/freq", iface
-        ))
-        .ok()
-        .map(|s| s.trim().to_string());
-        state.wifi_power_save = fs::read_to_string(format!(
-            "/sys/class/net/{}/power_save", iface
-        ))
-        .ok()
-        .map(|s| s.trim().to_string());
+        state.wifi_rssi =
+            fs::read_to_string(format!("/sys/class/net/{}/wireless/link/level", iface))
+                .ok()
+                .map(|s| s.trim().to_string());
+        state.wifi_freq = fs::read_to_string(format!("/sys/class/net/{}/wireless/freq", iface))
+            .ok()
+            .map(|s| s.trim().to_string());
+        state.wifi_power_save = fs::read_to_string(format!("/sys/class/net/{}/power_save", iface))
+            .ok()
+            .map(|s| s.trim().to_string());
     }
 
     // TCP/UDP buffers
@@ -668,10 +655,10 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
         "8.8.8.8",
         "1.1.1.1",
         // CODM game server regions (Activision CDN / Akamai edge)
-        "45.129.190.237",   // Asia (Activision)
-        "155.133.226.41",   // EU-West (Activision)
-        "162.254.197.42",   // NA-Central (Activision)
-        "162.254.197.2",    // Global fallback (Activision)
+        "45.129.190.237", // Asia (Activision)
+        "155.133.226.41", // EU-West (Activision)
+        "162.254.197.42", // NA-Central (Activision)
+        "162.254.197.2",  // Global fallback (Activision)
     ];
     let ping_count: u32 = 5;
     let ping_interval_ms: u64 = 100;
@@ -751,11 +738,7 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
 
         (br, jt, score)
     } else {
-        (
-            BulletRegQuality::Unknown,
-            JitterTier::B,
-            50,
-        )
+        (BulletRegQuality::Unknown, JitterTier::B, 50)
     };
 
     let quality = NetworkQuality {

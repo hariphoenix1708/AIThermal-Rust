@@ -92,7 +92,7 @@ pub struct ProfilesConfig {
     pub network_diagnostics_enabled: bool,
 
     // v3.2.29: apply gaming-specific network tweaks (WiFi power-save
-    // disable, TCP/UDP buffer tuning, DNS, IRQ affinity, fast dormancy).
+    // compatibility wrapper; GameTurbo owns safe WiFi/RPS runtime tuning.
     // Shell-side script with full backup/restore semantics.
     #[serde(default = "default_true")]
     pub gaming_network_tweaks_enabled: bool,
@@ -206,7 +206,7 @@ fn default_adaptive_governor_enabled() -> bool {
 }
 
 fn default_network_probe_interval() -> u64 {
-    10
+    30
 }
 
 /// SM8635 peridot: cores 4-7 are performance (A720+A720+X4+X4), 0-3 are efficiency (A520x4).

@@ -10,13 +10,13 @@
 //! help the SoC shed heat. Priority and touch boosts remain active —
 //! they add negligible thermal load.
 
-mod thread_affinity;
-mod priority;
 mod background;
-mod network;
-mod touch;
-mod io_scheduler;
 mod gpu_freq;
+mod io_scheduler;
+mod network;
+mod priority;
+mod thread_affinity;
+mod touch;
 
 use crate::config::ProfilesConfig;
 
@@ -141,7 +141,8 @@ impl GameTurboEngine {
         );
 
         if self.config_snapshot.thread_affinity {
-            self.affinity.activate(game_pid, self.config_snapshot.big_core_mask);
+            self.affinity
+                .activate(game_pid, self.config_snapshot.big_core_mask);
         }
         if self.config_snapshot.priority_elevator {
             self.priority.activate(game_pid);
@@ -181,7 +182,8 @@ impl GameTurboEngine {
         }
 
         if self.config_snapshot.thread_affinity {
-            self.affinity.tick(game_pid, self.config_snapshot.big_core_mask);
+            self.affinity
+                .tick(game_pid, self.config_snapshot.big_core_mask);
         }
         if self.config_snapshot.priority_elevator {
             self.priority.tick(game_pid);
@@ -189,6 +191,8 @@ impl GameTurboEngine {
         if self.config_snapshot.touch_boost {
             self.touch.tick();
         }
+        self.network
+            .refresh_for_network_handoff(self.config_snapshot.wifi_ps_disable);
     }
 
     /// Thermal-aware adjustment — called each tick with the current

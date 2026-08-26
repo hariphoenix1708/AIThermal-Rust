@@ -1,5 +1,4 @@
-//! Network optimizer — WiFi power-save disable, RPS steering, UDP/TCP buffer
-//! tuning, and socket prioritization during gaming.
+//! Network optimizer — WiFi low-latency mode and RPS steering during gaming.
 //!
 //! All values saved for restoration on game exit.
 
@@ -11,21 +10,6 @@ use std::fs;
 const WIFI_PS_PATHS: &[&str] = &[
     "/sys/class/net/wlan0/power_save",
     "/sys/kernel/debug/ieee80211/phy0/power_save",
-];
-
-/// /proc/sys/net tunables to boost for gaming network performance.
-/// (path, gaming_value, description)
-const GAMING_NET_TUNABLES: &[(&str, &str, &str)] = &[
-    (
-        "/proc/sys/net/core/rmem_default",
-        "262144",
-        "UDP/TCP default receive buffer",
-    ),
-    (
-        "/proc/sys/net/core/wmem_default",
-        "262144",
-        "UDP/TCP default send buffer",
-    ),
 ];
 
 pub struct NetworkState {
@@ -51,6 +35,15 @@ impl NetworkState {
 
     /// Disable WiFi power-save to reduce TX latency.
     pub fn activate_wifi_ps(&mut self) {
+        // Do not force a WiFi performance mode while cellular is the active
+        // transport. Besides being pointless, Android documents that
+        // low-latency mode may reduce WiFi scanning/roaming, which is harmful
+        // when the user later expects a clean handoff back to WiFi.
+        if !iface_is_active("wlan0") {
+            tracing::debug!(target: "game_turbo", "WiFi PS: WLAN inactive; waiting for handoff");
+            return;
+        }
+
         // v3.3.7: On Qualcomm WCN6750, /sys/class/net/wlan0/power_save doesn't exist.
         // Use Android framework command to set low-latency mode which disables PS.
         if std::process::Command::new("su")
@@ -138,9 +131,7 @@ impl NetworkState {
         if let Ok(entries) = fs::read_dir("/sys/class/net") {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("rmnet_data")
-                    && iface_is_active(&name)
-                {
+                if name.starts_with("rmnet_data") && iface_is_active(&name) {
                     ifaces.push(name);
                 }
             }
@@ -163,13 +154,17 @@ impl NetworkState {
                     if !std::path::Path::new(&rps_path).exists() {
                         continue;
                     }
-                    if !self.rps_saved.contains_key(&rps_path)
-                        && let Ok(orig) = fs::read_to_string(&rps_path)
-                    {
+                    let newly_saved = !self.rps_saved.contains_key(&rps_path);
+                    if newly_saved && let Ok(orig) = fs::read_to_string(&rps_path) {
                         self.rps_saved
                             .insert(rps_path.clone(), orig.trim().to_string());
                     }
-                    if write_file(&rps_path, cpus_all) {
+                    // Refreshes are needed when the active default network changes
+                    // mid-game. Avoid rewriting a queue that already has the desired
+                    // mask, but reapply if a driver reset cleared it during handoff.
+                    if read_trimmed(&rps_path).as_deref() != Some(cpus_all)
+                        && write_file(&rps_path, cpus_all)
+                    {
                         total_rps_cpus += 1;
                         tracing::debug!(target: "game_turbo", "RPS {} -> {}", rps_path, cpus_all);
                     }
@@ -192,7 +187,9 @@ impl NetworkState {
                             self.rps_saved
                                 .insert(flow_cnt_path.clone(), orig.trim().to_string());
                         }
-                        write_file(&flow_cnt_path, "4096");
+                        if read_trimmed(&flow_cnt_path).as_deref() != Some("4096") {
+                            write_file(&flow_cnt_path, "4096");
+                        }
                     }
                 }
             }
@@ -201,19 +198,38 @@ impl NetworkState {
         // Set global RPS sock flow entries
         let flow_path = "/proc/sys/net/core/rps_sock_flow_entries";
         if std::path::Path::new(flow_path).exists() {
-            if let Ok(orig) = fs::read_to_string(flow_path) {
+            if self.rps_flow_original.is_none()
+                && let Ok(orig) = fs::read_to_string(flow_path)
+            {
                 self.rps_flow_original = Some(orig.trim().to_string());
             }
-            write_file(flow_path, "32768");
+            if read_trimmed(flow_path).as_deref() != Some("32768") {
+                write_file(flow_path, "32768");
+            }
         }
 
-        if !self.rps_saved.is_empty() {
+        if total_rps_cpus > 0 {
             tracing::info!(
                 target: "game_turbo",
-                "RPS: enabled across {} interfaces ({} rx queues, cpus={})",
+                "RPS: refreshed across {} active interfaces ({} rx queues, cpus={})",
                 ifaces.len(), total_rps_cpus, cpus_all
             );
         }
+    }
+
+    /// Re-evaluate active interfaces while a game is running. Android can move
+    /// the default route from WiFi to rmnet (or back) without restarting the
+    /// game process; provisioning RPS only at game entry leaves the new RX path
+    /// on CPU0 and causes the exact softirq/ping spikes this module avoids.
+    pub fn refresh_for_network_handoff(&mut self, wifi_low_latency_enabled: bool) {
+        if wifi_low_latency_enabled && iface_is_active("wlan0") {
+            if !self.wifi_ps_cmd_used && self.wifi_ps_path.is_none() {
+                self.activate_wifi_ps();
+            }
+        } else if self.wifi_ps_cmd_used || self.wifi_ps_path.is_some() {
+            self.deactivate_wifi_ps();
+        }
+        self.activate_rps();
     }
 
     /// Restore RPS to original values.
@@ -237,38 +253,11 @@ impl NetworkState {
 
     /// Tune UDP/TCP buffers for gaming network performance.
     pub fn activate_buffers(&mut self) {
-        for &(path, value, desc) in GAMING_NET_TUNABLES {
-            if !std::path::Path::new(path).exists() {
-                continue;
-            }
-            if !self.saved_tunables.contains_key(path) {
-                if let Ok(orig) = fs::read_to_string(path) {
-                    self.saved_tunables
-                        .insert(path.to_string(), orig.trim().to_string());
-                } else {
-                    continue;
-                }
-            }
-
-            if write_file(path, value) {
-                tracing::debug!(
-                    target: "game_turbo",
-                    "NET-BUF {} {} -> {} ({})",
-                    path,
-                    self.saved_tunables.get(path).unwrap_or(&"?".to_string()),
-                    value,
-                    desc
-                );
-            }
-        }
-
-        if !self.saved_tunables.is_empty() {
-            tracing::info!(
-                target: "game_turbo",
-                "Network buffers: tuned {} sysctl knobs for gaming",
-                self.saved_tunables.len()
-            );
-        }
+        // Per-network socket buffer policy is owned by Android's netd/kernel.
+        // Global rmem_default/wmem_default writes provided no game-specific
+        // benefit and could race a WiFi-to-cellular handoff, so this remains a
+        // compatibility no-op for existing configuration files.
+        tracing::debug!(target: "game_turbo", "Network buffer overrides disabled; preserving kernel defaults");
     }
 
     /// Restore all saved network tunables.
@@ -307,6 +296,12 @@ fn iface_is_active(iface: &str) -> bool {
         return true;
     }
     false
+}
+
+fn read_trimmed(path: &str) -> Option<String> {
+    fs::read_to_string(path)
+        .ok()
+        .map(|value| value.trim().to_string())
 }
 
 fn write_file(path: &str, value: &str) -> bool {
