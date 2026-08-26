@@ -69,6 +69,7 @@ impl SystemOrchestrator {
         trend_score: i32,
         is_screen_off_now: bool,
         is_gaming: bool,
+        gpu_load: u32,
     ) -> (u64, bool) {
         let clamped_trend = (trend_score * 50).clamp(-50, 50);
         ctx.trend_score = clamped_trend;
@@ -89,26 +90,48 @@ impl SystemOrchestrator {
         let sustained_hot_trend = hot_trend_now && ctx.prev_hot_trend;
         ctx.prev_hot_trend = hot_trend_now;
 
-        let sleep_ms = if sustained_hot_trend {
+        let sleep_ms = if is_gaming {
+            // ─── Adaptive gaming poll interval ─────────────────────────
+            // Gaming needs faster polling for thermal response, but
+            // we scale based on temperature trend and GPU load:
+            // - Hot trend + high GPU load: 500ms (fastest — catch thermal spikes)
+            // - Hot trend (moderate):       1000ms (fast — game_poll_interval)
+            // - Stable + low GPU:           3000ms (slow — save power when safe)
+            // - Rising trend:               1500ms (medium — watching closely)
+            if sustained_hot_trend && gpu_load > 60 {
+                500  // Hot + GPU-loaded: respond immediately to thermal events
+            } else if sustained_hot_trend {
+                1000 // Hot but low GPU: game_poll_interval default
+            } else if clamped_trend > 15 {
+                1500 // Rising trend: medium speed
+            } else if gpu_load < 30 && (-5..=5).contains(&clamped_trend) {
+                // Low GPU + stable temp: safe to poll slowly.
+                // This saves significant CPU during cutscenes or menus.
+                3000
+            } else {
+                ctx.config.profiles.game_poll_interval.saturating_mul(1000)
+            }
+        } else if sustained_hot_trend {
             750
         } else if clamped_trend > 15 {
             1500
         } else if long_idle {
             30_000
-        } else if is_screen_off_now && !is_gaming && (-2..=2).contains(&clamped_trend) {
+        } else if is_screen_off_now && (-2..=2).contains(&clamped_trend) {
             ctx.config.profiles.poll_interval.saturating_mul(4000)
         } else {
             ctx.config.profiles.poll_interval.saturating_mul(1000)
         };
         tracing::trace!(
-            "adaptive sleep: base={}ms chosen={}ms trend={} sustained={} long_idle={} screen_off={} gaming={}",
+            "adaptive sleep: base={}ms chosen={}ms trend={} sustained={} long_idle={} screen_off={} gaming={} gpu_load={}",
             ctx.config.profiles.poll_interval.saturating_mul(1000),
             sleep_ms,
             clamped_trend,
             sustained_hot_trend,
             long_idle,
             is_screen_off_now,
-            is_gaming
+            is_gaming,
+            gpu_load
         );
 
         (sleep_ms, long_idle)
@@ -283,7 +306,11 @@ impl SystemOrchestrator {
             cpuset,
             charging,
             gaming,
-            game_turbo: crate::game_turbo::GameTurboEngine::new(),
+            game_turbo: {
+                let mut gt = crate::game_turbo::GameTurboEngine::new();
+                gt.init_profiles(&ctx.state_dir);
+                gt
+            },
             watchdog,
             recovery,
             calibration,
@@ -781,10 +808,18 @@ impl RuntimeTask for SystemOrchestrator {
                 && let Some(pid) = self.gaming.confirmed_pid
             {
                 let gpu = &self.hardware.gpu_profile;
+                // Use per-game GPU profile recommendation if available.
+                let gpu_min = gpu.min_power_level;
+                let gpu_max = gpu.max_power_level;
+                let gpu_best = gpu_min.map(|m| m.min(gpu_max.unwrap_or(m))).unwrap_or(0);
+                let gpu_worst = gpu_min.map(|m| m.max(gpu_max.unwrap_or(m))).unwrap_or(4);
+                let recommended = confirmed_pkg.as_deref()
+                    .and_then(|pkg| self.game_turbo.recommended_gpu_level(pkg, gpu_best, gpu_worst))
+                    .unwrap_or(gpu_best);
                 self.game_turbo.set_gpu_power_info(
                     gpu.power_level_path.clone(),
                     gpu.current_power_level,
-                    gpu.min_power_level.unwrap_or(0),
+                    recommended,
                 );
                 self.game_turbo.activate(pid, &ctx.config.profiles);
             }
@@ -823,10 +858,17 @@ impl RuntimeTask for SystemOrchestrator {
             if !self.game_turbo.is_active() {
                 // Deferred activation — PID became available after initial detection.
                 let gpu = &self.hardware.gpu_profile;
+                let gpu_min = gpu.min_power_level;
+                let gpu_max = gpu.max_power_level;
+                let gpu_best = gpu_min.map(|m| m.min(gpu_max.unwrap_or(m))).unwrap_or(0);
+                let gpu_worst = gpu_min.map(|m| m.max(gpu_max.unwrap_or(m))).unwrap_or(4);
+                let recommended = confirmed_pkg.as_deref()
+                    .and_then(|pkg| self.game_turbo.recommended_gpu_level(pkg, gpu_best, gpu_worst))
+                    .unwrap_or(gpu_best);
                 self.game_turbo.set_gpu_power_info(
                     gpu.power_level_path.clone(),
                     gpu.current_power_level,
-                    gpu.min_power_level.unwrap_or(0),
+                    recommended,
                 );
                 self.game_turbo.activate(pid, &ctx.config.profiles);
             }
@@ -856,6 +898,12 @@ impl RuntimeTask for SystemOrchestrator {
             // value that can drive false policy transitions.
             0
         });
+
+        // Record GPU load for per-game profile learning (needs gpu_load which is now in scope).
+        if is_gaming && ctx.config.profiles.game_turbo_enabled {
+            self.game_turbo.record_gpu_load(gpu_load);
+        }
+
         let comp_temp =
             ThermalEngine::composite_temp(cpu_temp, gpu_temp, bat_temp, skin_temp, gpu_load);
 
@@ -976,6 +1024,13 @@ impl RuntimeTask for SystemOrchestrator {
             );
 
             // v3.3.0: Deactivate GameTurbo engine — restore all runtime state.
+            // Record per-game GPU profile before deactivating.
+            let gpu_level_used = self.last_applied_gpu_level.unwrap_or(0);
+            self.game_turbo.record_session(
+                ctx.cooldown_source_pkg.as_deref().unwrap_or(""),
+                gpu_level_used,
+                ctx.game_session_worst_jank_pct,
+            );
             self.game_turbo.deactivate();
 
             // Actively restore the normal usage profile to drop heat quickly
@@ -1738,7 +1793,7 @@ impl RuntimeTask for SystemOrchestrator {
             .evaluate(&charging_inputs, &ctx.state_dir, &self.hardware);
 
         // 10. Adaptive Sleep
-        let (sleep_ms, long_idle) = self.calculate_adaptive_sleep(ctx, trend_score, is_screen_off_now, is_gaming);
+        let (sleep_ms, long_idle) = self.calculate_adaptive_sleep(ctx, trend_score, is_screen_off_now, is_gaming, gpu_load);
         ctx.sleep_ms = sleep_ms;
 
         if !needs_apply {

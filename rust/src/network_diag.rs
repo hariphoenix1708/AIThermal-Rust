@@ -409,12 +409,34 @@ pub enum BulletRegQuality {
 }
 
 impl BulletRegQuality {
+    /// Cellular networks have inherently higher latency than WiFi.
+    /// A 30ms RTT on 5G is excellent; on WiFi it would be mediocre.
+    /// This method applies network-type-aware thresholds.
     pub fn from_jitter_ms(jitter: f64, avg_rtt: f64, loss_pct: f64) -> Self {
         if jitter <= 5.0 && avg_rtt <= 80.0 && loss_pct == 0.0 {
             Self::Excellent
         } else if jitter <= 10.0 && avg_rtt <= 120.0 && loss_pct <= 2.0 {
             Self::Good
         } else if jitter <= 15.0 && avg_rtt <= 150.0 {
+            Self::Fair
+        } else if jitter <= 25.0 {
+            Self::Poor
+        } else {
+            Self::Bad
+        }
+    }
+
+    /// Cellular-specific thresholds — more generous for RTT since cell
+    /// towers add base latency, but strict on jitter since that causes
+    /// game desync and registration issues.
+    pub fn from_jitter_ms_cellular(jitter: f64, avg_rtt: f64, loss_pct: f64) -> Self {
+        // Cellular RTT baseline is ~20-40ms higher than WiFi.
+        // Jitter thresholds remain the same — jitter is equally bad for gaming.
+        if jitter <= 5.0 && avg_rtt <= 120.0 && loss_pct == 0.0 {
+            Self::Excellent
+        } else if jitter <= 10.0 && avg_rtt <= 160.0 && loss_pct <= 2.0 {
+            Self::Good
+        } else if jitter <= 15.0 && avg_rtt <= 200.0 {
             Self::Fair
         } else if jitter <= 25.0 {
             Self::Poor
@@ -702,9 +724,14 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
         dns_resolution_ms: dns_ms,
     });
 
-    // Score
+    // Score — use network-type-aware thresholds.
+    let is_cellular = active.as_ref().is_some() && passive.network_type == "mobile";
     let (bullet_reg, jitter_tier, quality_score) = if let Some(ref a) = active {
-        let br = BulletRegQuality::from_jitter_ms(a.jitter_ms, a.avg_rtt_ms, a.loss_pct);
+        let br = if is_cellular {
+            BulletRegQuality::from_jitter_ms_cellular(a.jitter_ms, a.avg_rtt_ms, a.loss_pct)
+        } else {
+            BulletRegQuality::from_jitter_ms(a.jitter_ms, a.avg_rtt_ms, a.loss_pct)
+        };
         let jt = JitterTier::from_jitter_ms(a.jitter_ms);
         let mut score = br.score();
 

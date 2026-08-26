@@ -12,8 +12,10 @@
 
 mod background;
 mod gpu_freq;
+mod gpu_profiles;
 mod io_scheduler;
 mod network;
+mod perf_hint;
 mod priority;
 mod thread_affinity;
 mod touch;
@@ -30,12 +32,17 @@ pub struct GameTurboEngine {
     touch: touch::TouchState,
     io_scheduler: io_scheduler::IoSchedulerState,
     gpu_freq: gpu_freq::GpuFreqState,
+    perf_hint: perf_hint::PerfHintState,
+    gpu_profiles: gpu_profiles::GpuProfileManager,
     /// Whether we've entered thermal-throttle mode (eased constraints).
     thermal_throttled: bool,
     /// Pending GPU power info (set by orchestrator before activate).
     pending_gpu_power_level_path: Option<String>,
     pending_gpu_current_level: Option<u32>,
     pending_gpu_best_level: u32,
+    /// GPU load accumulator for session average.
+    gpu_load_sum: u64,
+    gpu_load_samples: u32,
 }
 
 #[derive(Clone)]
@@ -84,10 +91,14 @@ impl GameTurboEngine {
             touch: touch::TouchState::new(),
             io_scheduler: io_scheduler::IoSchedulerState::new(),
             gpu_freq: gpu_freq::GpuFreqState::new(),
+            perf_hint: perf_hint::PerfHintState::new(),
+            gpu_profiles: gpu_profiles::GpuProfileManager::new(""),
             thermal_throttled: false,
             pending_gpu_power_level_path: None,
             pending_gpu_current_level: None,
             pending_gpu_best_level: 0,
+            gpu_load_sum: 0,
+            gpu_load_samples: 0,
         }
     }
 
@@ -101,6 +112,36 @@ impl GameTurboEngine {
         self.pending_gpu_power_level_path = power_level_path;
         self.pending_gpu_current_level = current_level;
         self.pending_gpu_best_level = best_level;
+    }
+
+    /// Initialize the GPU profile manager with the state directory.
+    pub fn init_profiles(&mut self, state_dir: &str) {
+        self.gpu_profiles = gpu_profiles::GpuProfileManager::new(state_dir);
+    }
+
+    /// Get recommended GPU level for a game from learned profiles.
+    pub fn recommended_gpu_level(&self, package: &str, gpu_best: u32, gpu_worst: u32) -> Option<u32> {
+        self.gpu_profiles.recommend_level(package, gpu_best, gpu_worst)
+    }
+
+    /// Record GPU load sample for session average.
+    pub fn record_gpu_load(&mut self, gpu_load: u32) {
+        if self.active {
+            self.gpu_load_sum += gpu_load as u64;
+            self.gpu_load_samples += 1;
+        }
+    }
+
+    /// Record session results when game exits.
+    pub fn record_session(&mut self, package: &str, gpu_level_used: u32, jank_pct: f64) {
+        let avg_load = if self.gpu_load_samples > 0 {
+            self.gpu_load_sum as f64 / self.gpu_load_samples as f64
+        } else {
+            50.0 // Assume moderate load if no data.
+        };
+        self.gpu_profiles.record_session(package, gpu_level_used, avg_load, jank_pct);
+        self.gpu_load_sum = 0;
+        self.gpu_load_samples = 0;
     }
 
     pub fn is_active(&self) -> bool {
@@ -171,6 +212,9 @@ impl GameTurboEngine {
             );
         }
 
+        // Activate Performance Hint — set uclamp_min for game-critical threads.
+        self.perf_hint.activate(game_pid);
+
         self.active = true;
     }
 
@@ -193,6 +237,8 @@ impl GameTurboEngine {
         }
         self.network
             .refresh_for_network_handoff(self.config_snapshot.wifi_ps_disable);
+        // Re-boost newly spawned game threads with uclamp.
+        self.perf_hint.tick(game_pid);
     }
 
     /// Thermal-aware adjustment — called each tick with the current
@@ -261,6 +307,7 @@ impl GameTurboEngine {
         self.background.deactivate();
         self.priority.deactivate();
         self.affinity.deactivate();
+        self.perf_hint.deactivate();
 
         self.thermal_throttled = false;
         self.active = false;
