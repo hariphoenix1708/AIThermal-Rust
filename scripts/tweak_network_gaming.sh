@@ -16,6 +16,21 @@ BACKUP_DIR="$STATE_DIR/network_backup"
 
 mkdir -p "$STATE_DIR" "$LOG_DIR" "$BACKUP_DIR" 2>/dev/null
 
+# v3.3.9: Boot-ID tracking — clear stale backups from previous boots.
+# On each new boot the kernel resets sysctl defaults, so backups from a
+# prior boot may capture already-modified values (e.g. from RuntimeTuner
+# or advanced.rs writing before the shell script runs).  Clearing on
+# boot boundary ensures we always snapshot the true kernel defaults.
+BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+SAVED_BOOT_ID=""
+if [ -f "$BACKUP_DIR/_boot_id" ]; then
+    SAVED_BOOT_ID=$(cat "$BACKUP_DIR/_boot_id" 2>/dev/null)
+fi
+if [ "$BOOT_ID" != "$SAVED_BOOT_ID" ]; then
+    rm -f "$BACKUP_DIR"/_* 2>/dev/null
+    echo "$BOOT_ID" > "$BACKUP_DIR/_boot_id" 2>/dev/null
+fi
+
 log() {
     echo "$(TZ=Asia/Kolkata date '+%Y-%m-%d %H:%M:%S%z') [NET-TWEAK] $*" >> "$LOGFILE"
 }
@@ -92,155 +107,36 @@ detect_rom() {
 }
 
 tweak_wifi_power_save() {
-    local enable="$1"
-    if [ "$enable" = "enable" ]; then
-        # v3.3.7: Qualcomm WCN6750 has no /sys/class/net/wlan0/power_save.
-        # Use Android framework command to set low-latency mode which disables PS.
-        if su -c 'cmd wifi force-low-latency-mode enabled' >/dev/null 2>&1; then
-            log "WiFi PS disabled via cmd wifi force-low-latency-mode"
-        elif command -v iw >/dev/null 2>&1; then
-            iw wlan0 set power_save off 2>/dev/null
-            log "WiFi PS disabled via iw"
-        fi
-        local ps_file="/sys/class/net/wlan0/power_save"
-        if [ -f "$ps_file" ]; then
-            backup_and_write "$ps_file" "0"
-        fi
-        for f in /sys/kernel/debug/ieee80211/phy*/ath9k/ps_timeout; do
-            if [ -f "$f" ]; then
-                backup_and_write "$f" "0"
-            fi
-        done
-    else
-        if su -c 'cmd wifi force-low-latency-mode disabled' >/dev/null 2>&1; then
-            log "WiFi PS restored via cmd wifi force-low-latency-mode"
-        elif command -v iw >/dev/null 2>&1; then
-            iw wlan0 set power_save on 2>/dev/null
-            log "WiFi PS re-enabled via iw"
-        fi
-        local ps_file="/sys/class/net/wlan0/power_save"
-        if [ -f "$ps_file" ]; then
-            backup_and_write "$ps_file" "1"
-        fi
-    fi
+    # v3.3.10: No-op — handled by Rust GameTurbo (network.rs activate_wifi_ps).
+    # The shell script previously wrote the same values, causing dual-backup
+    # race conditions where the second saver captured already-modified values.
+    log "WiFi PS: handled by Rust GameTurbo (shell no-op)"
 }
 
-# v3.3.7: RPS (Receive Packet Steering) distributes network packet processing
-# across all CPUs instead of CPU0 only. On SM8635, all WLAN and modem
-# interrupts land on CPU0 — without RPS this causes softirq storms and ping spikes.
-# v3.3.8: Also applies RPS to mobile data (rmnet) interfaces.
 tweak_rps() {
-    local enable="$1"
-    local cpus_all="ff"
-
-    # v3.3.8: Apply RPS to all active interfaces (WiFi + mobile data)
-    local ifaces=""
-    for iface in wlan0 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3; do
-        local operstate="/sys/class/net/$iface/operstate"
-        if [ -f "$operstate" ] && [ "$(cat "$operstate" 2>/dev/null)" = "up" ]; then
-            ifaces="$ifaces $iface"
-        fi
-    done
-
-    if [ "$enable" = "enable" ]; then
-        for iface in $ifaces; do
-            for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
-                [ -f "$q" ] || continue
-                local key=$(echo "$q" | tr '/' '_')
-                if [ ! -f "$BACKUP_DIR/$key" ]; then
-                    cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "00" > "$BACKUP_DIR/$key"
-                fi
-                write_if_different "$q" "$cpus_all"
-            done
-
-            for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
-                [ -f "$q" ] || continue
-                local key=$(echo "$q" | tr '/' '_')
-                if [ ! -f "$BACKUP_DIR/$key" ]; then
-                    cat "$q" > "$BACKUP_DIR/$key" 2>/dev/null || echo "0" > "$BACKUP_DIR/$key"
-                fi
-                write_if_different "$q" "4096"
-            done
-        done
-
-        # Enable flow-based steering so packets from same connection
-        # go to the same CPU (reduces lock contention)
-        local flow_key="_proc_sys_net_core_rps_sock_flow_entries"
-        if [ ! -f "$BACKUP_DIR/$flow_key" ]; then
-            cat /proc/sys/net/core/rps_sock_flow_entries > "$BACKUP_DIR/$flow_key" 2>/dev/null || echo "0" > "$BACKUP_DIR/$flow_key"
-        fi
-        write_if_different /proc/sys/net/core/rps_sock_flow_entries "32768"
-
-        log "RPS enabled on interfaces:$ifaces (distribute network processing across all CPUs)"
-    else
-        for iface in $ifaces; do
-            for q in /sys/class/net/$iface/queues/rx-*/rps_cpus; do
-                [ -f "$q" ] || continue
-                local key=$(echo "$q" | tr '/' '_')
-                if [ -f "$BACKUP_DIR/$key" ]; then
-                    local orig
-                    orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
-                    write_if_different "$q" "$orig"
-                fi
-            done
-
-            for q in /sys/class/net/$iface/queues/rx-*/rps_flow_cnt; do
-                [ -f "$q" ] || continue
-                local key=$(echo "$q" | tr '/' '_')
-                if [ -f "$BACKUP_DIR/$key" ]; then
-                    local orig
-                    orig=$(cat "$BACKUP_DIR/$key" 2>/dev/null)
-                    write_if_different "$q" "$orig"
-                fi
-            done
-        done
-
-        local flow_key="_proc_sys_net_core_rps_sock_flow_entries"
-        if [ -f "$BACKUP_DIR/$flow_key" ]; then
-            local orig
-            orig=$(cat "$BACKUP_DIR/$flow_key" 2>/dev/null)
-            write_if_different /proc/sys/net/core/rps_sock_flow_entries "$orig"
-        fi
-
-        log "RPS restored to defaults"
-    fi
+    # v3.3.10: No-op — handled by Rust GameTurbo (network.rs activate_rps).
+    # The shell script previously wrote the same values, causing dual-backup
+    # race conditions where the second saver captured already-modified values.
+    log "RPS: handled by Rust GameTurbo (shell no-op)"
 }
 
 tweak_network_buffers() {
     local enable="$1"
     if [ "$enable" = "enable" ]; then
-        # v3.3.6: Use values >= system defaults. Previous versions downgraded
-        # tcp_rmem/tcp_wmem/udp_mem from the kernel's well-tuned 12GB defaults,
-        # causing TCP window scaling issues (game opening) and UDP packet drops
-        # (in-match). The kernel autotuning on SM8635 is already optimal.
-        backup_and_write /proc/sys/net/ipv4/tcp_rmem "524288 1048576 16777216"
-        backup_and_write /proc/sys/net/ipv4/tcp_wmem "262144 524288 16777216"
-        backup_and_write /proc/sys/net/ipv4/tcp_mem "134106 178808 268212"
-        backup_and_write /proc/sys/net/ipv4/udp_mem "268212 357617 536424"
-        backup_and_write /proc/sys/net/core/rmem_max "16777216"
-        backup_and_write /proc/sys/net/core/wmem_max "16777216"
-        backup_and_write /proc/sys/net/core/netdev_max_backlog "100000"
-        backup_and_write /proc/sys/net/core/netdev_budget "600"
-        backup_and_write /proc/sys/net/core/busy_poll "50"
-        backup_and_write /proc/sys/net/core/busy_read "50"
-        backup_and_write /proc/sys/net/core/dev_weight "64"
-        backup_and_write /proc/sys/net/ipv4/tcp_keepalive_time "600"
-        backup_and_write /proc/sys/net/ipv4/tcp_fastopen "3"
-        log "Network buffers tuned for gaming"
+        # v3.3.10: Only write the 3 knobs that genuinely improve gaming latency
+        # over kernel defaults. All other network sysctl values (tcp_rmem, tcp_wmem,
+        # tcp_mem, udp_mem, rmem_max, wmem_max, netdev_max_backlog, dev_weight,
+        # tcp_keepalive_time, tcp_fastopen) are left at kernel defaults — the
+        # kernel autotuning on SM8635 is already optimal and previous versions
+        # downgraded these, breaking TCP window scaling and causing UDP drops.
+        backup_and_write /proc/sys/net/core/netdev_budget "600"    # kernel default: 300 — process more packets per NAPI poll
+        backup_and_write /proc/sys/net/core/busy_poll "50"        # kernel default: 0 — kernel bypass for lower latency
+        backup_and_write /proc/sys/net/core/busy_read "50"        # kernel default: 0 — kernel bypass for lower latency
+        log "Network buffers tuned for gaming (netdev_budget, busy_poll, busy_read)"
     else
-        backup_and_write /proc/sys/net/ipv4/tcp_rmem "524288 1048576 16777216"
-        backup_and_write /proc/sys/net/ipv4/tcp_wmem "262144 524288 16777216"
-        backup_and_write /proc/sys/net/ipv4/tcp_mem "134106 178808 268212"
-        backup_and_write /proc/sys/net/ipv4/udp_mem "268212 357617 536424"
-        backup_and_write /proc/sys/net/core/rmem_max "16777216"
-        backup_and_write /proc/sys/net/core/wmem_max "16777216"
-        backup_and_write /proc/sys/net/core/netdev_max_backlog "10000"
-        backup_and_write /proc/sys/net/core/netdev_budget "300"
-        backup_and_write /proc/sys/net/core/busy_poll "0"
-        backup_and_write /proc/sys/net/core/busy_read "0"
-        backup_and_write /proc/sys/net/core/dev_weight "1"
-        backup_and_write /proc/sys/net/ipv4/tcp_keepalive_time "7200"
-        backup_and_write /proc/sys/net/ipv4/tcp_fastopen "1"
+        backup_and_write /proc/sys/net/core/netdev_budget ""
+        backup_and_write /proc/sys/net/core/busy_poll ""
+        backup_and_write /proc/sys/net/core/busy_read ""
         log "Network buffers restored to defaults"
     fi
 }

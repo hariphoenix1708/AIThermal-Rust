@@ -121,13 +121,16 @@ impl NetworkState {
     /// interfaces. On SM8635, all WLAN and modem interrupts land on CPU0 —
     /// without RPS this causes softirq storms and ping spikes.
     /// v3.3.8: Also enables RPS on mobile data (rmnet) interfaces.
+    /// v3.3.9: Interface detection uses operstate OR carrier check.
+    /// rmnet interfaces on SM8635 report operstate="unknown" even when
+    /// the link is functionally up; carrier==1 indicates an active link.
     pub fn activate_rps(&mut self) {
         let cpus_all = "ff";
         let mut ifaces: Vec<String> = Vec::new();
 
         // Discover active interfaces: wlan0 + all up rmnet_data*
         for name in &["wlan0"] {
-            if std::path::Path::new(&format!("/sys/class/net/{}/operstate", name)).exists() {
+            if iface_is_active(name) {
                 ifaces.push(name.to_string());
             }
         }
@@ -135,11 +138,10 @@ impl NetworkState {
         if let Ok(entries) = fs::read_dir("/sys/class/net") {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("rmnet_data") {
-                    let operstate = format!("/sys/class/net/{}/operstate", name);
-                    if std::path::Path::new(&operstate).exists() {
-                        ifaces.push(name);
-                    }
+                if name.starts_with("rmnet_data")
+                    && iface_is_active(&name)
+                {
+                    ifaces.push(name);
                 }
             }
         }
@@ -289,6 +291,22 @@ impl NetworkState {
         }
         self.saved_tunables.clear();
     }
+}
+
+fn iface_is_active(iface: &str) -> bool {
+    let operstate = format!("/sys/class/net/{}/operstate", iface);
+    let carrier = format!("/sys/class/net/{}/carrier", iface);
+    if let Ok(content) = fs::read_to_string(&operstate)
+        && content.trim() == "up"
+    {
+        return true;
+    }
+    if let Ok(content) = fs::read_to_string(&carrier)
+        && content.trim() == "1"
+    {
+        return true;
+    }
+    false
 }
 
 fn write_file(path: &str, value: &str) -> bool {

@@ -42,10 +42,17 @@ detect_rom() {
 
 # ─── Network Interface Detection ─────────────────────────────────────
 detect_active_interface() {
-    # v3.3.8: Priority: wlan0 > rmnet_data0/1/2/3 (dual-SIM) > any other up interface
+    # v3.3.9: Priority: wlan0 > rmnet_data0/1/2/3 (dual-SIM) > any other up interface.
+    # rmnet interfaces report operstate="unknown" even when active —
+    # fall back to carrier==1 (kernel sets carrier when link is up).
     for iface in wlan0 rmnet_data0 rmnet_data1 rmnet_data2 rmnet_data3; do
         local state=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null)
         if [ "$state" = "up" ]; then
+            echo "$iface"
+            return
+        fi
+        local carrier=$(cat "/sys/class/net/$iface/carrier" 2>/dev/null)
+        if [ "$carrier" = "1" ]; then
             echo "$iface"
             return
         fi
@@ -56,6 +63,11 @@ detect_active_interface() {
         if [ "$iface" = "lo" ]; then continue; fi
         local state=$(cat "$iface_path" 2>/dev/null)
         if [ "$state" = "up" ]; then
+            echo "$iface"
+            return
+        fi
+        local carrier=$(cat "/sys/class/net/$iface/carrier" 2>/dev/null)
+        if [ "$carrier" = "1" ]; then
             echo "$iface"
             return
         fi

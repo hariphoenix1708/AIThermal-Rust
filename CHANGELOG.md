@@ -1,5 +1,55 @@
 # Changelog
 
+## v3.3.10 (versionCode 370)
+### Fixed — Network tuning backup race condition and deconfliction
+- **Removed `apply_network_buffers()` from `advanced.rs`**: Was writing
+  tcp_rmem/tcp_wmem values WORSE than kernel defaults (512K/1M vs 2M/6M),
+  causing TCP window scaling degradation during gaming. Network buffer tuning
+  is now handled exclusively by the shell script with proper backup/restore.
+- **Simplified `tweak_network_buffers()` in shell script**: Reduced from 13
+  sysctl writes to 3 — only `netdev_budget` (300→600), `busy_poll` (0→50),
+  and `busy_read` (0→50). All other values (tcp_rmem, tcp_wmem, rmem_max,
+  wmem_max, netdev_max_backlog, dev_weight, tcp_fastopen) were redundant
+  or downgrades from kernel defaults.
+- **Made `tweak_wifi_power_save()` and `tweak_rps()` shell no-ops**: These
+  were duplicate-writes conflicting with Rust GameTurbo's
+  `activate_wifi_ps()`/`activate_rps()`, which has proper save/restore.
+  Eliminates dual-backup race conditions where the second saver captured
+  already-modified values.
+- **Added network sysctl restoration to `uninstall.sh`**: Belt-and-suspenders
+  fallback to restore kernel defaults (netdev_budget, busy_poll, busy_read,
+  tcp_low_latency, rps) if daemon doesn't restore cleanly on uninstall.
+- **Comprehensive Rust + shell script audit**: Full audit of all network
+  sysctl/sysfs writes across the codebase. Identified 4 LOW-severity
+  remaining dual-write paths (WiFi PS, RPS, tcp_low_latency,
+  tcp_congestion_control) — all idempotent and restore-safe due to correct
+  boot-ID tracking and execution ordering.
+
+## v3.3.9 (versionCode 369)
+### Fixed — rmnet interface detection and stale backup cleanup
+- **Shell RPS detection for rmnet**: `tweak_rps()` in `tweak_network_gaming.sh`
+  checked `operstate=="up"` but rmnet interfaces on SM8635 report
+  `operstate="unknown"` even when active. RPS was never applied to mobile
+  data interfaces. Now falls back to `carrier==1` check.
+- **Shell interface detection in `detect_network_quality.sh`**:
+  `detect_active_interface()` returned "none" when gaming on mobile data
+  because rmnet operstate is "unknown". Now checks `carrier==1` as fallback.
+- **Shell network type in `detect_codm_servers.sh`**:
+  `detect_network_type()` returned "none" for rmnet. Now checks `carrier==1`.
+- **Rust `check_network_quality()`**: Only checked `operstate=="up"`, returning
+  false for rmnet interfaces. Now checks all active interfaces (wlan0,
+  rmnet_data0-3) with operstate OR carrier fallback.
+- **Rust `read_wifi_active()`**: Same operstate-only issue. Now uses carrier
+  fallback via shared `iface_is_active()` helper.
+- **Rust `activate_rps()` in `game_turbo/network.rs`**: Was using
+  `Path::exists()` on operstate file (worked but semantically inconsistent).
+  Now uses the same `iface_is_active()` helper (operstate OR carrier).
+- **Stale backup files**: Backup directory at `$STATE_DIR/network_backup/`
+  could retain values from a previous boot where RuntimeTuner or advanced.rs
+  had already modified sysctl values before the shell captured originals.
+  Now tracks boot ID (`/proc/sys/kernel/random/boot_id`) and clears backups
+  on each new boot, ensuring fresh captures of true kernel defaults.
+
 ## v3.3.8 (versionCode 368)
 ### Fixed — Comprehensive audit: critical bugs in network tuning, RPS, and shell scripts
 - **`advanced.rs` buffer values restored**: The Rust advanced tuner still had

@@ -158,12 +158,15 @@ wifi_band_analysis() {
 
 # Detect active network type
 detect_network_type() {
+    # v3.3.9: rmnet interfaces report operstate="unknown" even when active —
+    # fall back to carrier==1 (kernel sets carrier when link is up).
     local wlan_state=$(cat /sys/class/net/wlan0/operstate 2>/dev/null)
     local rmnet_state=$(cat /sys/class/net/rmnet_data0/operstate 2>/dev/null)
+    local rmnet_carrier=$(cat /sys/class/net/rmnet_data0/carrier 2>/dev/null)
 
     if [ "$wlan_state" = "up" ]; then
         echo "wifi"
-    elif [ "$rmnet_state" = "up" ]; then
+    elif [ "$rmnet_state" = "up" ] || [ "$rmnet_carrier" = "1" ]; then
         echo "mobile"
     else
         echo "none"

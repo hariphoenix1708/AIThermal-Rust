@@ -199,11 +199,26 @@ impl RuntimeTuner {
         dev.starts_with("dm-") || dev.starts_with("loop") || dev.starts_with("zram")
     }
     pub fn check_network_quality(&self) -> bool {
-        // Real operstate check
-        let wlan = std::fs::read_to_string("/sys/class/net/wlan0/operstate").unwrap_or_default();
-        let rmnet =
-            std::fs::read_to_string("/sys/class/net/rmnet_data0/operstate").unwrap_or_default();
-        wlan.trim() == "up" || rmnet.trim() == "up"
+        // v3.3.9: Check operstate OR carrier for each interface.
+        // rmnet interfaces report operstate="unknown" even when active;
+        // carrier==1 indicates the link is functionally up.
+        let interfaces = ["wlan0", "rmnet_data0", "rmnet_data1", "rmnet_data2", "rmnet_data3"];
+        for iface in &interfaces {
+            let operstate = format!("/sys/class/net/{}/operstate", iface);
+            let carrier = format!("/sys/class/net/{}/carrier", iface);
+            let is_up = std::fs::read_to_string(&operstate)
+                .ok()
+                .map(|c| c.trim() == "up")
+                .unwrap_or(false);
+            let has_carrier = std::fs::read_to_string(&carrier)
+                .ok()
+                .map(|c| c.trim() == "1")
+                .unwrap_or(false);
+            if is_up || has_carrier {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn apply_network_tweaks(

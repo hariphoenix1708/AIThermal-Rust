@@ -201,41 +201,14 @@ pub fn apply_powerhints(is_perf_or_gaming: bool) {
     write_if_absent_or_different(&format!("{}/cpus_online", base), "0:4 1:4");
 }
 
-/// TCP/UDP buffer tuning + busy_poll + netdev backlog for gaming.
-/// v3.3.8: Preserves system defaults for tcp_rmem/tcp_wmem/udp_mem —
-/// previous versions downgraded these from kernel autotuned values,
-/// breaking TCP window scaling and causing UDP packet drops.
-/// All paths are capability-probed and writes are idempotent.
-pub fn apply_network_buffers(is_gaming: bool) {
-    if !is_gaming {
-        return;
-    }
-
-    // v3.3.8: Use system-default-aware values. Only raise min/default,
-    // never lower below what the kernel already has.
-    // TCP receive buffer: min=512KB default=1MB max=16MB
-    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_rmem", "524288 1048576 16777216");
-    // TCP send buffer: min=256KB default=512KB max=16MB
-    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_wmem", "262144 524288 16777216");
-    // TCP memory pressure (pages): match kernel defaults — do NOT override
-    // if the kernel already has higher values.
-    // UDP receive/send max — raise floor for gaming voice/position data
-    write_if_absent_or_different("/proc/sys/net/core/rmem_max", "16777216");
-    write_if_absent_or_different("/proc/sys/net/core/wmem_max", "16777216");
-    // Increase netdev backlog to prevent packet drops on fast Wi-Fi
-    write_if_absent_or_different("/proc/sys/net/core/netdev_max_backlog", "100000");
-    // Netdev budget: process more packets per NAPI poll cycle
-    write_if_absent_or_different("/proc/sys/net/core/netdev_budget", "600");
-    // Busy-poll: kernel bypass for lower latency on socket reads
-    // 50us is a good balance between latency and CPU overhead.
-    write_if_absent_or_different("/proc/sys/net/core/busy_poll", "50");
-    write_if_absent_or_different("/proc/sys/net/core/busy_read", "50");
-    // Dev weight: process more packets per softirq
-    write_if_absent_or_different("/proc/sys/net/core/dev_weight", "64");
-    // v3.3.8: UDP memory — preserve system default, do NOT override.
-    // Previous versions used 8x smaller values causing packet drops.
-    // TCP fastopen: reduce handshake latency for reconnections
-    write_if_absent_or_different("/proc/sys/net/ipv4/tcp_fastopen", "3");
+/// Network buffer tuning is handled exclusively by the shell script
+/// (tweak_network_gaming.sh) which has proper backup/restore semantics.
+/// This function is a no-op to avoid racing with the shell script's
+/// backup_and_write() which captures kernel defaults before any writes.
+/// v3.3.10: Removed Rust-side network buffer writes that conflicted with
+/// the shell script and downgraded tcp_rmem/tcp_wmem below kernel defaults.
+pub fn apply_network_buffers(_is_gaming: bool) {
+    // Intentionally empty — network buffer tuning is in tweak_network_gaming.sh
 }
 
 /// CPU frequency floor during gaming: prevent deep frequency drops
