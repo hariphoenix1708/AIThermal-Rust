@@ -11,6 +11,8 @@
 //! they add negligible thermal load.
 
 mod background;
+mod combat_boost;
+mod combat_detector;
 mod cpu_idle;
 mod fps_cap;
 mod gpu_freq;
@@ -46,6 +48,8 @@ pub struct GameTurboEngine {
     fps_cap: fps_cap::FpsCapManager,
     gpu_profiles: game_profiles::GameProfileManager,
     sched_deadline: sched_deadline::SchedDeadlineManager,
+    combat_detector: combat_detector::CombatDetector,
+    combat_boost: combat_boost::CombatBoost,
     /// Whether we've entered thermal-throttle mode (eased constraints).
     thermal_throttled: bool,
     /// Pending GPU power info (set by orchestrator before activate).
@@ -111,6 +115,8 @@ impl GameTurboEngine {
             fps_cap: fps_cap::FpsCapManager::new(),
             gpu_profiles: game_profiles::GameProfileManager::new(""),
             sched_deadline: sched_deadline::SchedDeadlineManager::new(),
+            combat_detector: combat_detector::CombatDetector::new(),
+            combat_boost: combat_boost::CombatBoost::new(),
             thermal_throttled: false,
             pending_gpu_power_level_path: None,
             pending_gpu_current_level: None,
@@ -171,6 +177,25 @@ impl GameTurboEngine {
 
     pub fn current_fps_cap(&self) -> Option<u32> {
         self.fps_cap.current_cap()
+    }
+
+    pub fn combat_update(&mut self, gpu_load: u32) -> bool {
+        let is_burst = self.combat_detector.update(gpu_load);
+        if is_burst {
+            self.combat_boost.trigger(gpu_load, "");
+        }
+        // Tick boost state machine (handles hold/decay re-enter)
+        self.combat_boost.tick(is_burst, gpu_load);
+        self.combat_boost.is_active()
+    }
+
+    pub fn combat_is_active(&self) -> bool {
+        self.combat_boost.is_active()
+    }
+
+    pub fn combat_reset(&mut self) {
+        self.combat_detector.reset();
+        self.combat_boost.reset();
     }
 
     /// Record GPU load sample for session average.
@@ -286,6 +311,10 @@ impl GameTurboEngine {
         // Activate SCHED_DEADLINE — guaranteed CPU time for render threads.
         self.sched_deadline.activate(game_pid);
 
+        // Reset combat detector for fresh Ranked session
+        self.combat_detector.reset();
+        self.combat_boost.reset();
+
         self.active = true;
     }
 
@@ -325,6 +354,9 @@ impl GameTurboEngine {
 
         // SCHED_DEADLINE tick — re-scan for new render threads.
         self.sched_deadline.tick(game_pid);
+
+        // Combat heuristic — burst before frame miss
+        let _combat = self.combat_update(gpu_load);
     }
 
     /// Thermal-aware adjustment — called each tick with the current
@@ -405,6 +437,7 @@ impl GameTurboEngine {
         self.network_qos.deactivate();
         self.fps_cap.deactivate();
         self.sched_deadline.deactivate();
+        self.combat_reset();
 
         self.thermal_throttled = false;
         self.active = false;

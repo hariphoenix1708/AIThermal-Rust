@@ -1833,6 +1833,11 @@ impl RuntimeTask for SystemOrchestrator {
         // 10. Adaptive Sleep
         let (sleep_ms, long_idle) = self.calculate_adaptive_sleep(ctx, trend_score, is_screen_off_now, is_gaming, gpu_load);
         ctx.sleep_ms = sleep_ms;
+        // Combat boost: 200ms poll while burst detected (8.3ms budget at 120Hz)
+        if is_gaming && self.game_turbo.combat_is_active() {
+            ctx.sleep_ms = ctx.sleep_ms.min(200);
+            tracing::trace!(target: "thermal", "Combat active: sleep capped to 200ms (was {}ms)", sleep_ms);
+        }
 
         if !needs_apply {
             // no-op

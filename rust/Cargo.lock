@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "thermalai-daemon"
-version = "3.6.2"
+version = "3.7.0"
 dependencies = [
  "anyhow",
  "chrono",

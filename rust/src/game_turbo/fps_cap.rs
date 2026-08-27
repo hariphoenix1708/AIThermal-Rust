@@ -35,8 +35,9 @@ fn thermal_zone_path() -> String {
 const BATTERY_CRITICAL: u32 = 15;  // Below this: 60 FPS cap
 const BATTERY_LOW: u32 = 30; // Below this: 90 FPS cap
 
-/// Thermal thresholds for FPS scaling.
-const THERMAL_WARM: u32 = 45;      // Above this: start reducing FPS
+/// Thermal thresholds for FPS scaling — tuned for Low+Ultra120 Ranked.
+/// At 120Hz budget is 8.3ms; keep 120 until 48C (was 45) to avoid Ranked stutter.
+const THERMAL_WARM: u32 = 48;      // Above this: start reducing FPS (Ultra 120)
 const THERMAL_HOT: u32 = 50;       // Above this: aggressive FPS reduction
 
 pub struct FpsCapManager {

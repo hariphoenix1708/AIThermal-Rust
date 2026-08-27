@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.7.0 (versionCode 410)
+### Added — Enemy-proximity Combat Boost for Ranked (Low + Ultra 120)
+- `game_turbo/combat_detector.rs` heuristic burst: `rx_pps 1.5×` (`/proc/net/dev wlan0/rmnet`) + `gpu_busy +20pp` (kgsl `gpu_busy_percentage`/`gpubusy`) 2-of-2 vote in 500ms vs 2s baseline; `fps_cap.rs` `THERMAL_WARM 45→48` keeps `120` until `48C` (was capping to `90` at `45C` in Ranked).
+- `game_turbo/combat_boost.rs` 4s hold `Big+Prime performance fmax` `uclamp 90/max` `DDR max` `force_bus_on` then 800ms decay `90→40`; logs `Combat Boost ON/DECAY/OFF` to `thermalai.log:game_turbo` + `thermalai_combat.log` pullable via `Download/AIThermal-Logs/AIThermal` (no logcat needed).
+- `game_turbo/mod.rs` `combat_detector/combat_boost` wired `activate reset` `tick combat_update` `deactivate reset`, `orchestrator.rs:1834` `adaptive sleep` capped `200ms` when `combat_is_active()` (8.3ms budget at 120Hz) vs `1000/3000ms`.
+- 83 tests, clippy clean.
+
 ## v3.6.2 (versionCode 402)
 ### Fixed — ClaudeAI deep audit (8 findings, 2 CRITICAL)
 - **CRITICAL-1** `profiles::GameProfileManager` and `game_turbo::GameProfileManager` wrote to same `game_profiles.json` — last saver wins, corrupting learned data. Split to `game_session_profiles.json` (session/known_hot/cooldown) + `game_turbo_profiles.json` (GPU/FPS/network/thermal) with one-time migration from legacy `game_profiles.json`/`gpu_profiles.json` and hardened `load()` that warns on corrupted JSON instead of silently accepting partial defaults.
