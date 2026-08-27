@@ -854,8 +854,8 @@ impl RuntimeTask for SystemOrchestrator {
         // Also handles deferred activation when PID was unavailable at game detection.
         if is_gaming && ctx.config.profiles.game_turbo_enabled
             && let Some(pid) = self.gaming.confirmed_pid
+            && !self.game_turbo.is_active()
         {
-            if !self.game_turbo.is_active() {
                 // Deferred activation — PID became available after initial detection.
                 let gpu = &self.hardware.gpu_profile;
                 let gpu_min = gpu.min_power_level;
@@ -872,8 +872,7 @@ impl RuntimeTask for SystemOrchestrator {
                 );
                 self.game_turbo.activate(pid, &ctx.config.profiles);
             }
-            self.game_turbo.tick(pid);
-        }
+            // Note: game_turbo.tick() moved below to have access to gpu_load and comp_temp.
 
         // 3. Sensors & Thermal
         // Find the node name from the path stored in the thermal_profile.
@@ -911,6 +910,16 @@ impl RuntimeTask for SystemOrchestrator {
         let adj_temp = comp_temp + self.calibration.active_offset;
 
         self.thermal.update(adj_temp);
+
+        // v3.3.0: GameTurbo per-tick refresh (re-scan newly spawned threads).
+        // Also handles deferred activation when PID was unavailable at game detection.
+        if is_gaming
+            && let Some(pid) = self.gaming.confirmed_pid
+        {
+            // adj_temp is always positive (temp in Celsius), safe to cast.
+            let adj_temp_u32 = adj_temp.max(0) as u32;
+            self.game_turbo.tick(pid, gpu_load, adj_temp_u32);
+        }
 
         if is_gaming {
             if !was_gaming {

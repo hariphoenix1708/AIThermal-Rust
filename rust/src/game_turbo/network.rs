@@ -278,7 +278,25 @@ impl NetworkState {
                 self.saved_tunables.len()
             );
         }
-        self.saved_tunables.clear();
+self.saved_tunables.clear();
+    }
+
+    /// Get the currently active gaming interface (WiFi or rmnet_data).
+    pub fn active_interface(&self) -> Option<String> {
+        // Prefer WiFi if active.
+        if iface_is_active("wlan0") {
+            return Some("wlan0".to_string());
+        }
+        // Check rmnet_data interfaces.
+        if let Ok(entries) = fs::read_dir("/sys/class/net") {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("rmnet_data") && iface_is_active(&name) {
+                    return Some(name);
+                }
+            }
+        }
+        None
     }
 }
 

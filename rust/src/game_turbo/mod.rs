@@ -11,10 +11,16 @@
 //! they add negligible thermal load.
 
 mod background;
+mod cpu_idle;
+mod fps_cap;
 mod gpu_freq;
-mod gpu_profiles;
+mod gpu_hints;
+mod game_profiles;
+mod sched_deadline;
 mod io_scheduler;
+mod memory;
 mod network;
+mod network_qos;
 mod perf_hint;
 mod priority;
 mod thread_affinity;
@@ -33,7 +39,13 @@ pub struct GameTurboEngine {
     io_scheduler: io_scheduler::IoSchedulerState,
     gpu_freq: gpu_freq::GpuFreqState,
     perf_hint: perf_hint::PerfHintState,
-    gpu_profiles: gpu_profiles::GpuProfileManager,
+    cpu_idle: cpu_idle::CpuIdleControl,
+    gpu_hints: gpu_hints::GpuBusyHints,
+    memory: memory::MemoryManager,
+    network_qos: network_qos::NetworkQoS,
+    fps_cap: fps_cap::FpsCapManager,
+    gpu_profiles: game_profiles::GameProfileManager,
+    sched_deadline: sched_deadline::SchedDeadlineManager,
     /// Whether we've entered thermal-throttle mode (eased constraints).
     thermal_throttled: bool,
     /// Pending GPU power info (set by orchestrator before activate).
@@ -92,7 +104,13 @@ impl GameTurboEngine {
             io_scheduler: io_scheduler::IoSchedulerState::new(),
             gpu_freq: gpu_freq::GpuFreqState::new(),
             perf_hint: perf_hint::PerfHintState::new(),
-            gpu_profiles: gpu_profiles::GpuProfileManager::new(""),
+            cpu_idle: cpu_idle::CpuIdleControl::new(),
+            gpu_hints: gpu_hints::GpuBusyHints::new(),
+            memory: memory::MemoryManager::new(),
+            network_qos: network_qos::NetworkQoS::new(),
+            fps_cap: fps_cap::FpsCapManager::new(),
+            gpu_profiles: game_profiles::GameProfileManager::new(""),
+            sched_deadline: sched_deadline::SchedDeadlineManager::new(),
             thermal_throttled: false,
             pending_gpu_power_level_path: None,
             pending_gpu_current_level: None,
@@ -116,12 +134,27 @@ impl GameTurboEngine {
 
     /// Initialize the GPU profile manager with the state directory.
     pub fn init_profiles(&mut self, state_dir: &str) {
-        self.gpu_profiles = gpu_profiles::GpuProfileManager::new(state_dir);
+        self.gpu_profiles = game_profiles::GameProfileManager::new(state_dir);
     }
 
     /// Get recommended GPU level for a game from learned profiles.
     pub fn recommended_gpu_level(&self, package: &str, gpu_best: u32, gpu_worst: u32) -> Option<u32> {
-        self.gpu_profiles.recommend_level(package, gpu_best, gpu_worst)
+        self.gpu_profiles.recommend_gpu_level(package, gpu_best, gpu_worst)
+    }
+
+    /// Get recommended FPS cap for a game from learned profiles.
+    pub fn recommended_fps_cap(&self, package: &str) -> Option<u32> {
+        self.gpu_profiles.recommend_fps_cap(package)
+    }
+
+    /// Get recommended network profile for a game from learned profiles.
+    pub fn recommended_network_profile(&self, package: &str) -> Option<u8> {
+        self.gpu_profiles.recommend_network_profile(package)
+    }
+
+    /// Get recommended thermal policy for a game from learned profiles.
+    pub fn recommended_thermal_policy(&self, package: &str) -> Option<u8> {
+        self.gpu_profiles.recommend_thermal_policy(package)
     }
 
     /// Record GPU load sample for session average.
@@ -212,15 +245,37 @@ impl GameTurboEngine {
             );
         }
 
-        // Activate Performance Hint — set uclamp_min for game-critical threads.
-        self.perf_hint.activate(game_pid);
+        // Activate Performance Hint — set top-app uclamp_min for gaming.
+        self.perf_hint.activate();
+
+        // Activate CPU Idle Control — disable deep C-states for low wake latency.
+        self.cpu_idle.activate();
+
+        // Activate GPU Busy Hints — keep GPU clocks responsive.
+        self.gpu_hints.activate();
+
+        // Activate Memory Manager — compact ZRAM, protect game from OOM.
+        self.memory.activate(game_pid);
+
+        // Activate Network QoS — prioritize gaming traffic on active interface.
+        // Use the network interface detected by the network module.
+        if let Some(ref iface) = self.network.active_interface() {
+            self.network_qos.activate(iface);
+        }
+
+        // Activate FPS Cap — battery/thermal-aware max FPS limit.
+        // FPS cap reads thermal temp from sysfs internally.
+        self.fps_cap.activate();
+
+        // Activate SCHED_DEADLINE — guaranteed CPU time for render threads.
+        self.sched_deadline.activate(game_pid);
 
         self.active = true;
     }
 
     /// Per-tick refresh — re-scan threads that may have spawned after
     /// the initial activate (game engines commonly defer thread creation).
-    pub fn tick(&mut self, game_pid: u32) {
+    pub fn tick(&mut self, game_pid: u32, gpu_load: u32, thermal_temp: u32) {
         if !self.active {
             return;
         }
@@ -238,7 +293,22 @@ impl GameTurboEngine {
         self.network
             .refresh_for_network_handoff(self.config_snapshot.wifi_ps_disable);
         // Re-boost newly spawned game threads with uclamp.
-        self.perf_hint.tick(game_pid);
+        self.perf_hint.tick(gpu_load, thermal_temp);
+
+        // Adjust GPU idle timer based on GPU load.
+        self.gpu_hints.tick(gpu_load);
+
+        // Memory manager tick (no-op currently).
+        self.memory.tick();
+
+        // Network QoS tick (no-op currently).
+        self.network_qos.tick();
+
+        // FPS Cap tick — adjust based on battery/thermal.
+        self.fps_cap.tick();
+
+        // SCHED_DEADLINE tick — re-scan for new render threads.
+        self.sched_deadline.tick(game_pid);
     }
 
     /// Thermal-aware adjustment — called each tick with the current
@@ -308,6 +378,12 @@ impl GameTurboEngine {
         self.priority.deactivate();
         self.affinity.deactivate();
         self.perf_hint.deactivate();
+        self.cpu_idle.deactivate();
+        self.gpu_hints.deactivate();
+        self.memory.deactivate();
+        self.network_qos.deactivate();
+        self.fps_cap.deactivate();
+        self.sched_deadline.deactivate();
 
         self.thermal_throttled = false;
         self.active = false;
