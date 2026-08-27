@@ -14,9 +14,9 @@ use std::time::Instant;
 
 const WINDOW_SHORT_MS: u64 = 500;
 const WINDOW_BASELINE_MS: u64 = 2000;
-const GPU_SPIKE_PP: u32 = 20;
-const NET_SPIKE_FACTOR: f64 = 1.5;
-const MIN_PPS: u64 = 200; // ignore idle
+const GPU_SPIKE_PP: u32 = 10; // Ultra120: 8.3ms budget, +10pp already misses
+const NET_SPIKE_FACTOR: f64 = 1.3;
+const MIN_PPS: u64 = 100; // lower for lobby/low-pps ranked
 
 fn read_rx_packets() -> u64 {
     let Ok(content) = fs::read_to_string("/proc/net/dev") else { return 0 };
@@ -56,6 +56,7 @@ struct Sample {
 pub struct CombatDetector {
     window: VecDeque<Sample>,
     last_log: Option<Instant>,
+    last_heartbeat: Option<Instant>,
 }
 
 impl CombatDetector {
@@ -63,6 +64,7 @@ impl CombatDetector {
         Self {
             window: VecDeque::with_capacity(16),
             last_log: None,
+            last_heartbeat: None,
         }
     }
 
@@ -95,6 +97,15 @@ impl CombatDetector {
                 base_pps, short_pps, gpu_spike, gpu
             );
             self.append_combat_log(now, base_pps, short_pps, gpu, gpu_spike, net_spike);
+        } else if !combat && self.should_heartbeat(now) {
+            tracing::debug!(target: "game_turbo", "Combat Detector: idle rx {}pps gpu {}% (no burst)", short_pps, gpu);
+            // Heartbeat for offline analysis every 30s
+            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f%z").to_string();
+            let line = format!("{ts} COMBAT idle rx {short_pps}pps gpu={gpu}% burst=false\n");
+            let path = std::env::var("THERMALAI_LOG_DIR").unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
+            let p = std::path::Path::new(&path).join("thermalai_combat.log");
+            let _ = std::fs::OpenOptions::new().create(true).append(true).open(&p)
+                .and_then(|mut f| { use std::io::Write; f.write_all(line.as_bytes()) });
         }
         combat
     }
@@ -103,6 +114,13 @@ impl CombatDetector {
         if let Some(last) = self.last_log
             && now.duration_since(last).as_secs() < 2 { return false; }
         self.last_log = Some(now);
+        true
+    }
+
+    fn should_heartbeat(&mut self, now: Instant) -> bool {
+        if let Some(last) = self.last_heartbeat
+            && now.duration_since(last).as_secs() < 30 { return false; }
+        self.last_heartbeat = Some(now);
         true
     }
 
@@ -157,6 +175,7 @@ impl CombatDetector {
     pub fn reset(&mut self) {
         self.window.clear();
         self.last_log = None;
+        self.last_heartbeat = None;
     }
 }
 
