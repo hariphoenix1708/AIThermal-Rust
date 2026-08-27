@@ -1,5 +1,6 @@
 pub mod advanced;
 pub mod backend;
+pub mod soc_peridot;
 use crate::hardware::HardwareProfile;
 use crate::sysfs;
 

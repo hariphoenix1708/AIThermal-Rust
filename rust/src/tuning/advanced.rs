@@ -297,8 +297,17 @@ pub fn apply_all(hw: &HardwareProfile, policy: &str) {
     apply_freq_floor(hw, is_gaming);
     apply_uclamp(is_gaming);
 
+    // SM8635 peridot SoC-specific gaming blocks — all capability-probed.
+    crate::tuning::soc_peridot::apply_walt_gaming(is_gaming);
+    crate::tuning::soc_peridot::apply_bus_llc_gaming(is_gaming);
+    crate::tuning::soc_peridot::apply_uclamp_extended(is_gaming);
+    crate::tuning::soc_peridot::apply_latency_gaming(is_gaming);
+    crate::tuning::soc_peridot::apply_adpf_gaming(is_gaming);
+
     // Deep idle states are a boot-time / rarely-changing knob — enable
     // once and never touch again per policy tick. The write is idempotent
-    // so re-arming is cheap.
-    enable_all_idle_states();
+    // so re-arming is cheap. Keep disabled when gaming SoC blocks need it.
+    if !is_gaming {
+        enable_all_idle_states();
+    }
 }
