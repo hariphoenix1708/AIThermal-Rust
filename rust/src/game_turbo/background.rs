@@ -108,14 +108,26 @@ impl BackgroundState {
 
     /// Restore all saved uclamp values.
     pub fn deactivate(&mut self) {
+        let mut restored = 0u32;
+        let mut failed = 0u32;
         for (path, orig_val) in &self.saved_uclamp_max {
-            write_str(path, orig_val);
+            let ok = write_str(path, orig_val) || write_str(path, "max");
+            if ok {
+                restored += 1;
+            } else {
+                failed += 1;
+                tracing::warn!(
+                    target: "game_turbo",
+                    "Background lockdown: failed to restore {} to '{}' — cgroup may remain clamped",
+                    path, orig_val
+                );
+            }
         }
-
         tracing::info!(
             target: "game_turbo",
-            "Background lockdown: restored {} cgroups",
-            self.saved_uclamp_max.len()
+            "Background lockdown: restored {} cgroups{}",
+            restored,
+            if failed > 0 { format!(", {} failed to restore", failed) } else { String::new() }
         );
         self.saved_uclamp_max.clear();
     }

@@ -61,7 +61,7 @@ pub struct GameProfileManager {
 
 impl GameProfileManager {
     pub fn new(state_dir: &str) -> Self {
-        let path = Path::new(state_dir).join("game_profiles.json");
+        let path = Path::new(state_dir).join("game_turbo_profiles.json");
         let mut manager = Self {
             path,
             profiles: HashMap::new(),
@@ -71,14 +71,38 @@ impl GameProfileManager {
     }
 
     fn load(&mut self) {
-        // Primary: game_profiles.json
-        if self.path.exists()
-            && let Ok(content) = fs::read_to_string(&self.path)
-            && let Ok(profiles) = serde_json::from_str(&content)
-        {
-            self.profiles = profiles;
-            return;
+        // Primary: game_turbo_profiles.json
+        if self.path.exists() {
+            match fs::read_to_string(&self.path) {
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(profiles) => {
+                        self.profiles = profiles;
+                        return;
+                    }
+                    Err(e) => {
+                        tracing::warn!(target: "game_turbo", "game_turbo_profiles.json corrupted ({}), starting fresh", e);
+                        return;
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!(target: "game_turbo", "Failed to read game_turbo_profiles.json: {}", e);
+                    return;
+                }
+            }
         }
+        // Compat: migrate game_profiles.json if it contains turbo schema (v3.6.0 collision)
+        let unified_path = Path::new(self.path.parent().unwrap_or(Path::new("."))).join("game_profiles.json");
+        if unified_path.exists()
+            && let Ok(content) = fs::read_to_string(&unified_path)
+            && let Ok(map) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&content) {
+                let looks_like_turbo = map.values().any(|v| v.get("best_gpu_level").is_some() || v.get("optimal_fps_cap").is_some());
+                if looks_like_turbo && let Ok(profiles) = serde_json::from_str::<HashMap<String, GameProfileEntry>>(&content) {
+                    self.profiles = profiles;
+                    self.save();
+                    tracing::info!(target: "game_turbo", "Migrated game_profiles.json → game_turbo_profiles.json ({} entries, turbo schema)", self.profiles.len());
+                    return;
+                }
+            }
         // Compat: migrate old gpu_profiles.json if present (v3.4.0 → v3.5.0 rename)
         let legacy_path = Path::new(self.path.parent().unwrap_or(Path::new("."))).join("gpu_profiles.json");
         if legacy_path.exists()

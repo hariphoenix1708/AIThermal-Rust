@@ -244,7 +244,7 @@ impl Default for ProfilesConfig {
             battery_stats_enabled: default_true(),
             min_actuation_interval_ms: default_min_actuation_interval_ms(),
             tcp_congestion_control_gaming: default_tcp_cc(),
-            touch_network_stack: default_false(),
+            touch_network_stack: default_true(),
             safe_mode_after_crashes: default_safe_mode_after_crashes(),
             watchdog_stall_threshold: default_watchdog_stall_threshold(),
             trace_markers_enabled: default_false(),

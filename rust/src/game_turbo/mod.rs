@@ -335,8 +335,13 @@ impl GameTurboEngine {
             return;
         }
 
+        const THERMAL_RELEASE_MARGIN: i32 = 3;
         let was_throttled = self.thermal_throttled;
-        self.thermal_throttled = composite_temp >= temp_hot;
+        self.thermal_throttled = if was_throttled {
+            composite_temp >= (temp_hot - THERMAL_RELEASE_MARGIN)
+        } else {
+            composite_temp >= temp_hot
+        };
 
         if self.thermal_throttled && !was_throttled {
             tracing::info!(

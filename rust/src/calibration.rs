@@ -119,19 +119,9 @@ impl CalibrationManager {
         if is_heating_or_flat {
             self.hot_ticks += 1;
             self.cool_ticks = 0; // Reset cool ticks
-
-            // Shift offset after sustained heat
-            if self.hot_ticks > 60 {
-                if self.active_offset > -6 {
-                    self.active_offset -= 1;
-                    tracing::info!(
-                        "Calibration adjustment triggered. New offset: {}",
-                        self.active_offset
-                    );
-                    changed = true;
-                }
-                self.hot_ticks = 0; // Reset after adjustment
-            }
+            // Do NOT decrement active_offset on sustained heating — a genuinely
+            // rising trend must never cause under-reporting (see CRITICAL-2).
+            // Only the decay path below is allowed to move the offset.
         } else {
             if self.hot_ticks > 0 {
                 self.hot_ticks -= 1;
@@ -156,7 +146,6 @@ impl CalibrationManager {
             }
         }
 
-        // Also ensure positive bounds (e.g. if we decay too far, though we only +=1 if < 0 above).
         self.active_offset = self.active_offset.clamp(-6, 6);
 
         if changed {

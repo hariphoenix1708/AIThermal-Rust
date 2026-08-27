@@ -66,13 +66,33 @@ pub struct GameProfileManager {
 }
 
 impl GameProfileManager {
+    #[allow(clippy::collapsible_if)]
     pub fn new(state_dir: &str) -> Self {
-        let path = Path::new(state_dir).join("game_profiles.json");
+        let path = Path::new(state_dir).join("game_session_profiles.json");
         let mut manager = Self {
             path,
             profiles: HashMap::new(),
         };
         manager.load();
+        // One-time migration: prior v3.6.1 used game_profiles.json for this manager.
+        // If the new file is empty/missing but the old unified file exists with
+        // session-profile schema (contains known_hot/max_temp), migrate it.
+        #[allow(clippy::collapsible_if)]
+        let legacy = Path::new(state_dir).join("game_profiles.json");
+        if manager.profiles.is_empty() && legacy.exists() {
+            if let Ok(content) = fs::read_to_string(&legacy)
+                && let Ok(map) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&content) {
+                    let looks_like_session = map.values().any(|v| v.get("known_hot").is_some() || v.get("max_temp").is_some());
+                    #[allow(clippy::collapsible_if)]
+                    if looks_like_session {
+                        if let Ok(profiles) = serde_json::from_str::<HashMap<String, GameProfile>>(&content) {
+                            manager.profiles = profiles;
+                            let _ = manager.save();
+                            tracing::info!(target: "profiles", "Migrated game_profiles.json → game_session_profiles.json ({} entries)", manager.profiles.len());
+                        }
+                    }
+                }
+        }
         manager
     }
 

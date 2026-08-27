@@ -102,23 +102,20 @@ impl PerfHintState {
             return;
         }
 
-        if let Some(min) = &self.saved_uclamp_min {
-            let _ = fs::write(TOP_APP_UCLAMP_MIN, min.as_bytes());
-        } else {
-            // Default restore to 0.
-            let _ = fs::write(TOP_APP_UCLAMP_MIN, b"0");
+        let min_val = self.saved_uclamp_min.as_deref().unwrap_or("0");
+        if let Err(e) = fs::write(TOP_APP_UCLAMP_MIN, min_val.as_bytes()) {
+            tracing::warn!(target: "game_turbo", "PerfHint: failed to restore uclamp.min to '{}': {}", min_val, e);
         }
-        if let Some(max) = &self.saved_uclamp_max {
-            let _ = fs::write(TOP_APP_UCLAMP_MAX, max.as_bytes());
-        } else {
-            let _ = fs::write(TOP_APP_UCLAMP_MAX, b"max");
+        let max_val = self.saved_uclamp_max.as_deref().unwrap_or("max");
+        if let Err(e) = fs::write(TOP_APP_UCLAMP_MAX, max_val.as_bytes()) {
+            tracing::warn!(target: "game_turbo", "PerfHint: failed to restore uclamp.max to '{}': {}", max_val, e);
         }
 
         tracing::info!(
             target: "game_turbo",
             "PerfHint: restored top-app uclamp.min={}, uclamp.max={}",
-            self.saved_uclamp_min.as_deref().unwrap_or("0"),
-            self.saved_uclamp_max.as_deref().unwrap_or("max")
+            min_val,
+            max_val
         );
 
         self.saved_uclamp_min = None;

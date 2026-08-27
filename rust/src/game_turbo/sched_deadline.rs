@@ -182,6 +182,7 @@ impl SchedDeadlineManager {
             return;
         }
 
+        let restored_count = self.applied_tids.len();
         for tid in self.applied_tids.drain(..) {
             #[repr(C)]
             struct SchedAttr {
@@ -223,7 +224,7 @@ impl SchedDeadlineManager {
         tracing::info!(
             target: "game_turbo",
             "SCHED_DEADLINE: restored {} threads to SCHED_NORMAL",
-            self.applied_tids.len()
+            restored_count
         );
     }
 }

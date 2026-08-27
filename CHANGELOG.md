@@ -1,5 +1,43 @@
 # Changelog
 
+## v3.6.2 (versionCode 402)
+### Fixed — ClaudeAI deep audit (8 findings, 2 CRITICAL)
+- **CRITICAL-1** `profiles::GameProfileManager` and `game_turbo::GameProfileManager` wrote to same `game_profiles.json` — last saver wins, corrupting learned data. Split to `game_session_profiles.json` (session/known_hot/cooldown) + `game_turbo_profiles.json` (GPU/FPS/network/thermal) with one-time migration from legacy `game_profiles.json`/`gpu_profiles.json` and hardened `load()` that warns on corrupted JSON instead of silently accepting partial defaults.
+- **CRITICAL-2** `calibration.rs:116 apply_calibration()` decremented `active_offset` toward -6 after 60 sustained heating ticks, making `adj_temp = comp+offset` under-report by up to 6C mid-gaming. Removed heating decrement; only decay toward 0 on cooling (>120 cool ticks) remains.
+- **HIGH-1** `game_turbo/mod.rs:330 thermal_adjust()` single threshold flap `58C ON / 57C OFF` in 2.7s. Added `THERMAL_RELEASE_MARGIN 3C` asymmetric hysteresis (enter 58, exit 55) matching `PolicyEngine HYSTERESIS_MARGIN 8`.
+- **HIGH-2** `background.rs:109 deactivate()` blindly wrote `orig_val "20.00"` (ERANGE on peridot) and logged `restored N` regardless. Now retries `orig_val || "max"` and logs `restored/failed` counts with WARN on failure.
+- **MEDIUM-1** `perf_hint.rs:99 deactivate()` discarded `fs::write` Result with `let _=`. Now warns on failure for both `uclamp.min/max` restores.
+- **LOW-1** `config.rs:247 touch_network_stack` `Default` was `false` while `#[serde(default=true)]` doc said true. Fixed `impl Default` to `default_true()`.
+- **LOW-2** `sched_deadline.rs:179 deactivate()` logged `self.applied_tids.len()` after `drain()` always 0. Now captures `restored_count` before drain.
+
+## v3.6.1 (versionCode 401)
+### Fixed — Deep audit wiring + peridot device-specific
+- `fps_cap.rs` thermal zone now scans `cpu_therm/quiet_therm/soc_thermal` instead of hard `thermal_zone0` — correct for peridot.
+- `soc_peridot.rs` `write()` probes writable via `OpenOptions` before `TuningBackend` to avoid poison spam on `25` locked `cur_state` nodes.
+- `game_turbo` `cpu_idle` cluster collapse disable verified on-device: peridot has `WFI/c3/cluster` ×3 states, now disables `state2` only (8 cores).
+
+## v3.6.0 (versionCode 400)
+### Added — SoC peridot 5-block surpassing stock HyperOS
+- `tuning/soc_peridot.rs` capability-probed via `TuningBackend`:
+  * WALT: `upmigrate 85/down 70`, `busy_hysteresis 8ms` per cpu, `hispeed_load 95` policy3/7 `rtg_boost 1`, `walt_idle_enough 0`.
+  * DDR/LLCC: `devfreq cpubw/llccbw/l3` `min→max` + `performance` governor, `bw_hwmon hist_memory 0 hbm 0 io_percent 20 guard 10`.
+  * Uclamp ext: `foreground 10/max` `top-app latency_sensitive 1 prefer_idle 1`.
+  * Latency: `sched_waking 500us` `pm_qos_resume 0` `force_no_nap 1` `idle_timer 10ms`.
+  * ADPF: `PID Po 0.45 Pu 0.08 I 0.02 I_High 0.6 I_Low -0.3 Do 0.01 Du 0.005` `Uclamp High 85 Low 10` `target 8ms stale 30ms` `vendor.powerhal.adpf.gaming`.
+- `advanced::apply_all` calls all 5 blocks probed, restores stock on `!gaming` (idle states only re-enabled when not gaming).
+
+## v3.5.0 (versionCode 390)
+### Added — GameTurbo v2.1 stable
+- `game_turbo/game_profiles.rs` `GameProfileEntry` migrated `gpu_profiles.json→game_profiles.json` with `best_gpu_level/optimal_fps_cap/preferred_network/thermal_policy/last_session_ts`, compat legacy `best_level` read, `recommend_*` wired via `orchestrator.rs:1037` on game exit.
+- `cpu_idle.rs` `fps_cap.rs` `gpu_hints.rs` `memory.rs` `network_qos.rs` `sched_deadline.rs` — all wired via `GameTurboEngine` `activate/tick/deactivate`, 81 tests, clippy clean.
+- `cpu_idle` peridot fix: only 3 states `0:WFI 1:c3 2:cluster`, now disables `state2` (cluster) not `>2`.
+
+## v3.4.0 (versionCode 380-389)
+### Added — GameTurbo v2
+- `perf_hint.rs` cgroup `top-app uclamp 40%→70%` dynamic on `gpu_load≥50||temp≥48`, `gpu_profiles.rs` per-game GPU learning (`best_level` sessions≥2), `orchestrator.rs:93` adaptive gaming sleep `500/1000/1500/3000ms`, `network_diag.rs:401` cellular jitter thresholds `120/160/200ms` vs wifi `80/120/150`.
+### Fixed — Build warnings
+- `game_profiles.rs` `#[allow(dead_code)]` for `record_fps_cap/network/thermal` until wired in v3.5.0, `fps_cap` thermal zone dynamic.
+
 ## v3.3.11 (versionCode 371)
 ### Fixed — WiFi/mobile-data handoff stability
 - **Handoff-aware RPS refresh**: GameTurbo now rechecks active WiFi and rmnet
