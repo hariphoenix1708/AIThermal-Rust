@@ -82,8 +82,8 @@ impl GpuBusyHints {
         };
 
         // Only write if different from current.
-        if let Ok(current) = fs::read_to_string(format!("{}/idle_timer", KGSL_BASE)) {
-            if current.trim() != target {
+        if let Ok(current) = fs::read_to_string(format!("{}/idle_timer", KGSL_BASE))
+            && current.trim() != target {
                 write_sysfs("idle_timer", target);
                 tracing::debug!(
                     target: "game_turbo",
@@ -91,7 +91,6 @@ impl GpuBusyHints {
                     target, gpu_load
                 );
             }
-        }
     }
 
     /// Deactivate: restore original values.

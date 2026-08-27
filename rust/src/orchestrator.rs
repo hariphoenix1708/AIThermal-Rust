@@ -613,6 +613,10 @@ impl SystemOrchestrator {
 
     // ─── v3.2.29: Network Diagnostics ─────────────────────────────────
 
+    fn last_network_probe_interface(&self) -> Option<String> {
+        crate::network_diag::cached_quality().map(|q| q.passive.interface)
+    }
+
     /// Run the network quality probe in pure Rust (ICMP ping + sysfs).
     fn probe_network_quality(&mut self, state_dir: &str) {
         let quality = crate::network_diag::probe_quality(state_dir);
@@ -1035,11 +1039,36 @@ impl RuntimeTask for SystemOrchestrator {
             // v3.3.0: Deactivate GameTurbo engine — restore all runtime state.
             // Record per-game GPU profile before deactivating.
             let gpu_level_used = self.last_applied_gpu_level.unwrap_or(0);
+            let pkg = ctx.cooldown_source_pkg.as_deref().unwrap_or("");
             self.game_turbo.record_session(
-                ctx.cooldown_source_pkg.as_deref().unwrap_or(""),
+                pkg,
                 gpu_level_used,
                 ctx.game_session_worst_jank_pct,
             );
+            // Wire per-app learning: FPS cap / network / thermal feedback
+            // FPS cap learned from current cap (if jank low, keep it)
+            if let Some(fps_cap) = self.game_turbo.recommended_fps_cap(pkg) {
+                // Re-record with current jank to refine optimal_fps_cap
+                self.game_turbo.record_fps_cap(pkg, fps_cap, ctx.game_session_worst_jank_pct);
+            } else {
+                // Seed fps cap from actual max_fps if no profile yet
+                let cur_fps = self.game_turbo.current_fps_cap().unwrap_or(0);
+                if cur_fps > 0 {
+                    self.game_turbo.record_fps_cap(pkg, cur_fps, ctx.game_session_worst_jank_pct);
+                }
+            }
+            // Network preference from last probe
+            let net_type = match self.last_network_probe_interface() {
+                Some(i) if i.starts_with("rmnet") => 2u8, // cellular
+                Some(i) if i == "wlan0" => 1u8,
+                _ => 0u8,
+            };
+            if net_type != 0 {
+                self.game_turbo.record_network_profile(pkg, net_type);
+            }
+            // Thermal policy at session peak
+            let therm_policy = if ctx.game_session_peak_temp >= ctx.config.profiles.temp_hot { 2 } else if ctx.game_session_peak_temp >= 50 { 1 } else { 0 };
+            self.game_turbo.record_thermal_policy(pkg, therm_policy);
             self.game_turbo.deactivate();
 
             // Actively restore the normal usage profile to drop heat quickly

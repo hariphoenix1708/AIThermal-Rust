@@ -1,19 +1,22 @@
 //! CPU Idle Control — disable deep C-states during gaming to reduce
 //! wake latency and prevent frame pacing jitter.
 //!
-//! On modern ARM SoCs (SM8635), the CPU idle driver exposes C-states via
-//! `/sys/devices/system/cpu/cpu*/cpuidle/state*/disable`. C0=active, C1=WFI,
-//! C2=retention, C3+=power collapse. Disabling C3+ during gaming ensures
-//! big cores wake fast enough for render thread deadlines.
+//! On modern ARM SoCs (SM8635/peridot), the CPU idle driver exposes:
+//!  cpu0 (silver): WFI, silver-c3, silver-cluster0
+//!  cpu3 (gold): WFI, gold-c3, gold-cluster1-c
+//!  cpu7 (gold-plus): WFI, gold-plus-c3, gold-plus-clust
+//! state0=WFI, state1=core C3, state2=cluster power collapse.
+//! Disabling state2 (cluster) during gaming keeps the cluster powered
+//! and reduces wake latency for render threads without excessive power.
 
 use std::fs;
 use std::path::Path;
 
 const CPU_IDLE_BASE: &str = "/sys/devices/system/cpu";
 
-/// C-state index threshold: disable states >= this value (0=C0, 1=C1, 2=C2, 3=C3...).
-/// Keep C0-C2 enabled (active, WFI, retention), disable C3+ (power collapse).
-const MAX_ENABLED_CSTATE: u32 = 2;
+/// C-state index threshold: disable states > this value.
+ /// On peridot: 0=WFI, 1=core C3, 2=cluster collapse. Keep 0-1, disable 2.
+const MAX_ENABLED_CSTATE: u32 = 1;
 
 pub struct CpuIdleControl {
     /// Track which states we disabled for restoration.
@@ -31,7 +34,7 @@ impl CpuIdleControl {
         }
     }
 
-    /// Activate: disable deep C-states (C3+) on all cores.
+    /// Activate: disable cluster-level C-states on all cores.
     pub fn activate(&mut self) {
         if !self.available {
             return;
@@ -53,8 +56,13 @@ impl CpuIdleControl {
         if disabled > 0 {
             tracing::info!(
                 target: "game_turbo",
-                "CPU Idle: disabled {} deep C-states (C3+) on all cores",
+                "CPU Idle: disabled {} cluster C-states (state2) on all cores",
                 disabled
+            );
+        } else {
+            tracing::debug!(
+                target: "game_turbo",
+                "CPU Idle: no cluster C-states to disable (already disabled or not present)"
             );
         }
     }
@@ -103,12 +111,11 @@ impl CpuIdleControl {
                                 .unwrap_or_else(|_| "0".to_string());
 
                             // Only disable if not already disabled.
-                            if original == "0" {
-                                if fs::write(&disable_path, b"1").is_ok() {
+                            if original == "0"
+                                && fs::write(&disable_path, b"1").is_ok() {
                                     self.disabled_states.push((disable_path.to_string_lossy().to_string(), original));
                                     count += 1;
                                 }
-                            }
                         }
                     }
                 }

@@ -71,11 +71,55 @@ impl GameProfileManager {
     }
 
     fn load(&mut self) {
+        // Primary: game_profiles.json
         if self.path.exists()
             && let Ok(content) = fs::read_to_string(&self.path)
             && let Ok(profiles) = serde_json::from_str(&content)
         {
             self.profiles = profiles;
+            return;
+        }
+        // Compat: migrate old gpu_profiles.json if present (v3.4.0 → v3.5.0 rename)
+        let legacy_path = Path::new(self.path.parent().unwrap_or(Path::new("."))).join("gpu_profiles.json");
+        if legacy_path.exists()
+            && let Ok(content) = fs::read_to_string(&legacy_path)
+        {
+            // Try new format first
+            if let Ok(profiles) = serde_json::from_str::<HashMap<String, GameProfileEntry>>(&content) {
+                self.profiles = profiles;
+                self.save();
+                let _ = fs::remove_file(&legacy_path);
+                tracing::info!(target: "game_turbo", "Migrated gpu_profiles.json → game_profiles.json ({} entries)", self.profiles.len());
+                return;
+            }
+            // Fallback: legacy GpuProfileEntry format (best_level → best_gpu_level)
+            if let Ok(legacy) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&content) {
+                let mut migrated = 0;
+                for (pkg, v) in legacy {
+                    let best = v.get("best_level").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+                    let best_gpu = v.get("best_gpu_level").and_then(|x| x.as_u64()).unwrap_or(best as u64) as u32;
+                    let entry = GameProfileEntry {
+                        best_gpu_level: best_gpu,
+                        avg_gpu_load: v.get("avg_gpu_load").and_then(|x| x.as_f64()).unwrap_or(0.0),
+                        sessions: v.get("sessions").and_then(|x| x.as_u64()).unwrap_or(0) as u32,
+                        last_jank_pct: v.get("last_jank_pct").and_then(|x| x.as_f64()).unwrap_or(0.0),
+                        gpu_bound: v.get("gpu_bound").and_then(|x| x.as_bool()).unwrap_or(false),
+                        optimal_fps_cap: v.get("optimal_fps_cap").and_then(|x| x.as_u64()).unwrap_or(0) as u32,
+                        preferred_network: v.get("preferred_network").and_then(|x| x.as_u64()).unwrap_or(0) as u8,
+                        thermal_policy: v.get("thermal_policy").and_then(|x| x.as_u64()).unwrap_or(0) as u8,
+                        last_session_ts: v.get("last_session_ts").and_then(|x| x.as_u64()).unwrap_or(0),
+                    };
+                    if entry.sessions > 0 {
+                        self.profiles.insert(pkg, entry);
+                        migrated += 1;
+                    }
+                }
+                if migrated > 0 {
+                    self.save();
+                    let _ = fs::remove_file(&legacy_path);
+                    tracing::info!(target: "game_turbo", "Migrated legacy gpu_profiles.json → game_profiles.json ({} entries)", migrated);
+                }
+            }
         }
     }
 
@@ -213,11 +257,10 @@ impl GameProfileManager {
             .or_default();
 
         // If jank is low with this cap, record it as optimal.
-        if jank_pct < 10.0 && fps_cap > 0 {
-            if entry.optimal_fps_cap == 0 || fps_cap < entry.optimal_fps_cap {
+        if jank_pct < 10.0 && fps_cap > 0
+            && (entry.optimal_fps_cap == 0 || fps_cap < entry.optimal_fps_cap) {
                 entry.optimal_fps_cap = fps_cap;
             }
-        }
         self.save();
     }
 

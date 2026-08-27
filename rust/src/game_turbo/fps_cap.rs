@@ -18,8 +18,7 @@ const THERMAL_ZONE_PATH: &str = "/sys/class/thermal/thermal_zone0/temp";
 
 /// Battery thresholds for FPS scaling.
 const BATTERY_CRITICAL: u32 = 15;  // Below this: 60 FPS cap
-const BATTERY_LOW: u32 = 30;       // Below this: 90 FPS cap
-const BATTERY_NORMAL: u32 = 50;    // Below this: 120 FPS cap (if supported)
+const BATTERY_LOW: u32 = 30; // Below this: 90 FPS cap
 
 /// Thermal thresholds for FPS scaling.
 const THERMAL_WARM: u32 = 45;      // Above this: start reducing FPS
@@ -59,14 +58,12 @@ impl FpsCapManager {
         if let Ok(output) = std::process::Command::new("getprop")
             .arg(SF_MAX_FPS_PROP)
             .output()
-        {
-            if output.status.success() {
+            && output.status.success() {
                 let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !val.is_empty() && val != "0" {
                     self.original_max_fps = val.parse().ok();
                 }
             }
-        }
 
         let cap = self.calculate_cap(battery_percent, is_charging, thermal_temp);
         self.apply_cap(cap);
@@ -136,10 +133,8 @@ impl FpsCapManager {
             60
         } else if battery <= BATTERY_LOW {
             90
-        } else if battery <= BATTERY_NORMAL {
-            120
         } else {
-            120 // No cap for high battery
+            120
         };
 
         // Thermal reduction.
@@ -168,6 +163,10 @@ impl FpsCapManager {
             "FPS Cap: set max_fps to {}",
             cap
         );
+    }
+
+    pub fn current_cap(&self) -> Option<u32> {
+        self.current_cap
     }
 
     /// Deactivate: restore original FPS cap.

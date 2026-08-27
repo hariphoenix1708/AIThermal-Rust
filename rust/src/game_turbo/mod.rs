@@ -157,6 +157,22 @@ impl GameTurboEngine {
         self.gpu_profiles.recommend_thermal_policy(package)
     }
 
+    pub fn record_fps_cap(&mut self, package: &str, fps_cap: u32, jank_pct: f64) {
+        self.gpu_profiles.record_fps_cap(package, fps_cap, jank_pct);
+    }
+
+    pub fn record_network_profile(&mut self, package: &str, net_type: u8) {
+        self.gpu_profiles.record_network_profile(package, net_type);
+    }
+
+    pub fn record_thermal_policy(&mut self, package: &str, policy: u8) {
+        self.gpu_profiles.record_thermal_policy(package, policy);
+    }
+
+    pub fn current_fps_cap(&self) -> Option<u32> {
+        self.fps_cap.current_cap()
+    }
+
     /// Record GPU load sample for session average.
     pub fn record_gpu_load(&mut self, gpu_load: u32) {
         if self.active {
