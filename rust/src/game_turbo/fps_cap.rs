@@ -13,8 +13,23 @@ const BATTERY_CAPACITY_PATH: &str = "/sys/class/power_supply/battery/capacity";
 const BATTERY_STATUS_PATH: &str = "/sys/class/power_supply/battery/status";
 
 /// Thermal zone path for CPU temp (composite temp used for FPS decisions).
-/// Using cpu_therm as primary thermal sensor.
-const THERMAL_ZONE_PATH: &str = "/sys/class/thermal/thermal_zone0/temp";
+/// Scan for cpu_therm/quiet_therm dynamically — thermal_zone0 is not always CPU on peridot.
+fn thermal_zone_path() -> String {
+    if let Ok(entries) = std::fs::read_dir("/sys/class/thermal") {
+        for e in entries.flatten() {
+            let p = e.path();
+            let ty = std::fs::read_to_string(p.join("type")).unwrap_or_default();
+            let ty = ty.trim();
+            if ty == "cpu_therm" || ty == "quiet_therm" || ty == "soc_thermal" {
+                let temp = p.join("temp");
+                if temp.exists() {
+                    return temp.to_string_lossy().to_string();
+                }
+            }
+        }
+    }
+    "/sys/class/thermal/thermal_zone0/temp".to_string()
+}
 
 /// Battery thresholds for FPS scaling.
 const BATTERY_CRITICAL: u32 = 15;  // Below this: 60 FPS cap
@@ -114,7 +129,7 @@ impl FpsCapManager {
 
     /// Read thermal temperature from sysfs (millidegrees C -> degrees C).
     fn read_thermal_temp() -> u32 {
-        fs::read_to_string(THERMAL_ZONE_PATH)
+        fs::read_to_string(thermal_zone_path())
             .ok()
             .and_then(|s| s.trim().parse::<u32>().ok())
             .map(|millideg| millideg / 1000) // Convert millidegrees to degrees

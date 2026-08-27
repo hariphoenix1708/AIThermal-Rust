@@ -11,6 +11,10 @@ fn write(path: &str, val: &str) -> bool {
     if !Path::new(path).exists() {
         return false;
     }
+    // Writable probe — OpenOptions::write to avoid poisoned-node spam
+    if std::fs::OpenOptions::new().write(true).open(path).is_err() {
+        return false;
+    }
     if let Ok(cur) = std::fs::read_to_string(path)
         && cur.trim() == val.trim()
     {
