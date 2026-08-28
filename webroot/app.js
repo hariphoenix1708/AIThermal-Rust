@@ -274,10 +274,26 @@ async function loadGaming() {
     session_count: state.session_count,
     cooldown: state.cooldown_active,
     cooldown_source: state.cooldown_source_pkg,
+    game_turbo_active: state.game_turbo_active,
+    gpu_power_level: state.gpu_power_level,
+    adaptive_tier: state.adaptive_tier,
+    combat_boost: "see Combat card (200ms when burst)",
+    modules: "affinity/priority/background/wifi/rps/io/touch/gpu/perf_hint/cpu_idle/gpu_hints/memory/qos/fps/deadline/combat",
   }, null, 2);
   // game_list.conf lives under the module's config/ directory (see main.rs).
   const list = await readFile(`${MODULE_DIR}/config/game_list.conf`);
   document.getElementById("gameListRaw").textContent = list.trim() || "game_list.conf not found.";
+  // Combat log — last 30 lines
+  const combat = await readFile(`${LOG_DIR}/thermalai_combat.log`);
+  const combatLines = combat.trim().split("\n").slice(-30).join("\n");
+  document.getElementById("combatRaw").textContent = combatLines || "No combat events yet (idle heartbeat every 30s).";
+  // Per-app profiles — session + turbo
+  const sess = await readFile(`${STATE_DIR}/game_session_profiles.json`);
+  const turbo = await readFile(`${STATE_DIR}/game_turbo_profiles.json`);
+  let profText = "";
+  if (sess.trim()) profText += "── game_session_profiles.json ──\n" + sess.trim().slice(0, 800) + "\n\n";
+  if (turbo.trim()) profText += "── game_turbo_profiles.json ──\n" + turbo.trim().slice(0, 800);
+  document.getElementById("profilesRaw").textContent = profText.trim() || "No per-app profiles yet (run 2+ sessions).";
 }
 
 async function loadCharging() {
@@ -302,6 +318,7 @@ const LOG_FILES = {
   battery:  "thermalai_battery.log",
   verbose:  "thermalai_verbose.log",
   ui:       "thermalai_ui.log",
+  combat:   "thermalai_combat.log",
 };
 let currentLog = "logs";
 async function loadLogs(kind = currentLog) {
@@ -317,6 +334,9 @@ async function loadLogs(kind = currentLog) {
 async function loadHardware() {
   const cal = await readFile(`${STATE_DIR}/calibration.json`);
   document.getElementById("calRaw").textContent = cal.trim() || "No calibration state.";
+  // SoC peridot 5-block status — live sysfs
+  const soc = await ksuExec(`echo "WALT upmigrate: $(cat /proc/sys/kernel/sched_upmigrate 2>/dev/null || cat /proc/sys/kernel/sched_walt_upmigrate 2>/dev/null)"; echo "WALT downmigrate: $(cat /proc/sys/kernel/sched_downmigrate 2>/dev/null || cat /proc/sys/kernel/sched_walt_downmigrate 2>/dev/null)"; echo "DDR min: $(cat /sys/class/devfreq/soc:qcom,cpubw/min_freq 2>/dev/null | head -c 20)"; echo "LLCC min: $(cat /sys/class/devfreq/soc:qcom,llccbw/min_freq 2>/dev/null | head -c 20)"; echo "Uclamp FG: $(cat /dev/cpuctl/foreground/cpu.uclamp.min 2>/dev/null)"; echo "ADPF: $(cat /sys/module/adpf/parameters/enabled 2>/dev/null || echo none)"`);
+  document.getElementById("socRaw").textContent = soc.stdout.trim() || "No SoC tuning state (advanced_tuning_enabled=false?).";
 }
 
 function loadTab(name) {
@@ -345,6 +365,10 @@ document.getElementById("stopBtn").onclick = () => daemonCmd("stop");
 document.getElementById("restartBtn").onclick = () => daemonCmd("restart");
 document.getElementById("refreshTemps").onclick = loadZones;
 document.getElementById("reloadGames").onclick = loadGaming;
+const rc = document.getElementById("reloadCombat");
+if (rc) rc.onclick = loadGaming;
+const rp = document.getElementById("reloadProfiles");
+if (rp) rp.onclick = loadGaming;
 
 document.querySelectorAll("[data-charge]").forEach((b) =>
   b.addEventListener("click", () => daemonCmd(`charging ${b.dataset.charge}`))

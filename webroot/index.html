@@ -143,8 +143,22 @@
       <!-- GAMING -->
       <section class="view" id="view-gaming">
         <div class="card">
-          <div class="card-label">Gaming state</div>
+          <div class="card-label">Gaming state — GameTurbo v3.2 (15 modules)</div>
           <pre class="code" id="gamingRaw">Loading…</pre>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-label">Combat — enemy burst (Ultra120 10pp/1.3×)</div>
+            <button class="btn ghost sm" id="reloadCombat">Reload</button>
+          </div>
+          <pre class="code scroll" id="combatRaw">Loading…</pre>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-label">Per-App Profiles — session + turbo</div>
+            <button class="btn ghost sm" id="reloadProfiles">Reload</button>
+          </div>
+          <pre class="code" id="profilesRaw">Loading…</pre>
         </div>
         <div class="card">
           <div class="card-header">
@@ -183,6 +197,7 @@
               <button class="btn ghost sm" data-log="gaming">Gaming</button>
               <button class="btn ghost sm" data-log="battery">Battery</button>
               <button class="btn ghost sm" data-log="ui">UI</button>
+              <button class="btn ghost sm" data-log="combat">Combat</button>
               <button class="btn ghost sm" data-log="verbose">Verbose</button>
               <button class="btn ghost sm" id="clearVerbose">Clear verbose</button>
             </div>
@@ -195,13 +210,17 @@
       <section class="view" id="view-hardware">
         <div class="card">
           <div class="card-header">
-            <div class="card-label">Hardware report</div>
+            <div class="card-label">Hardware report — peridot SM8635</div>
             <button class="btn ghost sm" id="genReport">Generate</button>
           </div>
           <pre class="code scroll" id="hwRaw">Tap Generate to run thermalai-detect.</pre>
         </div>
         <div class="card">
-          <div class="card-label">Calibration</div>
+          <div class="card-label">SoC Tuning — 5-block (WALT/DDR/Uclamp/Latency/ADPF)</div>
+          <pre class="code" id="socRaw">Loading…</pre>
+        </div>
+        <div class="card">
+          <div class="card-label">Calibration — offset drift fix v3.6.2</div>
           <pre class="code" id="calRaw">Loading…</pre>
         </div>
       </section>

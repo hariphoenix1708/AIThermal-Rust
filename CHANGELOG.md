@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.7.4 (versionCode 414)
+### Changed — WebUI updated for v3.6-3.7
+- `webroot/index.html` Logs `Combat` button + `webroot/app.js` `LOG_FILES combat` `thermalai_combat.log` (was missing, new daemon logs were invisible in UI).
+- `Gaming` tab now `GameTurbo v3.2 (15 modules)` + `Combat` card (last 30 `COMBAT` lines + heartbeat) + `Per-App Profiles` card (`game_session_profiles.json`/`game_turbo_profiles.json` first 800 chars).
+- `Hardware` tab `SoC Tuning — 5-block` card shows live `sched_upmigrate/downmigrate` `DDR/LLCC min` `Uclamp FG` `ADPF enabled` via `ksu.exec`.
+- `app.js` reload handlers for `reloadCombat`/`reloadProfiles`, `gamingRaw` now lists `game_turbo_active/gpu_power_level/adaptive_tier/combat_boost/modules`.
+
 ## v3.7.3 (versionCode 413)
 ### Fixed — v3.7.2 improvement pass (poison expiry, combat TuningBackend, forensics)
 - `tuning/backend.rs` poison `HashSet→HashMap<Instant>` 30min expiry (was permanent) — transient boot SELinux/hotplug no longer blacklists working node for days.
