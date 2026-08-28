@@ -1,7 +1,7 @@
 id=thermalai_rust
 name=ThermalAI - Intelligent Thermal Manager (Rust Edition)
-version=v3.7.2
-versionCode=412
+version=v3.7.3
+versionCode=413
 author=phoenix1708
-description=AI-driven adaptive thermal throttling for Android with capability-driven hardware discovery, cgroup v1+v2 cpuset support, PSI-aware policy scoring, cycle-count-aware charge tapering, advanced schedutil/WALT + cpuidle + zRAM + F2FS tuning, GameTurbo v3.1 (combat 200ms boost + SoC 5-block + post-game Balanced fix at 43C), and Android 17 SELinux/seccomp compatibility. AOSP + HyperOS, Android 14-17.
+description=AI-driven adaptive thermal throttling for Android with capability-driven hardware discovery, cgroup v1+v2 cpuset support, PSI-aware policy scoring, cycle-count-aware charge tapering, advanced schedutil/WALT + cpuidle + zRAM + F2FS tuning, GameTurbo v3.2 (combat 10pp/1.3x + 30min poison expiry + TuningBackend + 4h log backup), and Android 17 SELinux/seccomp compatibility. AOSP + HyperOS, Android 14-17.
 updateJson=

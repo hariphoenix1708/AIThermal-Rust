@@ -102,12 +102,24 @@ fn main() -> Result<()> {
     tracing::info!(target: "lifecycle", "════════════════════════════════════════");
 
     let crash_marker = std::path::Path::new(&state_dir).join("crash_marker.json");
-    let crash_count: u32 = std::fs::read_to_string(&crash_marker)
+    let current_version = env!("CARGO_PKG_VERSION");
+    let (crash_count, crash_version): (u32, Option<String>) = std::fs::read_to_string(&crash_marker)
         .ok()
         .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("count").and_then(|c| c.as_u64()))
-        .map(|c| c as u32)
-        .unwrap_or(0);
+        .map(|v| {
+            let c = v.get("count").and_then(|c| c.as_u64()).map(|c| c as u32).unwrap_or(0);
+            let ver = v.get("version").and_then(|x| x.as_str()).map(|s| s.to_string());
+            (c, ver)
+        })
+        .unwrap_or((0, None));
+    if let Some(ver) = &crash_version
+        && ver != current_version {
+            tracing::warn!(
+                target: "lifecycle",
+                "Crash marker from prior version {} (current {}) — count {}",
+                ver, current_version, crash_count
+            );
+        }
 
     let mut config = config; // shadow so we can force safe mode
     if crash_count >= config.profiles.safe_mode_after_crashes {
@@ -122,7 +134,12 @@ fn main() -> Result<()> {
     // clean shutdown the next boot sees +1.
     let _ = std::fs::write(
         &crash_marker,
-        serde_json::json!({ "count": crash_count + 1 }).to_string(),
+        serde_json::json!({
+            "count": crash_count + 1,
+            "version": current_version,
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        })
+        .to_string(),
     );
 
     let mut daemon = Daemon::new(

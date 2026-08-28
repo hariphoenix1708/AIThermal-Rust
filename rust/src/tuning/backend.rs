@@ -1,6 +1,6 @@
 use crate::hardware::capability::CapabilityNode;
 use crate::sysfs;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -21,16 +21,27 @@ fn failure_counts() -> &'static Mutex<HashMap<PathBuf, u32>> {
     COUNTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn poisoned_nodes() -> &'static Mutex<HashSet<PathBuf>> {
-    static POISONED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
-    POISONED.get_or_init(|| Mutex::new(HashSet::new()))
+fn poisoned_nodes() -> &'static Mutex<HashMap<PathBuf, std::time::Instant>> {
+    static POISONED: OnceLock<Mutex<HashMap<PathBuf, std::time::Instant>>> = OnceLock::new();
+    POISONED.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn is_poisoned(path: &Path) -> bool {
-    poisoned_nodes()
-        .lock()
-        .map(|s| s.contains(path))
-        .unwrap_or(false)
+    let mut poisoned = match poisoned_nodes().lock() {
+        Ok(g) => g,
+        Err(_) => return false,
+    };
+    if let Some(&when) = poisoned.get(path) {
+        if when.elapsed().as_secs() < 30 * 60 {
+            return true;
+        }
+        // Expired — allow one retry
+        poisoned.remove(path);
+        if let Ok(mut counts) = failure_counts().lock() {
+            counts.remove(path);
+        }
+    }
+    false
 }
 
 fn record_failure(path: &Path) {
@@ -39,12 +50,12 @@ fn record_failure(path: &Path) {
         *entry = entry.saturating_add(1);
         if *entry == POISON_THRESHOLD {
             tracing::warn!(target: "thermal",
-                "Sysfs node {} rejected {} writes in a row, marking unsupported for the rest of this daemon run",
+                "Sysfs node {} rejected {} writes in a row, marking unsupported for 30m (was permanent)",
                 path.display(),
                 POISON_THRESHOLD
             );
             if let Ok(mut poisoned) = poisoned_nodes().lock() {
-                poisoned.insert(path.to_path_buf());
+                poisoned.insert(path.to_path_buf(), std::time::Instant::now());
             }
         }
     }

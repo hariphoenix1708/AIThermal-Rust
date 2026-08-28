@@ -72,12 +72,8 @@ impl AdaptiveGovernorState {
         // low, and the frame windows on this device never yielded >=5 samples
         // for jank to fire. When we cannot prove the game is smooth we run at
         // Max; only jank==0 over a real sample count is allowed to step down.
-        let enough_samples = frame_stats
-            .map(|s| s.sample_count >= MIN_JANK_SAMPLES)
-            .unwrap_or(false);
-
-        let raw_next_tier = if enough_samples {
-            let stats = frame_stats.unwrap();
+        let raw_next_tier = if let Some(stats) = frame_stats
+            && stats.sample_count >= MIN_JANK_SAMPLES {
             let jank_ratio = stats.jank_ratio();
             if jank_ratio > 0.15 || stats.worst_frame_ns > 50_000_000 {
                 FrequencyTier::Max

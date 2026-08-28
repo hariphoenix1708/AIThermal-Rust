@@ -522,12 +522,11 @@ impl ChargingEngine {
                     self.voter_consecutive_failures.remove(node);
                 }
                 Err(e) => {
-                    let count = self.voter_consecutive_failures
-                        .entry(node.clone())
-                        .or_insert(0)
-                        .checked_add(1)
-                        .unwrap_or(u32::MAX);
-                    *self.voter_consecutive_failures.get_mut(node).unwrap() = count;
+                    let count = {
+                        let c = self.voter_consecutive_failures.entry(node.clone()).or_insert(0);
+                        *c = c.checked_add(1).unwrap_or(u32::MAX);
+                        *c
+                    };
 
                     if count >= VOTER_DISABLE_THRESHOLD {
                         self.voter_disabled.insert(node.clone());

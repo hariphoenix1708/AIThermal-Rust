@@ -57,12 +57,10 @@ pub struct LoggerGuards {
     pub _ui: WorkerGuard,
 }
 
-const LOG_TRUNCATE_INTERVAL_SECS: u64 = 2 * 60 * 60;
+const LOG_TRUNCATE_INTERVAL_SECS: u64 = 4 * 60 * 60;
 
-// Periodic truncating writer truncates logs in place every two hours.
-// NOTE: This intentionally loses all historical logs from previous intervals.
-// If historical back-ups are needed, consider renaming to a '.1' backup
-// instead of truncating in place.
+// Periodic truncating writer truncates logs every four hours, keeping one
+// backup interval (.1) so crash evidence survives one rotation.
 struct HourlyTruncatingWriter {
     path: std::path::PathBuf,
     file: std::fs::File,
@@ -85,6 +83,14 @@ impl HourlyTruncatingWriter {
 
     fn maybe_rotate(&mut self) -> std::io::Result<()> {
         if self.opened_at.elapsed().as_secs() >= LOG_TRUNCATE_INTERVAL_SECS {
+            let backup_path = self.path.with_extension(format!(
+                "{}.1",
+                self.path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("log")
+            ));
+            let _ = std::fs::rename(&self.path, &backup_path);
             self.file = std::fs::OpenOptions::new()
                 .create(true)
                 .write(true)

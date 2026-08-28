@@ -1,7 +1,8 @@
 //! Combat Boost — 4s hard boost when CombatDetector fires.
 //! Holds Big+Prime at fmax, uclamp 90/max, DDR max, then decays 800ms to 40%.
-//! Logs every enter/exit to thermalai.log (game_turbo target) pullable offline.
+ //! Logs every enter/exit to thermalai.log (game_turbo target) pullable offline.
 
+use crate::tuning::backend::TuningBackend;
 use std::fs;
 use std::time::{Duration, Instant};
 
@@ -90,25 +91,39 @@ impl CombatBoost {
     }
 
     fn apply_enter(&self) {
-        // CPU Big+Prime to fmax performance
+        // CPU Big+Prime to fmax performance — via TuningBackend for poison tracking
         for policy in ["policy3", "policy7"] {
-            let _ = fs::write(format!("/sys/devices/system/cpu/cpufreq/{policy}/scaling_governor"), b"performance");
+            let gov_path = format!("/sys/devices/system/cpu/cpufreq/{policy}/scaling_governor");
+            if let Err(e) = TuningBackend::try_write_string(&gov_path, "performance") {
+                tracing::warn!(target: "game_turbo", "Combat Boost: failed {}: {}", gov_path, e);
+            }
             if let Ok(fmax) = fs::read_to_string(format!("/sys/devices/system/cpu/cpufreq/{policy}/cpuinfo_max_freq")) {
-                let _ = fs::write(format!("/sys/devices/system/cpu/cpufreq/{policy}/scaling_max_freq"), fmax.trim().as_bytes());
+                let max_path = format!("/sys/devices/system/cpu/cpufreq/{policy}/scaling_max_freq");
+                if let Err(e) = TuningBackend::try_write_string(&max_path, fmax.trim()) {
+                    tracing::warn!(target: "game_turbo", "Combat Boost: failed {}: {}", max_path, e);
+                }
             }
         }
-        // Uclamp 90/max combat
-        let _ = fs::write("/dev/cpuctl/top-app/cpu.uclamp.min", UCLAMP_COMBAT.as_bytes());
-        let _ = fs::write("/dev/cpuctl/top-app/cpu.uclamp.max", b"max");
+        // Uclamp 90/max combat — via TuningBackend (shares poison set with perf_hint/advanced)
+        if let Err(e) = TuningBackend::try_write_string("/dev/cpuctl/top-app/cpu.uclamp.min", UCLAMP_COMBAT) {
+            tracing::warn!(target: "game_turbo", "Combat Boost: failed uclamp.min 90: {}", e);
+        }
+        if let Err(e) = TuningBackend::try_write_string("/dev/cpuctl/top-app/cpu.uclamp.max", "max") {
+            tracing::warn!(target: "game_turbo", "Combat Boost: failed uclamp.max max: {}", e);
+        }
         // DDR/LLCC max via soc_peridot helper if available (best effort)
         crate::tuning::soc_peridot::apply_bus_llc_gaming(true);
         // GPU already 10ms via gpu_hints, ensure force_bus_on
-        let _ = fs::write("/sys/class/kgsl/kgsl-3d0/force_bus_on", b"1");
+        if let Err(e) = TuningBackend::try_write_string("/sys/class/kgsl/kgsl-3d0/force_bus_on", "1") {
+            tracing::warn!(target: "game_turbo", "Combat Boost: failed force_bus_on 1: {}", e);
+        }
     }
 
     fn apply_exit(&self) {
-        // Uclamp back to base 40 (perf_hint will take over 40→70 dynamic)
-        let _ = fs::write("/dev/cpuctl/top-app/cpu.uclamp.min", UCLAMP_BASE.as_bytes());
+        // Uclamp back to base 40 (perf_hint will take over 40→70 dynamic) — via TuningBackend
+        if let Err(e) = TuningBackend::try_write_string("/dev/cpuctl/top-app/cpu.uclamp.min", UCLAMP_BASE) {
+            tracing::warn!(target: "game_turbo", "Combat Boost: failed restore uclamp.min 40: {}", e);
+        }
         // CPU leave as-is; orchestrator/policy will restore walt on next Balanced tick.
         // DDR restore is handled by soc_peridot on next !gaming apply, here just log.
     }

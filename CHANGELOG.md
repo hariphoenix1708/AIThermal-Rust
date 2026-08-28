@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.7.3 (versionCode 413)
+### Fixed — v3.7.2 improvement pass (poison expiry, combat TuningBackend, forensics)
+- `tuning/backend.rs` poison `HashSet→HashMap<Instant>` 30min expiry (was permanent) — transient boot SELinux/hotplug no longer blacklists working node for days.
+- `game_turbo/combat_boost.rs` `fs::write` → `TuningBackend::try_write_string` + WARN logging + `soc_peridot` DDR via same backend (fixes silent fail + 3-writer uclamp race on `top-app`).
+- `logger.rs` `LOG_TRUNCATE_INTERVAL 2h→4h` + `maybe_rotate()` rename to `.1` backup (keeps one interval of crash evidence, was discarded).
+- `main.rs` `crash_marker.json` now `{count, version, timestamp}` + `prior version` WARN on boot.
+- `charging/mod.rs:525` redundant `get_mut` → hold `&mut` from `entry()`; `adaptive_governor.rs:75` collapse `map+unwrap_or+unwrap` → `if let Some &&`.
+
 ## v3.7.2 (versionCode 412)
 ### Fixed — v3.7.1 audit follow-ups + 08:23 post-game stutter
 - `combat_detector.rs` header/inline now `1.3× / +10pp single-signal OR` (was `2-of-3 / 1.5×/+20pp` mismatch), removed `top-app` bullet.
