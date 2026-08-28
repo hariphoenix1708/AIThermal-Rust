@@ -1,12 +1,16 @@
 //! Combat Detector — heuristic enemy-proximity burst detection for CODM Ranked.
 //!
 //! No game hook. When 3+ enemies enter, Unity adds ~180k tris + 3 setPass per
-//! enemy plus server enemy-tick bursts. Daemon-visible proxies:
-//!   - rx_packets/s ↑ 1.5× (wlan0/rmnet_data1)
-//!   - gpu_busy% ↑ +20pp
-//!   - top-app uclamp demand already high
-//! 2-of-3 vote avoids single-packet false positives.
-//! Logs to thermalai.log + thermalai_combat.log (pullable via Download/AIThermal-Logs).
+//! enemy plus server enemy-tick bursts.
+//!
+//! Daemon-visible proxies:
+//!
+//! * `rx_packets/s` ↑ 1.3× (`wlan0`/`rmnet`) threshold `NET_SPIKE_FACTOR`
+//! * `gpu_busy%` ↑ +10pp threshold `GPU_SPIKE_PP` (Ultra120: 8.3ms budget)
+//!
+//! Single-signal OR triggers boost (either net blip or GPU spike) —
+//! thresholds are already high (1.3× / +10pp) to avoid false positives.
+//! Logs to `thermalai.log` + `thermalai_combat.log` (pullable via `Download/AIThermal-Logs`).
 
 use std::collections::VecDeque;
 use std::fs;
@@ -87,7 +91,8 @@ impl CombatDetector {
         let (short_pps, base_pps) = self.pps_windows(now);
         let gpu_spike = self.gpu_spike();
         let net_spike = short_pps as f64 > base_pps as f64 * NET_SPIKE_FACTOR && short_pps > MIN_PPS;
-        // 1-of-2 vote with thresholds already high: net 1.5× + gpu +20pp
+        // Single-signal OR with high thresholds (1.3× / +10pp) — either net blip
+        // or GPU spike is enough; avoids needing 2-of-3 top-app signal.
         let combat = net_spike || gpu_spike;
 
         if combat && self.should_log(now) {

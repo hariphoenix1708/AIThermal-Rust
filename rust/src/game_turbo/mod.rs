@@ -355,8 +355,8 @@ impl GameTurboEngine {
         // SCHED_DEADLINE tick — re-scan for new render threads.
         self.sched_deadline.tick(game_pid);
 
-        // Combat heuristic — burst before frame miss
-        let _combat = self.combat_update(gpu_load);
+        // Combat heuristic — burst before frame miss (side effects only; state read via combat_is_active())
+        let _ = self.combat_update(gpu_load);
     }
 
     /// Thermal-aware adjustment — called each tick with the current
@@ -396,8 +396,11 @@ impl GameTurboEngine {
         } else if !self.thermal_throttled && was_throttled {
             tracing::info!(
                 target: "game_turbo",
-                "Thermal throttle OFF: temp={}C < temp_hot={}C — re-applying full boost",
-                composite_temp, temp_hot
+                "Thermal throttle OFF: temp={}C < release_threshold={}C (temp_hot {} - margin {}) — re-applying full boost",
+                composite_temp,
+                temp_hot - THERMAL_RELEASE_MARGIN,
+                temp_hot,
+                THERMAL_RELEASE_MARGIN
             );
 
             // Re-pin to big cores.

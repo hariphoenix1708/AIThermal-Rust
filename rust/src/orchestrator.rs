@@ -1182,6 +1182,16 @@ impl RuntimeTask for SystemOrchestrator {
             .recovery
             .check_recovery(&desired_policy, was_gaming, is_gaming);
 
+        // Post-game: if SoC already cool (< temp_warm) at exit, don't clamp
+        // to Conservative — that caused 364MHz little-core stutter in Kotatsu
+        // 120Hz at 08:23:29 (43C, score 17.5). Keep Balanced for smooth UI.
+        let mut desired_policy = desired_policy;
+        if was_gaming && !is_gaming && adj_temp < ctx.config.profiles.temp_warm
+            && matches!(desired_policy, PolicyState::Conservative | PolicyState::Powersave) {
+                tracing::debug!(target: "thermal", "Post-game cool clamp: {} -> Balanced (adj {}C < warm {})", format!("{:?}", desired_policy), adj_temp, ctx.config.profiles.temp_warm);
+                desired_policy = PolicyState::Balanced;
+            }
+
         let final_policy = if desired_policy == PolicyState::EmergencyCool {
             // A real emergency (composite/predicted >= temp_critical, or a
             // high score at temp >= temp_hot) must always win over the

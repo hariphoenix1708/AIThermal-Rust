@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.7.2 (versionCode 412)
+### Fixed — v3.7.1 audit follow-ups + 08:23 post-game stutter
+- `combat_detector.rs` header/inline now `1.3× / +10pp single-signal OR` (was `2-of-3 / 1.5×/+20pp` mismatch), removed `top-app` bullet.
+- `game_turbo/mod.rs:359 tick()` `let _combat` → `let _ = combat_update()` (discarded return clarified).
+- `game_turbo/mod.rs:405 thermal_adjust OFF` log `temp < temp_hot` → `temp < release_threshold (temp_hot-3)` (fixes hysteresis wording).
+- `CHANGELOG` was one version behind (`v3.7.0` newest vs shipped `v3.7.1`); now backfilled.
+- `orchestrator.rs:1176` post-game cool clamp: when `was_gaming && !is_gaming && adj_temp < temp_warm (48C)` force `Conservative/Powersave → Balanced` — fixes `08:23:29 Performance→Conservative 17.5 @43C` causing `schedutil 364MHz` 120Hz Kotatsu stutter after Ranked exit (verified in `thermalai_ui.log 08:23`).
+
+## v3.7.1 (versionCode 411)
+### Fixed — Ultra120 combat sensitivity + heartbeat
+- `combat_detector` `GPU 20→10pp` `net 1.5→1.3×` `MIN_PPS 200→100` + `30s` heartbeat `COMBAT idle` to `thermalai_combat.log` for offline analysis.
+
 ## v3.7.0 (versionCode 410)
 ### Added — Enemy-proximity Combat Boost for Ranked (Low + Ultra 120)
 - `game_turbo/combat_detector.rs` heuristic burst: `rx_pps 1.5×` (`/proc/net/dev wlan0/rmnet`) + `gpu_busy +20pp` (kgsl `gpu_busy_percentage`/`gpubusy`) 2-of-2 vote in 500ms vs 2s baseline; `fps_cap.rs` `THERMAL_WARM 45→48` keeps `120` until `48C` (was capping to `90` at `45C` in Ranked).
