@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.7.5 (versionCode 415)
+### Fixed — Deep audit findings (heating/throttling report 2026-08-29)
+- `tuning/soc_peridot.rs:apply_bus_llc_gaming()` exclude `kgsl-*` nodes from bus/LLCC governor pinning (substring match on "bus" was catching `kgsl-busmon` which rejects "performance" governor). Added `available_governors` probe before writing "performance" — matches `hardware/gpu.rs` pattern. Fixes silent 5-strike poison cycle every gaming session.
+- `service.sh` rate limiter: skip killall/restart burst if `boot_completed` re-fires within 60s (prevents 18-restart-in-2h storms). Added 5-minute proximity WARN for soft-reboot loop detection.
+
 ## v3.7.4 (versionCode 414)
 ### Changed — WebUI updated for v3.6-3.7
 - `webroot/index.html` Logs `Combat` button + `webroot/app.js` `LOG_FILES combat` `thermalai_combat.log` (was missing, new daemon logs were invisible in UI).

@@ -8,6 +8,7 @@ PID_FILE="$LOG_DIR/thermalai.pid"
 STARTUP_LOG="$LOG_DIR/thermalai_startup.log"
 BIN_DIR="$MODDIR/system/bin"
 DAEMON="$BIN_DIR/thermalai-daemon"
+LAST_RUN_FILE="$STATE_DIR/last_service_run"
 
 export THERMALAI_MODULE_DIR="$MODDIR"
 export THERMALAI_CONFIG_DIR="$MODDIR/config"
@@ -56,6 +57,20 @@ prepare_binary_contexts() {
 
 wait_for_boot_completed
 prepare_binary_contexts
+
+# Rate limiter: skip killall/restart burst if boot_completed re-fires
+# within 60s of last run (prevents 18-restart-in-2h storms).
+NOW=$(date +%s)
+LAST=$(cat "$LAST_RUN_FILE" 2>/dev/null || echo 0)
+if [ $((NOW - LAST)) -lt 60 ]; then
+    log_startup "WARN: service.sh invoked again within 60s of last run (NOW=$NOW LAST=$LAST) — skipping killall/restart burst"
+    exit 0
+fi
+echo "$NOW" > "$LAST_RUN_FILE"
+# Warn if boot_completed fires again within 5 minutes
+if [ $((NOW - LAST)) -lt 300 ] && [ "$LAST" -ne 0 ]; then
+    log_startup "WARN: boot_completed events under 5min apart (NOW=$NOW LAST=$LAST) — possible soft-reboot loop"
+fi
 
 if [ -f "$PID_FILE" ]
 then

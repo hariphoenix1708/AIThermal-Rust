@@ -107,21 +107,28 @@ pub fn apply_bus_llc_gaming(is_gaming: bool) {
             let base = e.path();
             let name = base.file_name().unwrap_or_default().to_string_lossy().to_string();
             // Only bus-related devfreqs: cpubw, llccbw, l3, ddr, memlat
+            // Exclude kgsl-* nodes (GPU bus monitors) which don't support "performance" governor
             let is_bus = name.contains("cpubw")
                 || name.contains("llccbw")
                 || name.contains("l3")
                 || name.contains("ddr")
                 || name.contains("memlat")
-                || name.contains("bus");
+                || (name.contains("bus") && !name.starts_with("kgsl"));
             if !is_bus {
                 continue;
             }
             let min_path = base.join("min_freq");
             let max_path = base.join("max_freq");
             let avail_path = base.join("available_frequencies");
+            let gov_path = base.join("governor");
+            let avail_gov_path = base.join("available_governors");
             if !min_path.exists() || !max_path.exists() {
                 continue;
             }
+            // Check if "performance" governor is supported before attempting write
+            let supports_performance = std::fs::read_to_string(&avail_gov_path)
+                .map(|s| s.split_whitespace().any(|g| g == "performance"))
+                .unwrap_or(false);
             if is_gaming {
                 if let Ok(max) = std::fs::read_to_string(&max_path) {
                     let max = max.trim();
@@ -136,8 +143,10 @@ pub fn apply_bus_llc_gaming(is_gaming: bool) {
                         max.to_string()
                     };
                     write(min_path.to_string_lossy().as_ref(), &target);
-                    // Also vote via userspace governor if present
-                    write(base.join("governor").to_string_lossy().as_ref(), "performance");
+                    // Only write performance governor if supported
+                    if supports_performance {
+                        write(gov_path.to_string_lossy().as_ref(), "performance");
+                    }
                 }
             } else {
                 // Restore: min_freq -> available_frequencies first entry
