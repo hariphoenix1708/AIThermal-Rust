@@ -62,6 +62,7 @@ for f in thermalai.log \
          thermalai_charging.log \
          thermalai_gaming.log \
          thermalai_ui.log \
+         thermalai_combat.log \
          network_diag.log \
          network_tweak.log \
          codm_network_diag.log \
@@ -71,14 +72,25 @@ for f in thermalai.log \
          ml_model.json; do
     rm -f "$LOG_DIR/$f"
     rm -f "$STATE_DIR/$f"
-    # Log rotation may leave .1 / .gz siblings; sweep them too.
-    rm -f "$LOG_DIR/${f}.1" "$LOG_DIR/${f}.gz" "$LOG_DIR/${f}.1.gz"
-    rm -f "$STATE_DIR/${f}.1" "$STATE_DIR/${f}.gz" "$STATE_DIR/${f}.1.gz"
+    # Log rotation may leave .1 / .gz siblings; sweep them too (including incrementing .1-.5 for ml).
+    for i in 1 2 3 4 5; do
+        rm -f "$LOG_DIR/${f}.$i" "$LOG_DIR/${f}.$i.gz" 2>/dev/null
+        rm -f "$STATE_DIR/${f}.$i" "$STATE_DIR/${f}.$i.gz" 2>/dev/null
+    done
+    rm -f "$LOG_DIR/${f}.gz" 2>/dev/null
+    rm -f "$STATE_DIR/${f}.gz" 2>/dev/null
 done
+# Catch-all for any other rotated logs (thermalai*.log.*) that may have been missed
+rm -f "$LOG_DIR"/thermalai*.log.* 2>/dev/null
+rm -f "$LOG_DIR"/network*.log.* 2>/dev/null
+rm -f "$LOG_DIR"/codm*.log.* 2>/dev/null
+rm -f "$LOG_DIR"/ml_features.jsonl.* 2>/dev/null
+rm -f "$STATE_DIR"/ml_features.jsonl.* 2>/dev/null
 # External staging copies (from manual push before v3.7.7 bundled)
 rm -f /data/local/tmp/ml_model.onnx 2>/dev/null
 rm -f /data/local/tmp/ml_model.onnx.json 2>/dev/null
 rm -f /data/local/tmp/ml_features.jsonl 2>/dev/null
+rm -f /data/local/tmp/ml_features.jsonl.* 2>/dev/null
 rm -f /sdcard/ml_model.onnx* 2>/dev/null
 rm -rf "$STATE_DIR"
 

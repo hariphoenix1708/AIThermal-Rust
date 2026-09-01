@@ -33,23 +33,31 @@ pub struct MlFeatureRow {
 }
 
 const ML_FILE: &str = "ml_features.jsonl";
-const ML_MAX_BYTES: u64 = 2 * 1024 * 1024; // 2 MB ~ 20k rows, keeps /data bounded
-const ML_KEEP_BACKUP: bool = true;
+const ML_MAX_BYTES: u64 = 2 * 1024 * 1024; // 2 MB ~ 6k rows, keeps /data bounded
+const ML_MAX_BACKUPS: usize = 5; // keep .1 .. .5 → 10MB + current 2MB = 12MB ≈ 36k rows for training
 
 /// Cheap, best-effort append. Never panics, never blocks tick on error.
 pub fn log_row(state_dir: &str, row: &MlFeatureRow) {
     let path = Path::new(state_dir).join(ML_FILE);
-    // Rotate if too large — keep one backup like logger.rs HourlyTruncatingWriter.
+    // Rotate if too large — keep incrementing backups .1..ML_MAX_BACKUPS.
     if let Ok(meta) = fs::metadata(&path) {
         if meta.len() > ML_MAX_BYTES {
+            // Shift .4→.5, .3→.4, ..., .1→.2  (remove oldest .5 first)
+            for i in (1..ML_MAX_BACKUPS).rev() {
+                let from = Path::new(state_dir).join(format!("{}.{}", ML_FILE, i));
+                let to = Path::new(state_dir).join(format!("{}.{}", ML_FILE, i + 1));
+                if from.exists() {
+                    let _ = fs::remove_file(&to);
+                    let _ = fs::rename(&from, &to);
+                }
+            }
             let backup = Path::new(state_dir).join(format!("{}.1", ML_FILE));
-            let _ = fs::remove_file(&backup);
             let _ = fs::rename(&path, &backup);
             let _marker = serde_json::json!({
                 "v": row.v,
                 "ts": row.ts,
                 "event": "rotate",
-                "kept_backup": ML_KEEP_BACKUP,
+                "kept_backups": ML_MAX_BACKUPS,
             });
             if let Ok(line) = serde_json::to_string(&_marker) {
                 let _ = fs::write(&path, format!("{}\n", line));

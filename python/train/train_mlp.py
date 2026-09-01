@@ -21,14 +21,44 @@ import numpy as np
 FEATURES = ["composite_c","adj_c","trend_score","cpu_c","gpu_c","batt_c","gpu_load","cpu_pressure"]
 
 def load_rows(path, horizon=5):
+    import glob, os
+    # Support single file, directory, or pattern; also load incrementing .1..5 siblings for training
+    candidates = []
+    is_ml = "ml_features" in os.path.basename(path)
+    if os.path.isdir(path):
+        # directory: load all ml_features.jsonl* inside
+        candidates = glob.glob(os.path.join(path, "ml_features.jsonl*"))
+    elif "*" in path or "?" in path:
+        candidates = glob.glob(path)
+    else:
+        candidates.append(path)
+        if is_ml:
+            # Also load siblings .1..5 if base file given (for incrementing rotation)
+            base = path
+            for i in range(1, 6):
+                cand = f"{base}.{i}"
+                if os.path.exists(cand) and cand not in candidates:
+                    candidates.append(cand)
+            # Also glob for any ml_features.jsonl* in same dir (covers .1..5 already, but deduped)
+            dirn = os.path.dirname(base) or "."
+            extra = glob.glob(os.path.join(dirn, "ml_features.jsonl*"))
+            for e in extra:
+                if e not in candidates and os.path.basename(e) != os.path.basename(path):
+                    # Only add if not already in candidates and not the base itself
+                    # Avoid double-counting when passing a combined file that is not ml_features
+                    candidates.append(e)
     rows = []
-    with open(path) as f:
-        for line in f:
-            try:
-                j = json.loads(line)
-                if j.get("v") != 1 or "event" in j: continue
-                rows.append(j)
-            except: continue
+    for cand in sorted(set(candidates)):
+        try:
+            with open(cand) as f:
+                for line in f:
+                    try:
+                        j = json.loads(line)
+                        if j.get("v") != 1 or "event" in j: continue
+                        rows.append(j)
+                    except: continue
+        except FileNotFoundError:
+            continue
     # sort by ts, join horizon ahead for label
     rows.sort(key=lambda r: r["ts"])
     data = []

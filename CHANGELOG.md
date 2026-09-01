@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.7.8 (versionCode 418)
+### Fixed — Deep audit: ml rotation + residual log cleanup
+- `telemetry/ml_logger.rs` `2MB → .1` (single backup, data loss after 2 rotations) → `2MB → .1..5` incrementing (12MB ≈ 36k rows, `MAE 0.78` training now uses all `13.7k` rows via `python/train/train_mlp.py` multi-file glob). Fixes `.jsonl1` overwrite you saw after `2MB` second rotation.
+- `customize.sh:52` `rm -f 8 logs` left `*.log.1` + `combat/network/codm` rotated logs after dirty `update` — now `rm -f thermalai*.log* network*.log* codm*.log*` comprehensive, while `ml_features/model` are preserved via `preserve` (previously `rm -rf $STATE_DIR` wiped `976K` ring on every update).
+- `uninstall.sh:57` loop missed `thermalai_combat.log` + `ml .1-.5` + `network .1` — now `for i 1..5` sweeps `ml_features.jsonl.$i` + `thermalai_combat.log.$i` and catch-all `rm -f thermalai*.log.* ml_features.jsonl.*` ensures true clean (`rm -rf STATE_DIR` alone left `LOG_DIR` `.1` behind).
+
 ## v3.7.7 (versionCode 417)
 ### Added — On-device AI thermal prediction (peridot, 13.7k rows)
 - **Bundled MLP 8-16-8-1 (6.3K JSON, MAE 0.78C)** trained on 13,711 rows from peridot (`gaming 40%`, `32-60C avg 44.6`, `Balanced 10k/Performance 1.4k`) via `python/train/train_mlp.py` (`sklearn` `16,8` `ReLU`, horizon 5 ticks ≈10s). Manual `ReLU` inference `0.1ms` on A520, no `tract` heavy dep. Config `config/ml_model.json` inside ZIP (survives clean install), fallback to `state/ml_model.onnx.json`.
