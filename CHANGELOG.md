@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.7.7 (versionCode 417)
+### Added — On-device AI thermal prediction (peridot, 13.7k rows)
+- **Bundled MLP 8-16-8-1 (6.3K JSON, MAE 0.78C)** trained on 13,711 rows from peridot (`gaming 40%`, `32-60C avg 44.6`, `Balanced 10k/Performance 1.4k`) via `python/train/train_mlp.py` (`sklearn` `16,8` `ReLU`, horizon 5 ticks ≈10s). Manual `ReLU` inference `0.1ms` on A520, no `tract` heavy dep. Config `config/ml_model.json` inside ZIP (survives clean install), fallback to `state/ml_model.onnx.json`.
+- **Collection + shadow + gentle actuation:** `telemetry/ml_logger.rs` `2MB → .1` ring `v1` `30/min`, `orchestrator.rs:998` shadow `TRACE ml_pred vs linear` every tick + blend `predicted = (linear+ml)/2` capped `±2C` only when `conf>50` and `err≤4` and `screen_on` — never overrides `EmergencyCool`/`Powersave` hard rules. Logs `ml actuation blended 43→42`.
+- **Defaults enabled:** `config.rs` `ml_features/shadow true` by default, `ml_model_path = "/data/adb/modules/thermalai_rust/config/ml_model.json"`; `profiles.conf` same. `prediction/ml.rs` `OnceLock` + fallback `config → state onnx.json → state json`.
+- **Preserve across update:** `customize.sh:65` now copies `ml_features* + ml_model*` to `preserve` before `rm -rf $STATE_DIR` (previously wiped `976K` ring on every update). `uninstall.sh:68` now wipes `ml_features/ml_model` in both `LOG_DIR`/`STATE_DIR` + `/data/local/tmp/ml_model*` for true clean.
+- **Training pipeline:** `python/train/train_mlp.py` + `README` always writes `onnx + json` (6K), `MAE 0.78` on holdout `20%`, horizon `5`. Host `Python 3.14` `sklearn 1.9` `onnx 1.22`.
+
+## v3.7.6 (versionCode 416)
+### Added — Phase 0/1 ML scaffold (collect + shadow stub)
+- `config.rs` `ml_features_enabled / ml_shadow_enabled / ml_model_path` (`default_false` initially), `profiles.conf` + `ml_logger.rs` `2MB ring` + `prediction/ml.rs` `OnceLock` stub + `orchestrator.rs` shadow `TRACE` (no actuation). `Cargo.toml` `ml=[]` lightweight (no `tract` by default). `python/train` skeleton.
+
 ## v3.7.5 (versionCode 415)
 ### Fixed — Deep audit findings (heating/throttling report 2026-08-29)
 - `tuning/soc_peridot.rs:apply_bus_llc_gaming()` exclude `kgsl-*` nodes from bus/LLCC governor pinning (substring match on "bus" was catching `kgsl-busmon` which rejects "performance" governor). Added `available_governors` probe before writing "performance" — matches `hardware/gpu.rs` pattern. Fixes silent 5-strike poison cycle every gaming session.

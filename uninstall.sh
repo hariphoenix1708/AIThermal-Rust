@@ -64,11 +64,22 @@ for f in thermalai.log \
          thermalai_ui.log \
          network_diag.log \
          network_tweak.log \
-         codm_network_diag.log; do
+         codm_network_diag.log \
+         ml_features.jsonl \
+         ml_model.onnx \
+         ml_model.onnx.json \
+         ml_model.json; do
     rm -f "$LOG_DIR/$f"
+    rm -f "$STATE_DIR/$f"
     # Log rotation may leave .1 / .gz siblings; sweep them too.
     rm -f "$LOG_DIR/${f}.1" "$LOG_DIR/${f}.gz" "$LOG_DIR/${f}.1.gz"
+    rm -f "$STATE_DIR/${f}.1" "$STATE_DIR/${f}.gz" "$STATE_DIR/${f}.1.gz"
 done
+# External staging copies (from manual push before v3.7.7 bundled)
+rm -f /data/local/tmp/ml_model.onnx 2>/dev/null
+rm -f /data/local/tmp/ml_model.onnx.json 2>/dev/null
+rm -f /data/local/tmp/ml_features.jsonl 2>/dev/null
+rm -f /sdcard/ml_model.onnx* 2>/dev/null
 rm -rf "$STATE_DIR"
 
 echo "Module uninstalled. Daemon stopped and all files under $LOG_DIR and $STATE_DIR cleaned up." >> /dev/kmsg

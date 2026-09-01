@@ -1,6 +1,6 @@
 [package]
 name = "thermalai-daemon"
-version = "3.7.5"
+version = "3.7.7"
 edition = "2024"
 
 [dependencies]
@@ -24,6 +24,11 @@ lazy_static = "1.5.0"
 chrono = { version = "0.4.45", features = ["clock"] }
 notify = "8.2.0"
 netlink-sys = "0.8.8"
+tract-onnx = { version = "0.21", optional = true }
+
+[features]
+default = []
+ml = []
 
 [profile.release]
 opt-level = 3

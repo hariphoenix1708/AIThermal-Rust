@@ -45,7 +45,7 @@ then
     ui_print ""
 fi
 
-ui_print "  Clearing old logs and state..."
+ui_print "  Clearing old logs and state (keeping ML dataset)..."
 LOG_DIR="${THERMALAI_LOG_DIR:-/data/local/tmp/AIThermal}"
 STATE_DIR="${THERMALAI_STATE_DIR:-/data/local/tmp/AIThermal/state}"
 THERMALAI_BIN_DIR="$MODPATH/system/bin"
@@ -59,9 +59,20 @@ rm -f "$LOG_DIR/thermalai_gaming.log"
 rm -f "$LOG_DIR/thermalai_ui.log"
 rm -f "$LOG_DIR/thermalai.pid"
 rm -f "$LOG_DIR/thermalai.pid.lock"
-rm -rf "$STATE_DIR"
-
-mkdir -p "$LOG_DIR" "$STATE_DIR" 2>/dev/null
+# v3.7.7: preserve ML dataset/model across update (2MB ring is valuable).
+if [ -d "$STATE_DIR" ]; then
+    mkdir -p /data/local/tmp/AIThermal_preserve 2>/dev/null
+    cp -a "$STATE_DIR/ml_features.jsonl"* /data/local/tmp/AIThermal_preserve/ 2>/dev/null
+    cp -a "$STATE_DIR/ml_model."* /data/local/tmp/AIThermal_preserve/ 2>/dev/null
+    rm -rf "$STATE_DIR"
+    mkdir -p "$STATE_DIR" 2>/dev/null
+    cp -a /data/local/tmp/AIThermal_preserve/* "$STATE_DIR/" 2>/dev/null
+    rm -rf /data/local/tmp/AIThermal_preserve 2>/dev/null
+else
+    rm -rf "$STATE_DIR"
+    mkdir -p "$STATE_DIR" 2>/dev/null
+fi
+mkdir -p "$LOG_DIR" 2>/dev/null
 
 for bin in thermalai-daemon thermalai-detect thermalair
 do

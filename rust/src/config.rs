@@ -125,6 +125,15 @@ pub struct ProfilesConfig {
     pub game_turbo_thermal_throttle: bool,
     #[serde(default = "default_big_core_mask")]
     pub game_turbo_big_core_mask: u64,
+
+    // v3.7.6 Phase 0 ML — feature collection + shadow inference.
+    // v3.7.7: enabled by default, bundled model inside module.
+    #[serde(default = "default_true")]
+    pub ml_features_enabled: bool,
+    #[serde(default = "default_true")]
+    pub ml_shadow_enabled: bool,
+    #[serde(default = "default_ml_model_path")]
+    pub ml_model_path: String,
 }
 
 fn default_false() -> bool {
@@ -211,6 +220,10 @@ fn default_network_probe_interval() -> u64 {
 
 /// SM8635 peridot: cores 4-7 are performance (A720+A720+X4+X4), 0-3 are efficiency (A520x4).
 /// Bitmask 0b11110000 = 0xF0.
+fn default_ml_model_path() -> String {
+    "/data/adb/modules/thermalai_rust/config/ml_model.json".to_string()
+}
+
 fn default_big_core_mask() -> u64 {
     0xF0
 }
@@ -263,6 +276,9 @@ impl Default for ProfilesConfig {
             game_turbo_gpu_freq_boost: default_true(),
             game_turbo_thermal_throttle: default_true(),
             game_turbo_big_core_mask: default_big_core_mask(),
+            ml_features_enabled: default_true(),
+            ml_shadow_enabled: default_true(),
+            ml_model_path: default_ml_model_path(),
         }
     }
 }

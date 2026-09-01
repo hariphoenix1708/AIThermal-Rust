@@ -1,7 +1,9 @@
-# ThermalAI - Rust Edition (Stable)
-Stable | Android 14-17 (AOSP + HyperOS) | Kernel 4.14-6.6+ | AArch64 | cgroup v1/v2 | Adreno 730/735/750 + Mali
+# ThermalAI - Rust Edition (Stable) — v3.7.7
+Stable | Android 14-17 (AOSP + HyperOS) | Kernel 4.14-6.6+ | AArch64 | cgroup v1/v2 | Adreno 730/735/750 + Mali | **On-device AI (MLP 8-16-8-1, MAE 0.78C)**
 
-A highly optimized, adaptive thermal and performance orchestrator for Android devices, natively written in Rust for safety, minimal overhead, and rigorous stability. It scales device responsiveness intelligently across dynamic system states (Idle, Gaming, Charging, Emergency).
+A highly optimized, adaptive thermal and performance orchestrator for Android devices, natively written in Rust for safety, minimal overhead, and rigorous stability. It scales device responsiveness intelligently across dynamic system states (Idle, Gaming, Charging, Emergency). **v3.7.7 adds per-device on-device AI thermal prediction (13.7k peridot rows, 0.1ms, 6K bundled model) that gently blends `predicted_temp` to cool 10s earlier without overriding safety.**
+
+**AI Note:** The `6.3K` `config/ml_model.json` is trained **only on your peridot data** (not generic) and runs `0.1ms` on the little A520 — `NPU HTP v73` (`/odm/lib64/libQnnHtp.so`) is present but reserved for larger future brains (e.g., `GRU 30s`).
 
 ## ⚠️ Disclaimer
 
@@ -18,6 +20,7 @@ and device-compatibility statement before installing.
 AIThermal-Rust replaces legacy shell-based orchestration with a memory-safe, deterministic, and highly concurrent Rust daemon.
 
 ### Key Features
+*   **On-device AI Thermal Prediction (v3.7.7, 6K, 0.1ms):** Peridot-trained `MLP 8-16-8-1` (`MAE 0.78C` on 13.7k rows, `MAE 0.74` on 3k) predicts `ΔT 10s` from `composite/adj/trend/cpu/gpu/batt/gpu_load/cpu_pressure`. Shadow `TRACE ml_pred vs linear` every tick + gentle blend `predicted = (linear+ml)/2` capped `±2C` only when `conf>50` and `err≤4` — never overrides `EmergencyCool`/`Powersave`. Model `config/ml_model.json` bundled inside ZIP, `2MB` ring `ml_features.jsonl` preserves across update.
 *   **Adaptive Governor**: An opt-in, frame-timing-and-load-aware CPU frequency governor (`adaptive_governor_enabled`) that dynamically adjusts frequencies during active gaming based on real per-frame data (via `dumpsys`) with a CPU-load-based fallback.
 *   **Netlink Screen Detection**: Implements low-latency `uevent` screen-state detection to quickly trigger idle policies when the screen turns off. Includes a broadened-match mode for compatibility across diverse kernel uevent behaviors alongside a reliable polling fallback.
 *   **Advanced Game Detection**: Hardened game detection relying on exact full-string matching of process names, supplemented by a secondary `top-app` cgroup-based confirmation to prevent false positives from background processes that share package names.
@@ -71,6 +74,9 @@ By default, the active runtime writes JSON files safely via atomic renames insid
 - `charging_session.json`: Written atomically post-charge summarizing durations, max temperatures, and average loads.
 - `thermalai_state.json`: Live telemetry dump continuously reflecting the tick-by-tick daemon memory.
 - `game_profiles.json`: Accumulates historical sessions, peak thresholds, and triggers per-app hot modifiers.
+- `ml_features.jsonl` (+ `.1`): `v1` AI dataset `30/min` `2MB → .1` ring (`13.7k` rows total, preserves across update via `customize.sh`).
+- `ml_model.json`: `6.3K` `8-16-8-1` weights. Primary at `config/ml_model.json` (inside ZIP, survives clean install), fallback `state/ml_model.onnx.json` for retrain override.
+- `hardware_profile.json`: `62K` peridot `SM8635` discovery cache.
 
 ## Build Setup
 

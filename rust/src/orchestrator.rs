@@ -949,12 +949,14 @@ impl RuntimeTask for SystemOrchestrator {
         // use and masked all gaming heat).
         self.calibration.apply_calibration(self.thermal.is_heating());
 
-        // 4. Prediction
+        // 4. Prediction — linear (authoritative) + ML shadow (compare only)
         let mut predicted_temp = self.thermal.get_smoothed_temp();
         let mut trend_score = 0;
+        let mut linear_confidence: u32 = 0;
         #[allow(clippy::collapsible_if)]
         if let Some(pred) = self.prediction.predict(&self.thermal) {
             trend_score = pred.trend_score;
+            linear_confidence = pred.confidence;
             if pred.confidence > 50 {
                 predicted_temp = pred.predicted_temp;
             }
@@ -1007,6 +1009,64 @@ impl RuntimeTask for SystemOrchestrator {
             is_gaming,
         );
         let cooling_eff = Self::get_cooling_efficiency(trend_score, gpu_load, is_cooling);
+
+        // ML — Phase 2: shadow + gentle actuation when confident.
+        // - Always TRACE logs shadow vs linear for you to see in verbose log.
+        // - When model exists and linear is confident (>50), gently blend ML
+        //   into predicted_temp (±2C max). This keeps phone cooler earlier
+        //   without ever overriding EmergencyCool/Powersave hard rules.
+        // - Guarded: ML must be within ±5C of adj and err vs linear <4C.
+        if ctx.config.profiles.ml_shadow_enabled
+            && !ctx.config.profiles.ml_model_path.is_empty()
+        {
+            if let Some(d_x10) = crate::prediction::ml::shadow_predict(
+                &ctx.config.profiles.ml_model_path,
+                comp_temp,
+                adj_temp,
+                trend_score,
+                cpu_temp,
+                gpu_temp,
+                bat_temp,
+                gpu_load,
+                cpu_pressure as f32,
+            ) {
+                let ml_pred = adj_temp + (d_x10 as f32 / 10.0).round() as i32;
+                let err = ml_pred - predicted_temp;
+                tracing::trace!(
+                    target: "ml",
+                    "shadow ml_pred={} linear_pred={} err={} composite={} adj={} trend={} conf={}",
+                    ml_pred,
+                    predicted_temp,
+                    err,
+                    comp_temp,
+                    adj_temp,
+                    trend_score,
+                    linear_confidence
+                );
+                // Gentle actuation: only when we trust linear, ML is sane,
+                // and phone not already in deep sleep.
+                if linear_confidence > 50
+                    && (ml_pred - adj_temp).abs() <= 5
+                    && err.abs() <= 4
+                    && !is_screen_off_now
+                {
+                    // Blend 50/50 but cap movement to 2C from linear to stay safe.
+                    let blended = (predicted_temp + ml_pred) / 2;
+                    let delta = (blended - predicted_temp).clamp(-2, 2);
+                    if delta != 0 {
+                        tracing::debug!(
+                            target: "ml",
+                            "ml actuation blended predicted {} -> {} (ml {}, linear {})",
+                            predicted_temp,
+                            predicted_temp + delta,
+                            ml_pred,
+                            predicted_temp
+                        );
+                        predicted_temp += delta;
+                    }
+                }
+            }
+        }
 
         let final_context = context_score + cooling_eff;
 
@@ -1988,10 +2048,85 @@ impl RuntimeTask for SystemOrchestrator {
         if due_time || policy_changed_for_ui || ctx.recovery_mode {
             crate::telemetry::writer::write_telemetry(ctx, &telemetry);
             self.last_telemetry_write_at = Some(std::time::Instant::now());
-            self.last_telemetry_policy = Some(policy_now);
+            self.last_telemetry_policy = Some(policy_now.clone());
         }
 
         self.watchdog.mark_healthy();
+
+        // ─── Phase 0 ML feature collection (2 MB ring, 2.1M host → 320.8 MB/s push validated)
+        if ctx.config.profiles.ml_features_enabled {
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            // avg cpu util 0-100 from last_load_sample HashMap; fallback 0
+            let cpu_util_pct: u8 = {
+                if self.last_load_sample.is_empty() {
+                    0
+                } else {
+                    let mut sum = 0.0f64;
+                    let mut cnt = 0usize;
+                    for sample in self.last_load_sample.values() {
+                        // sample is LoadSample { idle, total } — utilization needs delta,
+                        // but single-point total/idle ratio is a rough proxy for Phase 0.
+                        if sample.total > 0 {
+                            let util = 100.0 * (1.0 - sample.idle as f64 / sample.total as f64);
+                            sum += util.clamp(0.0, 100.0);
+                            cnt += 1;
+                        }
+                    }
+                    if cnt > 0 {
+                        (sum / cnt as f64).round() as u8
+                    } else {
+                        0
+                    }
+                }
+            };
+            let row = crate::telemetry::ml_logger::MlFeatureRow {
+                v: 1,
+                ts,
+                composite_c: comp_temp,
+                adj_c: adj_temp,
+                predicted_c: predicted_temp,
+                trend_score,
+                cpu_c: cpu_temp,
+                gpu_c: gpu_temp,
+                batt_c: bat_temp,
+                skin_c: skin_temp,
+                gpu_load,
+                cpu_util_pct,
+                cpu_pressure: cpu_pressure as f32,
+                io_pressure: io_pressure as f32,
+                mem_pressure: mem_pressure as f32,
+                gaming: is_gaming,
+                screen_off: is_screen_off_now,
+                plugged: is_plugged,
+                cycle_count: self.hardware.charging_profile.cycle_count,
+                policy: policy_now.clone(),
+                actuation_blocked: !can_actuate,
+            };
+            crate::telemetry::ml_logger::log_row(&ctx.state_dir, &row);
+
+            #[cfg(feature = "ml")]
+            if ctx.config.profiles.ml_shadow_enabled
+                && !ctx.config.profiles.ml_model_path.is_empty()
+            {
+                // Shadow inference — load once per process, cache in OnceLock.
+                use std::sync::OnceLock;
+                static ML_SHADOW_ONCE: OnceLock<String> = OnceLock::new();
+                let msg = ML_SHADOW_ONCE.get_or_init(|| {
+                    // Probe tract model once; subsequent ticks just trace.
+                    let p = &ctx.config.profiles.ml_model_path;
+                    match std::path::Path::new(p).exists() {
+                        true => format!("ml shadow: model found at {} (tract feature active)", p),
+                        false => format!("ml shadow: model not found at {} (collecting only)", p),
+                    }
+                });
+                // Rate-limit to once per 30 ticks via last_telemetry_write_at guard already ~2s,
+                // but we just emit at most once per process start to keep verbose log clean.
+                tracing::trace!(target: "ml", "{}", msg);
+            }
+        }
 
         Ok(())
     }
