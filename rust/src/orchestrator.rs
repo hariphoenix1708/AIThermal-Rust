@@ -60,6 +60,9 @@ pub struct SystemOrchestrator {
     last_policy_change_at: Option<std::time::Instant>,
     last_network_probe: Option<std::time::Instant>,
     last_network_tweaks_applied: bool,
+    last_call_check: Option<std::time::Instant>,
+    call_active_cached: bool,
+    call_check_counter: u8,
 }
 
 impl SystemOrchestrator {
@@ -338,6 +341,9 @@ impl SystemOrchestrator {
             last_policy_change_at: None,
             last_network_probe: None,
             last_network_tweaks_applied: false,
+            last_call_check: None,
+            call_active_cached: false,
+            call_check_counter: 0,
         }
     }
 
@@ -585,6 +591,9 @@ impl SystemOrchestrator {
             last_policy_change_at: None,
             last_network_probe: None,
             last_network_tweaks_applied: false,
+            last_call_check: None,
+            call_active_cached: false,
+            call_check_counter: 0,
         }
     }
 
@@ -615,6 +624,20 @@ impl SystemOrchestrator {
 
     fn last_network_probe_interface(&self) -> Option<String> {
         crate::network_diag::cached_quality().map(|q| q.passive.interface)
+    }
+
+    fn is_call_active_cached(&mut self) -> bool {
+        self.call_check_counter = self.call_check_counter.wrapping_add(1);
+        let should_check = self
+            .last_call_check
+            .map(|t| t.elapsed().as_secs() >= 10)
+            .unwrap_or(true)
+            || self.call_check_counter.is_multiple_of(5);
+        if should_check {
+            self.call_active_cached = crate::hardware::services::is_call_active();
+            self.last_call_check = Some(std::time::Instant::now());
+        }
+        self.call_active_cached
     }
 
     /// Run the network quality probe in a background thread (non-blocking).
@@ -936,12 +959,19 @@ impl RuntimeTask for SystemOrchestrator {
             }
 
             // v3.3.0: Thermal-aware GameTurbo — ease constraints when hot.
+            // During active calls, throttle 5C earlier (call adds sustained modem/audio load).
             if ctx.config.profiles.game_turbo_enabled
                 && let Some(pid) = self.gaming.confirmed_pid
             {
+                let call_active = self.is_call_active_cached();
+                let effective_temp_hot = if call_active {
+                    ctx.config.profiles.temp_hot.saturating_sub(5)
+                } else {
+                    ctx.config.profiles.temp_hot
+                };
                 self.game_turbo.thermal_adjust(
                     adj_temp,
-                    ctx.config.profiles.temp_hot,
+                    effective_temp_hot,
                     pid,
                 );
             }
@@ -1073,7 +1103,7 @@ impl RuntimeTask for SystemOrchestrator {
 
         let final_context = context_score + cooling_eff;
 
-        let desired_policy = self.policy.evaluate(
+        let mut desired_policy = self.policy.evaluate(
             adj_temp,
             predicted_temp,
             trend_score,
@@ -1088,6 +1118,18 @@ impl RuntimeTask for SystemOrchestrator {
             bat_temp_c,
             skin_temp,
         );
+
+        // CPU-only critical ceiling — composite dilutes a hot CPU (e.g. 81C cpu + 46C batt → 60C composite) so
+        // EmergencyCool may never trigger. Force it when raw CPU is critically hot.
+        const CPU_ONLY_CRITICAL_C: i32 = 80;
+        if cpu_temp >= CPU_ONLY_CRITICAL_C {
+            tracing::warn!(
+                target: "thermal",
+                "CPU-only critical ceiling hit ({}C) despite composite={}C — forcing EmergencyCool",
+                cpu_temp, comp_temp
+            );
+            desired_policy = crate::policy::PolicyState::EmergencyCool;
+        }
 
         // 6. Recovery overrides
         // 6. Post-game cooldown and session updates

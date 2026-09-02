@@ -98,7 +98,7 @@ impl GameTurboEngine {
                 gpu_freq_boost: true,
                 thermal_throttle_enabled: true,
                 big_core_mask: 0xF0,
-                thermal_throttle_mask: 0xFF,
+                thermal_throttle_mask: 0x0F,
             },
             affinity: thread_affinity::AffinityState::new(),
             priority: priority::PriorityState::new(),
@@ -244,9 +244,10 @@ impl GameTurboEngine {
             gpu_freq_boost: profiles.game_turbo_gpu_freq_boost,
             thermal_throttle_enabled: profiles.game_turbo_thermal_throttle,
             big_core_mask: profiles.game_turbo_big_core_mask,
-            // When thermally throttled, expand to all 8 cores (0xFF)
-            // so the scheduler can shift work to efficiency cores.
-            thermal_throttle_mask: 0xFF,
+            // When thermally throttled, narrow to efficiency cores only (0x0F)
+            // — widening to 0xFF does NOT migrate already-running threads off
+            // the hot big cluster, only a restrictive mask does.
+            thermal_throttle_mask: 0x0F,
         };
 
         tracing::info!(
@@ -382,8 +383,8 @@ impl GameTurboEngine {
                 composite_temp, temp_hot
             );
 
-            // Expand affinity mask to all cores so the scheduler can
-            // move work to efficiency cores.
+            // Narrow to efficiency cluster only — widening to all cores does
+            // NOT force migration off the hot big cluster.
             if self.config_snapshot.thread_affinity {
                 self.affinity
                     .update_mask(game_pid, self.config_snapshot.thermal_throttle_mask);

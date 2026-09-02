@@ -163,10 +163,28 @@ fn main() -> Result<()> {
                 println!("No charging session history found.");
             }
 
-            let games_file = Path::new(&state_dir).join("game_profiles.json");
+            let games_file = Path::new(&state_dir).join("game_session_profiles.json");
+            let turbo_file = Path::new(&state_dir).join("game_turbo_profiles.json");
+            
+            let mut printed_any = false;
+            
             if let Ok(content) = fs::read_to_string(&games_file) {
-                println!("\n--- Game Profiles History ---");
+                println!("\n--- Game Session Profiles History ---");
                 println!("{}", content);
+                printed_any = true;
+            }
+            
+            if let Ok(content) = fs::read_to_string(&turbo_file) {
+                if printed_any {
+                    println!();
+                }
+                println!("--- Game Turbo Profiles History ---");
+                println!("{}", content);
+                printed_any = true;
+            }
+            
+            if !printed_any {
+                println!("\nNo game profiles recorded yet.");
             }
         }
         "verbose" => {
@@ -257,7 +275,8 @@ fn show_gaming() {
         .unwrap_or_else(|_| "/data/local/tmp/AIThermal/state".to_string());
 
     let state_file = format!("{}/thermalai_state.json", state_dir);
-    let profile_file = format!("{}/game_profiles.json", state_dir);
+    let profile_file = format!("{}/game_session_profiles.json", state_dir);
+    let turbo_profile_file = format!("{}/game_turbo_profiles.json", state_dir);
 
     // --- GameTurbo status from daemon state ---
     match fs::read_to_string(&state_file) {
@@ -338,68 +357,79 @@ fn show_gaming() {
     }
 
     // --- Per-game profiles ---
-    match fs::read_to_string(&profile_file) {
-        Err(_) => {
-            println!("\n  No game profiles recorded yet.");
-        }
-        Ok(content) => {
-            if let Ok(profiles) =
-                serde_json::from_str::<serde_json::Value>(&content)
-                && let Some(obj) = profiles.as_object()
-            {
-                if obj.is_empty() {
-                    println!("\n  No game profiles recorded yet.");
-                    return;
-                }
-
-                // Sort by last_seen descending.
-                let mut entries: Vec<_> = obj.iter().collect();
-                entries.sort_by(|a, b| {
-                    let a_seen = a.1.get("last_seen").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let b_seen = b.1.get("last_seen").and_then(|v| v.as_u64()).unwrap_or(0);
-                    b_seen.cmp(&a_seen)
-                });
-
-                println!("\n=== Game Profiles ===");
-                println!(
-                    "  {:<35} {:>5} {:>6} {:>5} {:>5} {:>6}",
-                    "Package", "Sess", "MaxT", "Hot", "GTur", "AvgT"
-                );
-                println!("  {}", "-".repeat(65));
-
-                for (pkg, p) in entries.iter().take(15) {
-                    let sessions = p.get("session_count").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let max_t = p.get("max_temp").and_then(|v| v.as_i64()).unwrap_or(0);
-                    let hot = if p.get("known_hot").and_then(|v| v.as_bool()).unwrap_or(false) {
-                        "Y"
-                    } else {
-                        " "
-                    };
-                    let gt_sessions = p
-                        .get("game_turbo_sessions")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
-                    let avg_t = p
-                        .get("avg_peak_temp")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0);
-
-                    let short_pkg = if pkg.len() > 34 {
-                        format!("{}…", &pkg[..33])
-                    } else {
-                        pkg.to_string()
-                    };
-
-                    println!(
-                        "  {:<35} {:>5} {:>5}C {:>5} {:>5} {:>5.1}C",
-                        short_pkg, sessions, max_t, hot, gt_sessions, avg_t
-                    );
-                }
-
-                if entries.len() > 15 {
-                    println!("  ... and {} more", entries.len() - 15);
+    let mut combined = serde_json::Map::new();
+    
+    // Read session profiles
+    if let Ok(content) = fs::read_to_string(&profile_file) {
+        if let Ok(profiles) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(obj) = profiles.as_object() {
+                for (k, v) in obj {
+                    combined.insert(k.clone(), v.clone());
                 }
             }
+        }
+    }
+    
+    // Read turbo profiles
+    if let Ok(content) = fs::read_to_string(&turbo_profile_file) {
+        if let Ok(profiles) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(obj) = profiles.as_object() {
+                for (k, v) in obj {
+                    combined.entry(k.clone()).or_insert(v.clone());
+                }
+            }
+        }
+    }
+    
+    if combined.is_empty() {
+        println!("\n  No game profiles recorded yet.");
+    } else {
+        // Sort by last_seen descending.
+        let mut entries: Vec<_> = combined.iter().collect();
+        entries.sort_by(|a, b| {
+            let a_seen = a.1.get("last_seen").and_then(|v| v.as_u64()).unwrap_or(0);
+            let b_seen = b.1.get("last_seen").and_then(|v| v.as_u64()).unwrap_or(0);
+            b_seen.cmp(&a_seen)
+        });
+
+        println!("\n=== Game Profiles ===");
+        println!(
+            "  {:<35} {:>5} {:>6} {:>5} {:>5} {:>6}",
+            "Package", "Sess", "MaxT", "Hot", "GTur", "AvgT"
+        );
+        println!("  {}", "-".repeat(65));
+
+        for (pkg, p) in entries.iter().take(15) {
+            let sessions = p.get("session_count").and_then(|v| v.as_u64()).unwrap_or(0);
+            let max_t = p.get("max_temp").and_then(|v| v.as_i64()).unwrap_or(0);
+            let hot = if p.get("known_hot").and_then(|v| v.as_bool()).unwrap_or(false) {
+                "Y"
+            } else {
+                " "
+            };
+            let gt_sessions = p
+                .get("game_turbo_sessions")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let avg_t = p
+                .get("avg_peak_temp")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+
+            let short_pkg = if pkg.len() > 34 {
+                format!("{}…", &pkg[..33])
+            } else {
+                pkg.to_string()
+            };
+
+            println!(
+                "  {:<35} {:>5} {:>5}C {:>5} {:>5} {:>5.1}C",
+                short_pkg, sessions, max_t, hot, gt_sessions, avg_t
+            );
+        }
+
+        if combined.len() > 15 {
+            println!("  ... and {} more", combined.len() - 15);
         }
     }
 }
