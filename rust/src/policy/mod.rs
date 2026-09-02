@@ -97,7 +97,13 @@ impl PolicyEngine {
         let s_temp = (composite_temp as f64 - config.temp_cool as f64).max(0.0) * 2.0;
         let s_pred = (predicted_temp as f64 - config.temp_cool as f64).max(0.0) * 1.5;
         let s_game = if is_gaming {
-            -(config.gaming_score_boost as f64)
+            if composite_temp >= config.temp_hot {
+                0.0 // no relief when already hot — must throttle to protect battery
+            } else if composite_temp >= config.temp_warm {
+                -(config.gaming_score_boost as f64) * 0.3 // 70% less relief when warm
+            } else {
+                -(config.gaming_score_boost as f64)
+            }
         } else {
             0.0
         };
@@ -127,10 +133,12 @@ impl PolicyEngine {
         let mut normal_use_guard = 0.0;
         let mut interactive_ui_smoothness_guard = false;
         if !is_gaming && !is_screen_off {
-            if composite_temp >= config.temp_hot - 2 || smoothed_trend > 18 {
-                normal_use_guard += 12.0; // Apply measured pressure only for real heat or sustained ramp.
+            if composite_temp >= config.temp_hot || composite_temp >= 55 {
+                normal_use_guard += 18.0; // Your normal 60C at 22:13 was still Balanced — need stronger push to Conservative/Powersave
+            } else if composite_temp >= config.temp_hot - 2 || smoothed_trend > 18 {
+                normal_use_guard += 12.0;
             } else if composite_temp >= config.temp_warm && smoothed_trend > 9 {
-                normal_use_guard += 6.0; // Warm-but-rising: nudge, don't cliff the UI.
+                normal_use_guard += 6.0;
             }
 
             interactive_ui_smoothness_guard = composite_temp < config.temp_hot
@@ -237,13 +245,13 @@ impl PolicyEngine {
             self.gaming_return_ticks = 0;
         }
 
-        // Gaming floor: never clamp CPU/GPU below Balanced while a game is
-        // running and the SoC is below the hot threshold. Mid-game dips into
-        // Conservative/Powersave from trend/comfort noise were the biggest
-        // source of in-game frame pacing jitter — each dip rewrote the CPU
-        // Fmax cap AND dropped the GPU to its lowest power level mid-render.
-        // Real emergencies (temp >= temp_critical / predicted) still pass.
-        if is_gaming && composite_temp < config.temp_hot {
+        // Gaming floor: only clamp below warm (48C), not below hot (58C).
+        // Mid-game dips into Conservative/Powersave from trend/comfort noise
+        // at 42-47C were the biggest source of frame pacing jitter — each dip
+        // rewrote the CPU Fmax cap mid-render. At 55-60C (your 20:37 55C
+        // Balanced at 60C) the floor must lift so real heat can throttle.
+        // Keep floor only while composite < temp_warm (48C) and skin/batt <42C.
+        if is_gaming && composite_temp < config.temp_warm && skin_temp < 42 && bat_temp_c < 42 {
             match tentative {
                 PolicyState::Conservative | PolicyState::Powersave => {
                     tentative = PolicyState::Balanced;

@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.7.9 (versionCode 419)
+### Fixed — Overheating during normal/gaming/charging (deep audit 2026-09-02, 13.7k rows)
+- **Gaming 55-60C still Balanced (197/228 high ticks gaming true, 60C Balanced) → overheating:** `policy/mod.rs: s_game` was `-35` even at `60C` and `gaming floor` clamped `Conservative/Powersave → Balanced` while `composite <58` — at `55C` it held `Balanced` with `gpu 90C skin 49C`. Now `s_game 0 at ≥58C, -10 at ≥48C` and floor only while `composite<48 && skin<42 && batt<42` (was `<58`). Your `20:37 55C Balanced gpu 74C` will now correctly go `Conservative` at `55C` gaming.
+- **Normal 60C Powersave delayed 2 ticks (P5 arm) → UI heat:** `normal_use_guard` added `+18 at ≥55C` (was `12 at ≥56`) so `60C` normal (your `22:13 60C gpu90`) reaches `Powersave 65` in 1 tick, not 2. `Suspend↔Balanced` flapping at `36C` kept, but hot path now tighter.
+- **Charging 47C at 9A (your 08:51 47C 9.4A) → extra heat:** `charging/mod.rs: thermal_cap` was `4000 at 46C` but `limit_nodes` empty on Lunaris (no writable `input_current_limit`) + `voter restrict_cur` disabled after 3 fails, so `9A` unthrottled. Now caps `2000 at 46C, 1000 at 48C` (was `4000/2000`) and **periodic battery cooling hold respects `bat<44`** (was clearing to `0` even at `47C`, unblocking Turbo and adding `5W`). At `47C` now holds `cur_state 14-15` to throttle.
+- **ML still `MAE 0.78` on `13.7k`:** `ml_logger 5×2MB` + `train` multi-file glob already in `v3.7.8`, no change.
+
 ## v3.7.8 (versionCode 418)
 ### Fixed — Deep audit: ml rotation + residual log cleanup
 - `telemetry/ml_logger.rs` `2MB → .1` (single backup, data loss after 2 rotations) → `2MB → .1..5` incrementing (12MB ≈ 36k rows, `MAE 0.78` training now uses all `13.7k` rows via `python/train/train_mlp.py` multi-file glob). Fixes `.jsonl1` overwrite you saw after `2MB` second rotation.

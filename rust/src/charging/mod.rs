@@ -928,13 +928,14 @@ impl ChargingEngine {
         // sysfs read (one stat + one read_file, ~2µs) — negligible overhead.
         //
         // SAFETY: Skip enforcement during Emergency state (battery ≥50°C,
-        // charger ≥70°C, USB ≥65°C, PMIC ≥70°C). In Emergency, the kernel's
-        // own battery thermal mitigation is a safety backstop — zeroing
-        // cur_state would suppress the kernel-side emergency charge throttle
-        // while AIThermal is also trying to throttle. Our own Emergency target
-        // (500mA) is applied via voter nodes separately.
+        // charger ≥70°C, USB ≥65°C, PMIC ≥70°C) AND when battery is already
+        // warm (≥44°C). At 47C (your 08:51 9A at 47C) clearing to 0 unblocks
+        // Turbo and adds ~5W heat. Let the kernel hold cur_state 14-15 to
+        // throttle. Our own Emergency target (500mA) is applied via voter
+        // nodes separately.
         if let Some(ref path) = self.battery_cooling_path
             && next != ChargeState::Emergency
+            && bat_temp < BATTERY_TEMP_THERMAL_STEP_1
         {
             let should_enforce = match self.last_battery_cooling_clear {
                 Some(last) => last.elapsed().as_secs() >= 15,
@@ -977,14 +978,19 @@ impl ChargingEngine {
 
         let base_target = Self::soc_target_ma(soc, &self.charge_mode);
 
+        // Industrial: more aggressive low-heat TurboCharge — at 42C already
+        // throttle to 7A, at 44C to 4A, at 46C to 2A, at 48C to 1A. Your
+        // 08:51 47C at 9A was still 9A because 46C cap was 4A but not
+        // enforced via limit_nodes (empty). Now cap is lower and enforced
+        // via battery cooling hold (see periodic clear below).
         let thermal_cap = if bat_temp >= BATTERY_TEMP_THERMAL_STEP_4 {
-            2000
+            1000
         } else if bat_temp >= BATTERY_TEMP_THERMAL_STEP_3 {
-            4000
+            2000
         } else if bat_temp >= BATTERY_TEMP_THERMAL_STEP_2 {
-            7000
+            4000
         } else if bat_temp >= BATTERY_TEMP_THERMAL_STEP_1 {
-            9000
+            7000
         } else {
             base_target
         };
