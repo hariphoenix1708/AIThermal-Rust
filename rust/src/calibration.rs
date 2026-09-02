@@ -97,23 +97,37 @@ impl CalibrationManager {
             // If drop is between 1 and 3, it's neutral, do nothing.
         }
     }
-    /// Zero out any calibration offset at the start of a gaming session so a
-    /// stale negative offset (accumulated during warm-flat normal use) cannot
-    /// mask real SoC heat and delay thermal escalation mid-game.
-    pub fn reset_for_gaming_session(&mut self) {
-        let prev = self.active_offset;
-        self.active_offset = 0;
-        self.hot_ticks = 0;
-        self.cool_ticks = 0;
-        if prev != 0 {
-            tracing::info!(
-                "Calibration offset reset for gaming session (was {}C)", prev
-            );
-            let _ = self.save_state();
-        }
+/// Zero out any calibration offset at the start of a gaming session so a
+/// stale negative offset (accumulated during warm-flat normal use) cannot
+/// mask real SoC heat and delay thermal escalation mid-game.
+/// 
+/// NOTE: This calibration mechanism is now a legacy-decay mechanism only.
+/// active_offset can only ever decay toward zero from a negative value.
+/// It never increases (never becomes more negative). There is no active
+/// learning of new positive or negative offsets — this is intentional to
+/// prevent the under-reporting bug that occurred in v3.6.1.
+pub fn reset_for_gaming_session(&mut self) {
+    let prev = self.active_offset;
+    self.active_offset = 0;
+    self.hot_ticks = 0;
+    self.cool_ticks = 0;
+    if prev != 0 {
+        tracing::info!(
+            "Calibration offset reset for gaming session (was {}C)", prev
+        );
+        let _ = self.save_state();
     }
+}
 
-    pub fn apply_calibration(&mut self, is_heating_or_flat: bool) {
+/// Apply calibration decay. Only decays negative offset toward zero during
+/// sustained cooling (>120 ticks ~4min). Negative offsets only decay;
+/// heating never increases the offset (prevents under-reporting).
+/// Offset clamped to [-6, 6]°C.
+/// 
+/// NOTE: This is a legacy-decay mechanism only. The "Calibration Engine"
+/// described in the README no longer actively learns; it only decays
+/// legacy negative offsets. See README for updated description.
+pub fn apply_calibration(&mut self, is_heating_or_flat: bool) {
         let mut changed = false;
 
         if is_heating_or_flat {

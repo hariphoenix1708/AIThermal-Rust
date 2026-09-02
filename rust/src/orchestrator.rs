@@ -617,12 +617,15 @@ impl SystemOrchestrator {
         crate::network_diag::cached_quality().map(|q| q.passive.interface)
     }
 
-    /// Run the network quality probe in pure Rust (ICMP ping + sysfs).
+    /// Run the network quality probe in a background thread (non-blocking).
     fn probe_network_quality(&mut self, state_dir: &str) {
-        let quality = crate::network_diag::probe_quality(state_dir);
-        let summary = crate::network_diag::quality_summary(&quality);
-        tracing::info!(target: "network", "NET-PROBE {}", summary);
-        crate::network_diag::cache_quality(quality);
+        let state_dir = state_dir.to_string();
+        std::thread::spawn(move || {
+            let quality = crate::network_diag::probe_quality(&state_dir);
+            let summary = crate::network_diag::quality_summary(&quality);
+            tracing::info!(target: "network", "NET-PROBE {}", summary);
+            crate::network_diag::cache_quality(quality);
+        });
     }
 
     /// Apply or restore gaming network tweaks via the shell script.

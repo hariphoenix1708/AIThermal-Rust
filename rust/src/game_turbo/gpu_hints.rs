@@ -106,12 +106,18 @@ impl GpuBusyHints {
         }
         if let Some(v) = self.saved_force_bus_on.take() {
             write_sysfs("force_bus_on", &v);
+        } else {
+            write_sysfs("force_bus_on", "0");
         }
         if let Some(v) = self.saved_force_clk_on.take() {
             write_sysfs("force_clk_on", &v);
+        } else {
+            write_sysfs("force_clk_on", "0");
         }
         if let Some(v) = self.saved_rt_bus_hint.take() {
             write_sysfs("rt_bus_hint", &v);
+        } else {
+            write_sysfs("rt_bus_hint", "0");
         }
 
         tracing::info!(

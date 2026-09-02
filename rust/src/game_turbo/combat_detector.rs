@@ -22,6 +22,9 @@ const GPU_SPIKE_PP: u32 = 10; // Ultra120: 8.3ms budget, +10pp already misses
 const NET_SPIKE_FACTOR: f64 = 1.3;
 const MIN_PPS: u64 = 100; // lower for lobby/low-pps ranked
 
+/// Maximum size for thermalai_combat.log before rotation (1 MB).
+const MAX_COMBAT_LOG_BYTES: u64 = 1_000_000;
+
 fn read_rx_packets() -> u64 {
     let Ok(content) = fs::read_to_string("/proc/net/dev") else { return 0 };
     let mut total = 0u64;
@@ -107,10 +110,7 @@ impl CombatDetector {
             // Heartbeat for offline analysis every 30s
             let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f%z").to_string();
             let line = format!("{ts} COMBAT idle rx {short_pps}pps gpu={gpu}% burst=false\n");
-            let path = std::env::var("THERMALAI_LOG_DIR").unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
-            let p = std::path::Path::new(&path).join("thermalai_combat.log");
-            let _ = std::fs::OpenOptions::new().create(true).append(true).open(&p)
-                .and_then(|mut f| { use std::io::Write; f.write_all(line.as_bytes()) });
+            self.write_combat_log_line(&line);
         }
         combat
     }
@@ -169,12 +169,25 @@ impl CombatDetector {
     fn append_combat_log(&self, now: Instant, base_pps: u64, short_pps: u64, gpu: u32, gpu_spike: bool, net_spike: bool) {
         let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f%z").to_string();
         let line = format!("{ts} COMBAT rx {base_pps}->{short_pps}pps net_spike={net_spike} gpu={gpu}% gpu_spike={gpu_spike} combat=true\n");
-        // Pullable combat log + verbose trace
+        self.write_combat_log_line(&line);
+        let _ = now; // keep
+    }
+
+    fn write_combat_log_line(&self, line: &str) {
         let path = std::env::var("THERMALAI_LOG_DIR").unwrap_or_else(|_| "/data/local/tmp/AIThermal".to_string());
         let p = std::path::Path::new(&path).join("thermalai_combat.log");
-        let _ = std::fs::OpenOptions::new().create(true).append(true).open(&p)
+        
+        // Rotate if too large
+        if let Ok(meta) = std::fs::metadata(&p) {
+            if meta.len() > MAX_COMBAT_LOG_BYTES {
+                let backup = p.with_extension("log.1");
+                let _ = fs::remove_file(&p.with_extension("log.1"));
+                let _ = fs::rename(&p, &backup);
+            }
+        }
+        
+        let _ = fs::OpenOptions::new().create(true).append(true).open(&p)
             .and_then(|mut f| { use std::io::Write; f.write_all(line.as_bytes()) });
-        let _ = now; // keep
     }
 
     pub fn reset(&mut self) {

@@ -102,15 +102,17 @@ fn icmp_ping_one(
             return None;
         }
 
-        // Read
+        // Read with source address to verify sender
+        let mut from_addr = libc::sockaddr_in { sin_family: 0, sin_port: 0, sin_addr: libc::in_addr { s_addr: 0 }, sin_zero: [0; 8] };
+        let mut from_len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
         let received = unsafe {
             libc::recvfrom(
                 sock_fd,
                 buf.as_mut_ptr() as *mut libc::c_void,
                 buf.len(),
                 0,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
+                &mut from_addr as *mut _ as *mut libc::sockaddr,
+                &mut from_len,
             )
         };
         if received < 20 {
@@ -127,6 +129,11 @@ fn icmp_ping_one(
         let icmp_type = buf[ihl];
         let reply_id = u16::from_be_bytes([buf[ihl + 4], buf[ihl + 5]]);
         let reply_seq = u16::from_be_bytes([buf[ihl + 6], buf[ihl + 7]]);
+
+        // Verify sender IP matches target
+        if from_addr.sin_addr.s_addr != target_addr.sin_addr.s_addr {
+            continue;
+        }
 
         // Filter delayed/unrelated replies as well as packets from other raw
         // socket users. A reply from the prior sequence must never be counted
@@ -706,6 +713,7 @@ pub fn probe_quality(state_dir: &str) -> NetworkQuality {
         // responds but with mediocre latency.
         if let Some(ref b) = best
             && b.avg_rtt_ms < 80.0
+            && b.loss_pct == 0.0
             && targets_tried >= 2
         {
             break;
