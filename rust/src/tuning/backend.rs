@@ -27,19 +27,12 @@ fn poisoned_nodes() -> &'static Mutex<HashMap<PathBuf, std::time::Instant>> {
 }
 
 fn is_poisoned(path: &Path) -> bool {
-    let mut poisoned = match poisoned_nodes().lock() {
+    let poisoned = match poisoned_nodes().lock() {
         Ok(g) => g,
         Err(_) => return false,
     };
-    if let Some(&when) = poisoned.get(path) {
-        if when.elapsed().as_secs() < 30 * 60 {
-            return true;
-        }
-        // Expired — allow one retry
-        poisoned.remove(path);
-        if let Ok(mut counts) = failure_counts().lock() {
-            counts.remove(path);
-        }
+    if poisoned.contains_key(path) {
+        return true;
     }
     false
 }
@@ -50,7 +43,7 @@ fn record_failure(path: &Path) {
         *entry = entry.saturating_add(1);
         if *entry == POISON_THRESHOLD {
             tracing::warn!(target: "thermal",
-                "Sysfs node {} rejected {} writes in a row, marking unsupported for 30m (was permanent)",
+                "Sysfs node {} rejected {} writes in a row, permanently marking as unsupported",
                 path.display(),
                 POISON_THRESHOLD
             );

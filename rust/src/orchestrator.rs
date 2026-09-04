@@ -63,6 +63,12 @@ pub struct SystemOrchestrator {
     last_call_check: Option<std::time::Instant>,
     call_active_cached: bool,
     call_check_counter: u8,
+    /// Reverse lookup: thermal-zone temp_path -> type_name, resolved once at
+    /// init so per-tick read_thermal_source() is O(1) instead of a linear scan.
+    zone_lookup: std::collections::HashMap<String, String>,
+    /// Last plug-state check + cached (is_plugged, reliable) (10s TTL).
+    plug_cache_at: Option<std::time::Instant>,
+    plug_cache: (bool, bool),
 }
 
 impl SystemOrchestrator {
@@ -293,6 +299,16 @@ impl SystemOrchestrator {
         // restore so snapshot covers baseline cleanly).
         crate::tuning::RuntimeTuner::rehydrate_and_restore(&ctx.state_dir);
 
+        // v3.7.12: pre-resolve thermal zone type-names once (path -> type_name).
+        // `all_zones` stores type_name -> temp_path; invert once so per-tick
+        // sensor reads are O(1) HashMap lookups instead of linear scans.
+        let zone_lookup: std::collections::HashMap<String, String> = hardware
+            .thermal_profile
+            .all_zones
+            .iter()
+            .map(|(name, path)| (path.clone(), name.clone()))
+            .collect();
+
         let runtime_tuner = RuntimeTuner::new(hardware.clone())
             .with_state_dir(&ctx.state_dir)
             .with_network_config(
@@ -344,6 +360,9 @@ impl SystemOrchestrator {
             last_call_check: None,
             call_active_cached: false,
             call_check_counter: 0,
+            zone_lookup,
+            plug_cache_at: None,
+            plug_cache: (false, false),
         }
     }
 
@@ -412,15 +431,10 @@ impl SystemOrchestrator {
         }
     }
 
+    /// Resolve a thermal-zone temp_path to its type_name via the pre-built
+    /// O(1) reverse lookup (built once at init, not scanned per tick).
     fn resolve_sensor_name(&self, path_opt: Option<&String>) -> Option<String> {
-        path_opt.and_then(|path| {
-            self.hardware
-                .thermal_profile
-                .all_zones
-                .iter()
-                .find(|(_, p)| *p == path)
-                .map(|(name, _)| name.clone())
-        })
+        path_opt.and_then(|path| self.zone_lookup.get(path).cloned())
     }
 
     fn read_thermal_source(&self, path_opt: Option<&String>) -> Option<i32> {
@@ -470,7 +484,24 @@ impl SystemOrchestrator {
         None
     }
 
-    fn plug_state(&self) -> (bool, bool) {
+    /// Charger connection state with a 10s cache. Scanning
+    /// /sys/class/power_supply/ on every tick is wasted sysfs I/O — plug state
+    /// changes slowly (cable insert/remove), so a 10s refresh is plenty and
+    /// the charging engine re-checks its own voters at its own cadence.
+    fn plug_state(&mut self) -> (bool, bool) {
+        const PLUG_CACHE_SECS: u64 = 10;
+        if let Some(at) = self.plug_cache_at
+            && at.elapsed().as_secs() < PLUG_CACHE_SECS
+        {
+            return self.plug_cache;
+        }
+        let result = self.plug_state_uncached();
+        self.plug_cache_at = Some(std::time::Instant::now());
+        self.plug_cache = result;
+        result
+    }
+
+    fn plug_state_uncached(&self) -> (bool, bool) {
         let known = &self.hardware.charging_profile.path;
         if !known.is_empty() {
             if let Ok(online) = crate::sysfs::read_i64(format!("{}/online", known)) {
@@ -551,6 +582,12 @@ impl SystemOrchestrator {
             game_session_worst_jank_pct: 0.0,
             game_session_worst_p90_ms: 0.0,
         };
+        let zone_lookup: std::collections::HashMap<String, String> = hardware
+            .thermal_profile
+            .all_zones
+            .iter()
+            .map(|(name, path)| (path.clone(), name.clone()))
+            .collect();
         Self {
             sensors: SensorManager::new(),
             thermal: ThermalEngine::new(ctx.config.profiles.temp_history_size),
@@ -594,6 +631,9 @@ impl SystemOrchestrator {
             last_call_check: None,
             call_active_cached: false,
             call_check_counter: 0,
+            zone_lookup,
+            plug_cache_at: None,
+            plug_cache: (false, false),
         }
     }
 
@@ -707,6 +747,33 @@ impl RuntimeTask for SystemOrchestrator {
         self.runtime_tuner.restore_stock_thermal();
         self.stock_thermal_disabled = Some(false);
         self.last_applied_policy = None;
+    }
+
+    fn on_config_reload(&mut self, ctx: &RuntimeContext) {
+        // v3.7.12: editing game_list.conf hot-reloads the detector's package
+        // list without a daemon restart (daemon.rs dispatches this after the
+        // config watcher sees a change).
+        let new_games = ctx.config.games.packages.clone();
+        if new_games != self.gaming.known_games {
+            let added = new_games
+                .iter()
+                .filter(|p| !self.gaming.known_games.contains(p))
+                .count();
+            let removed = self
+                .gaming
+                .known_games
+                .iter()
+                .filter(|p| !new_games.contains(p))
+                .count();
+            tracing::info!(
+                target: "gaming",
+                "Game list hot-reloaded: +{} added, -{} removed ({} total)",
+                added,
+                removed,
+                new_games.len()
+            );
+            self.gaming.known_games = new_games;
+        }
     }
 
     fn execute(&mut self, ctx: &mut RuntimeContext) -> Result<()> {
@@ -920,17 +987,22 @@ impl RuntimeTask for SystemOrchestrator {
             .read_thermal_source(self.hardware.thermal_profile.skin_zone.as_ref())
             .unwrap_or(bat_temp); // Fallback to bat
 
-        let gpu_load = crate::hardware::display::gpu_load_percent().unwrap_or({
+        let gpu_load_raw = crate::hardware::display::gpu_load_percent().unwrap_or({
             // No fake substitute. When GPU load truly can't be read, fall back
             // to CPU utilization-derived estimate if it was computed (we don't have it at this exact spot so 0),
             // or 0 if unavailable — never a fabricated "typical"
             // value that can drive false policy transitions.
             0
         });
+        // v3.7.12: EMA-smooth GPU load (alpha 0.4) before composite_temp so a
+        // single 0→100% frame spike can't flip policy. Raw load is retained
+        // below for per-game profile learning and combat spike detection.
+        let gpu_load = self.thermal.update_gpu_load(gpu_load_raw);
 
-        // Record GPU load for per-game profile learning (needs gpu_load which is now in scope).
+        // Record raw GPU load for per-game profile learning (EMA would lag
+        // sustained loads and skew learned per-game GPU ceilings).
         if is_gaming && ctx.config.profiles.game_turbo_enabled {
-            self.game_turbo.record_gpu_load(gpu_load);
+            self.game_turbo.record_gpu_load(gpu_load_raw);
         }
 
         let comp_temp =
@@ -1005,22 +1077,19 @@ impl RuntimeTask for SystemOrchestrator {
         }
 
         let game_modifier = self.compute_game_modifier(confirmed_pkg.as_deref(), ctx, is_gaming);
-        let mem_pressure = self
-            .hardware
-            .memory_profile
-            .memory_pressure_avg10
+        // v3.7.12: re-read PSI pressure live each tick. The hardware-profile
+        // snapshot is taken once at discovery and goes stale (e.g. 22.6 at
+        // boot vs 2.4 actual), which skewed policy scoring for the whole run.
+        // Falls back to the snapshot only when the kernel has no PSI.
+        let (cpu_psi, io_psi, mem_psi) = crate::hardware::memory::read_live_psi();
+        let mem_pressure = mem_psi
+            .or(self.hardware.memory_profile.memory_pressure_avg10)
             .unwrap_or(0.0);
-
-        let cpu_pressure = self
-            .hardware
-            .memory_profile
-            .cpu_pressure_some_avg10
+        let cpu_pressure = cpu_psi
+            .or(self.hardware.memory_profile.cpu_pressure_some_avg10)
             .unwrap_or(0.0);
-
-        let io_pressure = self
-            .hardware
-            .memory_profile
-            .io_pressure_full_avg10
+        let io_pressure = io_psi
+            .or(self.hardware.memory_profile.io_pressure_full_avg10)
             .unwrap_or(0.0);
 
         let comfort_weight =

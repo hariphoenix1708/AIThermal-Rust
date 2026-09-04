@@ -187,19 +187,101 @@ fn try_gfxinfo_latency(package: &str, frame_budget_ns: u64) -> Option<FrameStats
     parse_latency_output(&text, frame_budget_ns)
 }
 
-fn try_surfaceflinger_latency(package: &str, frame_budget_ns: u64) -> Option<FrameStats> {
+/// Discover the actual game rendering layer from SurfaceFlinger --list.
+/// CoD Mobile and other games may use layer names that don't match the
+/// standard SurfaceView[<pkg>] format. This scans the layer list for
+/// the best candidate.
+fn discover_game_layer(package: &str) -> Option<String> {
     let output = Command::new("dumpsys")
         .arg("SurfaceFlinger")
-        .arg("--latency")
-        .arg(format!("SurfaceView[{}]", package))
+        .arg("--list")
         .output()
         .ok()?;
 
     if !output.status.success() {
         return None;
     }
+
     let text = String::from_utf8_lossy(&output.stdout);
-    parse_latency_output(&text, frame_budget_ns)
+    let pkg_short = package.rsplit('.').next().unwrap_or(package);
+
+    // Priority 1: Exact SurfaceView match
+    let sv_exact = format!("SurfaceView[{}]", package);
+    for line in text.lines() {
+        let line = line.trim();
+        if line == sv_exact {
+            return Some(line.to_string());
+        }
+    }
+
+    // Priority 2: SurfaceView containing the package name (partial match)
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with("SurfaceView[") && line.contains(pkg_short) {
+            return Some(line.to_string());
+        }
+    }
+
+    // Priority 3: Any layer containing the package name
+    for line in text.lines() {
+        let line = line.trim();
+        if !line.is_empty() && line.contains(package) {
+            return Some(line.to_string());
+        }
+    }
+
+    // Priority 4: Layer containing the short package name (e.g. "callofduty")
+    for line in text.lines() {
+        let line = line.trim();
+        if !line.is_empty() && line.contains(pkg_short) && !line.contains("Animation") {
+            return Some(line.to_string());
+        }
+    }
+
+    None
+}
+
+fn try_surfaceflinger_latency(package: &str, frame_budget_ns: u64) -> Option<FrameStats> {
+    // First try the standard SurfaceView[<pkg>] format
+    let std_layer = format!("SurfaceView[{}]", package);
+    let output = Command::new("dumpsys")
+        .arg("SurfaceFlinger")
+        .arg("--latency")
+        .arg(&std_layer)
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let text = String::from_utf8_lossy(&output.stdout);
+        // Check if we got more than just the budget line (1 line = no real data)
+        let line_count = text.lines().filter(|l| !l.trim().is_empty()).count();
+        if line_count > 1 {
+            if let Some(stats) = parse_latency_output(&text, frame_budget_ns) {
+                return Some(stats);
+            }
+        }
+    }
+
+    // Standard format failed — discover the actual game layer
+    if let Some(layer_name) = discover_game_layer(package) {
+        let output = Command::new("dumpsys")
+            .arg("SurfaceFlinger")
+            .arg("--latency")
+            .arg(&layer_name)
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let line_count = text.lines().filter(|l| !l.trim().is_empty()).count();
+            if line_count > 1 {
+                tracing::debug!("Using discovered SF layer: {} ({} lines)", layer_name, line_count);
+                return parse_latency_output(&text, frame_budget_ns);
+            }
+        }
+    }
+
+    None
 }
 
 fn try_surfaceflinger_latency_fallback(package: &str, frame_budget_ns: u64) -> Option<FrameStats> {
@@ -214,7 +296,13 @@ fn try_surfaceflinger_latency_fallback(package: &str, frame_budget_ns: u64) -> O
         return None;
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    parse_latency_output(&text, frame_budget_ns)
+    // Check for budget-only output (1 line = no real frame data)
+    let line_count = text.lines().filter(|l| !l.trim().is_empty()).count();
+    if line_count > 1 {
+        parse_latency_output(&text, frame_budget_ns)
+    } else {
+        None
+    }
 }
 
 pub fn sample_frame_stats(package: &str) -> Option<FrameStats> {
@@ -382,7 +470,12 @@ impl BackgroundFrameSampler {
                                         && prev.worst_frame_ns == new.worst_frame_ns
                                         && prev.max_consecutive_jank == new.max_consecutive_jank
                             );
-                            if !unchanged {
+                            // Bypass unchanged guard when frame count is suspiciously low.
+                            // At 120Hz any game produces 100+ frames per 5s sample.
+                            // A tiny batch (e.g. 5 frames) means we captured a cold-start
+                            // or loading snapshot — always overwrite with fresh data.
+                            let is_tiny_batch = result.as_ref().map_or(false, |r| r.sample_count < 15);
+                            if !unchanged || is_tiny_batch {
                                 *slot = result;
                             }
                         }

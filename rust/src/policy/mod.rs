@@ -27,6 +27,15 @@ const GAMING_LATCH_THRESHOLD: f64 = 40.0;
 // so a single cool dip cannot yank Performance back up only to reheat and
 // drop again seconds later.
 const GAMING_RETURN_REQUIRED: u8 = 2;
+// Suspend latch: prevent Suspend <-> Balanced oscillation when screen-off
+// score hovers near the -5.0 boundary. Require N consecutive low-score
+// ticks before entering Suspend, and N consecutive moderate-score ticks
+// before exiting. The minimum hold prevents the adaptive sleep cycle
+// (8s Suspend sleep + 2s Balanced sleep = ~10s oscillation) from
+// constantly rewriting governors.
+const SUSPEND_LATCH_REQUIRED: u8 = 2;
+const SUSPEND_EXIT_REQUIRED: u8 = 2;
+const SUSPEND_MIN_HOLD_SECS: u64 = 15;
 
 pub struct PolicyEngine {
     pub current_policy: PolicyState,
@@ -40,6 +49,8 @@ pub struct PolicyEngine {
     trend_history: std::collections::VecDeque<i32>,
     gaming_latch_ticks: u8,
     gaming_return_ticks: u8,
+    suspend_latch_ticks: u8,
+    suspend_exit_ticks: u8,
 }
 
 impl PolicyEngine {
@@ -58,6 +69,8 @@ impl PolicyEngine {
             trend_history: std::collections::VecDeque::with_capacity(5),
             gaming_latch_ticks: 0,
             gaming_return_ticks: 0,
+            suspend_latch_ticks: 0,
+            suspend_exit_ticks: 0,
         }
     }
 
@@ -189,10 +202,20 @@ impl PolicyEngine {
             PolicyState::EmergencyCool
         } else if is_screen_off
             && !is_gaming
-            && total_score < -5.0
+            && total_score < -3.0
             && self.last_change_at.elapsed().as_secs() > 10
         {
-            PolicyState::Suspend
+            // Suspend latch: require SUSPEND_LATCH_REQUIRED consecutive low-score
+            // ticks to prevent oscillation when score hovers near -5.0 boundary.
+            self.suspend_latch_ticks = self.suspend_latch_ticks.saturating_add(1);
+            if self.suspend_latch_ticks >= SUSPEND_LATCH_REQUIRED {
+                self.suspend_latch_ticks = 0;
+                PolicyState::Suspend
+            } else {
+                // Not yet confirmed — stay at current (Balanced)
+                self.suspend_exit_ticks = 0;
+                self.current_policy.clone()
+            }
         } else if total_score > 65.0 && composite_temp >= config.temp_hot {
             PolicyState::Powersave
         } else if total_score > 40.0 {
@@ -257,6 +280,44 @@ impl PolicyEngine {
                     tentative = PolicyState::Balanced;
                 }
                 _ => {}
+            }
+        }
+
+        // Suspend exit latch: once in Suspend, prevent oscillation with the
+        // Balanced <-> Suspend cycle caused by the adaptive sleep interval
+        // (8s in Suspend + 2s in Balanced = ~10s period, shorter than the
+        // 10s debounce on Suspend entry). Three rules:
+        // 1. Screen off + score cold (< -5): NEVER exit — hold Suspend.
+        // 2. Screen on: always allow exit (wake must be instant).
+        // 3. Screen off + score warming (>= -5 but < 2): require N confirmed
+        //    ticks + minimum hold before allowing exit.
+        if matches!(self.current_policy, PolicyState::Suspend)
+            && !matches!(tentative, PolicyState::Suspend | PolicyState::EmergencyCool)
+        {
+            if is_screen_off && total_score < -3.0 {
+                // Rule 1: Cold score with screen off — hard hold
+                self.suspend_exit_ticks = 0;
+                tentative = PolicyState::Suspend;
+            } else if !is_screen_off {
+                // Rule 2: Screen turned on — immediate exit (wake is always fast)
+                self.suspend_exit_ticks = 0;
+                self.suspend_latch_ticks = 0;
+            } else {
+                // Rule 3: Screen off but score warming up — require latch
+                self.suspend_exit_ticks = self.suspend_exit_ticks.saturating_add(1);
+                let hold_ok = self.last_change_at.elapsed().as_secs() >= SUSPEND_MIN_HOLD_SECS;
+                if self.suspend_exit_ticks >= SUSPEND_EXIT_REQUIRED && hold_ok {
+                    self.suspend_exit_ticks = 0;
+                    self.suspend_latch_ticks = 0;
+                } else {
+                    self.suspend_latch_ticks = 0;
+                    tentative = PolicyState::Suspend;
+                }
+            }
+        } else if !matches!(self.current_policy, PolicyState::Suspend) {
+            self.suspend_exit_ticks = 0;
+            if total_score >= -3.0 || is_gaming || !is_screen_off {
+                self.suspend_latch_ticks = 0;
             }
         }
 
@@ -394,7 +455,13 @@ mod tests {
         // Screen off doesn't override immediately unless score is low and time elapsed > 10
         engine.last_change_at = std::time::Instant::now() - std::time::Duration::from_secs(11);
         // With temps at 30, they are likely cool, giving 0 for s_temp and s_pred.
-        // We pass -10.0 for context_weight to drop the score below -5.0.
+        // We pass -10.0 for context_weight to drop the score below -3.0.
+        // The Suspend latch requires SUSPEND_LATCH_REQUIRED consecutive cold
+        // ticks: the first stays Balanced (armed), the second enters Suspend.
+        assert_eq!(
+            engine.evaluate(30, 30, 0, false, true, -10.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30),
+            PolicyState::Balanced
+        );
         assert_eq!(
             engine.evaluate(30, 30, 0, false, true, -10.0, 0.0, 0.0, 0.0, 0.0, &config, 30, 30),
             PolicyState::Suspend
@@ -462,12 +529,13 @@ mod tests {
         assert_eq!(engine.gaming_latch_ticks, 0);
 
         // A score that genuinely crosses into Conservative territory (~46 at
-        // composite 50C) is allowed to soften: the latch never blocks it, and
-        // the gaming floor clamps it to Balanced while composite < temp_hot.
+        // composite 50C) is allowed to soften: the latch never blocks it. The
+        // gaming floor only clamps below temp_warm (48C) — at 50C (>= 48C,
+        // floor lifted per v3.7.9 heat fix) escalation to Conservative applies.
         let policy = engine.evaluate(
             50, 50, 10, true, false, 14.0, 0.0, 18.0, 10.0, 0.0, &config, 42, 43,
         );
-        assert_eq!(policy, PolicyState::Balanced);
+        assert_eq!(policy, PolicyState::Conservative);
 
         // Same score but at temp_hot (58): the gaming floor lifts and
         // escalation to Conservative is allowed for real protection.

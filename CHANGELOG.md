@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.7.12 (versionCode 422)
+### Added/Fixed — Live-session audit fixes (2026-09-03)
+- **Suspend ↔ Balanced oscillation killed (policy latch):** `policy/mod.rs` now requires 2 consecutive cold-score ticks (entry) and a 15s hold + 2 confirmed warming ticks (exit) before Suspend↔Balanced flips. Screen-off no longer rewrites 3 governors + GPU + cpusets every ~10s (was 8 flips in 2 min). Fine-tuned live: cold threshold `-5 → -3`, entry latch `3 → 2 ticks` — screen-off → Suspend in ~2s with zero oscillation across 8+ ticks.
+- **Frame sampler fixed for CoD Mobile:** `monitor/frame_sampler.rs` adds `discover_game_layer()` — falls back to scanning `dumpsys SurfaceFlinger --list` for the real game layer when the standard `SurfaceView[<pkg>]` name returns nothing (CoD uses a different surface). Budget-line-only output (1 line = no frame data) is now treated as no-data; tiny 5-frame cold-start snapshots bypass the unchanged-guard so stale `jank=40%` from a frozen snapshot can't stick for the whole session.
+- **Combat Boost warning flood fixed:** `game_turbo/combat_boost.rs` suppresses `WARN` for `BackendError::Poisoned` on uclamp.min/max + `force_bus_on` — 1,204 force_bus_on warns/session → 0.
+- **Thermal throttle ↔ combat boost ping-pong fixed:** `game_turbo/mod.rs` release margin `3C → 6C` (throttle now releases at 52C not 55C) + 8s post-throttle cooldown before combat boost can re-escalate. Kills the 52→58→52°C sawtooth that rewrote uclamp/affinity 8+ times per 2 min.
+- **Sysfs node poisoning is permanent:** `tuning/backend.rs` removed the 30-minute expiry — after 5 consecutive rejections a node (`force_bus_on`, `restrict_cur`, `comp_algorithm`, `force_no_nap`) is permanently unsupported, no more per-session retry loops.
+- **WebUI redesigned + Settings tab:** `webroot/` — modern dark glassmorphism theme, bottom-nav (Home/Gaming/Charge/Logs/Settings), live gaming telemetry card (game/temp/GPU/frames/PSI/sparkline/cooldown), push-style notifications (EmergencyCool/recovery/game start-end/cooldown), and a Settings tab to edit thresholds, poll intervals, feature toggles and the game list at runtime (`profiles.conf` reload via daemon's hot-reload watcher).
+- **Orchestrator sensing/perf fixes re-applied (v3.7.12 — lost in an earlier source reset):**
+  - `GPU load EMA` (`thermal.rs` helper now actually called in `orchestrator.rs`): α=0.4 smoothing before `composite_temp` so single-frame 0→100% GPU spikes can't flip policy; raw load still fed to per-game profile learning.
+  - `Live PSI re-read` (`hardware/memory.rs read_live_psi()`): `/proc/pressure/{cpu,io,memory}` read every tick instead of the boot-time discovery snapshot (was 22.57 boot vs 2.39 actual → skewed policy scoring all run).
+  - `Zone-name pre-resolution`: reverse `path→type_name` lookup built once at init (`zone_lookup`), replacing 5–7 linear `all_zones` scans per tick.
+  - `Plug-state 10s cache`: charger connect state cached with 10s TTL instead of scanning `/sys/class/power_supply` every tick.
+  - `Game list hot-reload`: `SystemOrchestrator::on_config_reload()` updates the GameDetector package list when `game_list.conf` changes (daemon dispatch was already wired).
+- **Compact telemetry:** `telemetry/writer.rs` writes single-line JSON (was pretty-printed) — ~30% less per-write serialization cost.
+- **Unit tests:** 2 stale policy tests aligned with intended latch/floor behavior (`test_policy_evaluation_and_debounce`, `gaming_latch_holds_performance_through_short_balanced_dips`) — full suite 85/85 green.
+
+## v3.7.11 (versionCode 421)
+### Fixed — call + gaming heat (2026-09-02)
+- Thermal throttle mask `0xFF → 0x0F` (narrowing to efficiency cores actually migrates threads off the hot cluster; widening alone does not). Call-aware throttle 5°C earlier (call adds sustained modem/audio load). CPU-only critical ceiling 80°C forces EmergencyCool even when composite is diluted. `thermalair` CLI paths fixed.
+
+## v3.7.10 (versionCode 420)
+### Fixed — from-scratch audit pass (2026-09-02)
+- `thermalair` CLI reads correct per-game profile files (`game_session_profiles.json` + `game_turbo_profiles.json`).
+- `gpu_hints.rs` deactivate() restored fallback defaults for `force_bus_on`/`force_clk_on`/`rt_bus_hint` (missing else branches).
+- `combat_detector.rs` combat log rotation: 1MB cap with 5 incrementing backups.
+- `network_diag.rs` probe now runs in a background thread (no tick-blocking) + ICMP ping verifies sender IP matches target.
+- `calibration.rs` docs updated to reflect decay-only behavior.
+
 ## v3.7.9 (versionCode 419)
 ### Fixed — Overheating during normal/gaming/charging (deep audit 2026-09-02, 13.7k rows)
 - **Gaming 55-60C still Balanced (197/228 high ticks gaming true, 60C Balanced) → overheating:** `policy/mod.rs: s_game` was `-35` even at `60C` and `gaming floor` clamped `Conservative/Powersave → Balanced` while `composite <58` — at `55C` it held `Balanced` with `gpu 90C skin 49C`. Now `s_game 0 at ≥58C, -10 at ≥48C` and floor only while `composite<48 && skin<42 && batt<42` (was `<58`). Your `20:37 55C Balanced gpu 74C` will now correctly go `Conservative` at `55C` gaming.

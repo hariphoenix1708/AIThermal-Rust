@@ -5,6 +5,9 @@ pub struct ThermalEngine {
     history_size: usize,
     ema_temp: f64,
     alpha: f64,
+    /// EMA-smoothed GPU load (0-100). Prevents raw GPU spikes from
+    /// causing policy oscillation in composite_temp weighting.
+    ema_gpu_load: f64,
 }
 
 impl ThermalEngine {
@@ -14,12 +17,15 @@ impl ThermalEngine {
             history_size,
             ema_temp: 0.0,
             alpha: 0.2, // EMA smoothing factor
+            ema_gpu_load: 0.0,
         }
     }
 
     pub fn reset_after_long_sleep(&mut self) {
         self.history.clear();
         self.ema_temp = 0.0;
+        // GPU load EMA is NOT reset on long sleep — screen-off transitions
+        // can have 0→100% GPU load jumps that should be smoothed, not re-zeroed.
     }
 
     pub fn update(&mut self, current_temp: i32) {
@@ -45,6 +51,26 @@ impl ThermalEngine {
             return 0;
         }
         self.ema_temp.round() as i32
+    }
+
+    /// Update GPU load EMA. Call once per tick with the raw GPU load.
+    /// Uses a faster alpha (0.4) than temperature (0.2) because GPU load
+    /// changes faster and we want to track bursts while still smoothing
+    /// single-frame spikes.
+    pub fn update_gpu_load(&mut self, raw_load: u32) -> u32 {
+        let raw = raw_load as f64;
+        const GPU_ALPHA: f64 = 0.4;
+        if self.ema_gpu_load == 0.0 && raw > 0.0 {
+            self.ema_gpu_load = raw;
+        } else {
+            self.ema_gpu_load = (raw * GPU_ALPHA) + (self.ema_gpu_load * (1.0 - GPU_ALPHA));
+        }
+        self.ema_gpu_load.round() as u32
+    }
+
+    /// Get the current EMA-smoothed GPU load without updating.
+    pub fn get_smoothed_gpu_load(&self) -> u32 {
+        self.ema_gpu_load.round() as u32
     }
 
     pub fn composite_temp(cpu: i32, gpu: i32, battery: i32, skin: i32, gpu_load: u32) -> i32 {

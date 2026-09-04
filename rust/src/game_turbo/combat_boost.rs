@@ -2,7 +2,7 @@
 //! Holds Big+Prime at fmax, uclamp 90/max, DDR max, then decays 800ms to 40%.
  //! Logs every enter/exit to thermalai.log (game_turbo target) pullable offline.
 
-use crate::tuning::backend::TuningBackend;
+use crate::tuning::backend::{BackendError, TuningBackend};
 use std::fs;
 use std::time::{Duration, Instant};
 
@@ -106,16 +106,23 @@ impl CombatBoost {
         }
         // Uclamp 90/max combat — via TuningBackend (shares poison set with perf_hint/advanced)
         if let Err(e) = TuningBackend::try_write_string("/dev/cpuctl/top-app/cpu.uclamp.min", UCLAMP_COMBAT) {
-            tracing::warn!(target: "game_turbo", "Combat Boost: failed uclamp.min 90: {}", e);
+            if !matches!(e, BackendError::Poisoned(_)) {
+                tracing::warn!(target: "game_turbo", "Combat Boost: failed uclamp.min 90: {}", e);
+            }
         }
         if let Err(e) = TuningBackend::try_write_string("/dev/cpuctl/top-app/cpu.uclamp.max", "max") {
-            tracing::warn!(target: "game_turbo", "Combat Boost: failed uclamp.max max: {}", e);
+            if !matches!(e, BackendError::Poisoned(_)) {
+                tracing::warn!(target: "game_turbo", "Combat Boost: failed uclamp.max max: {}", e);
+            }
         }
         // DDR/LLCC max via soc_peridot helper if available (best effort)
         crate::tuning::soc_peridot::apply_bus_llc_gaming(true);
         // GPU already 10ms via gpu_hints, ensure force_bus_on
+        // Skip warning for poisoned nodes (permanently unsupported on this ROM)
         if let Err(e) = TuningBackend::try_write_string("/sys/class/kgsl/kgsl-3d0/force_bus_on", "1") {
-            tracing::warn!(target: "game_turbo", "Combat Boost: failed force_bus_on 1: {}", e);
+            if !matches!(e, BackendError::Poisoned(_)) {
+                tracing::warn!(target: "game_turbo", "Combat Boost: failed force_bus_on 1: {}", e);
+            }
         }
     }
 

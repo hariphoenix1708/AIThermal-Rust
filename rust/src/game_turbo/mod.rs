@@ -29,6 +29,7 @@ mod thread_affinity;
 mod touch;
 
 use crate::config::ProfilesConfig;
+use std::time::Instant;
 
 pub struct GameTurboEngine {
     active: bool,
@@ -52,6 +53,9 @@ pub struct GameTurboEngine {
     combat_boost: combat_boost::CombatBoost,
     /// Whether we've entered thermal-throttle mode (eased constraints).
     thermal_throttled: bool,
+    /// Timestamp when thermal throttle was last released. Combat boost
+    /// respects a cooldown after release to prevent ping-pong.
+    thermal_throttle_release_at: Option<Instant>,
     /// Pending GPU power info (set by orchestrator before activate).
     pending_gpu_power_level_path: Option<String>,
     pending_gpu_current_level: Option<u32>,
@@ -118,6 +122,7 @@ impl GameTurboEngine {
             combat_detector: combat_detector::CombatDetector::new(),
             combat_boost: combat_boost::CombatBoost::new(),
             thermal_throttled: false,
+            thermal_throttle_release_at: None,
             pending_gpu_power_level_path: None,
             pending_gpu_current_level: None,
             pending_gpu_best_level: 0,
@@ -181,7 +186,7 @@ impl GameTurboEngine {
 
     pub fn combat_update(&mut self, gpu_load: u32) -> bool {
         let is_burst = self.combat_detector.update(gpu_load);
-        if is_burst {
+        if is_burst && !self.in_post_throttle_cooldown() {
             self.combat_boost.trigger(gpu_load, "");
         }
         // Tick boost state machine (handles hold/decay re-enter)
@@ -225,6 +230,18 @@ impl GameTurboEngine {
     /// Returns true if the engine entered thermal-throttle mode during this session.
     pub fn was_thermally_throttled(&self) -> bool {
         self.thermal_throttled
+    }
+
+    /// Returns true if we're within the post-throttle cooldown period.
+    /// Combat boost should skip escalation during this window to prevent
+    /// the thermal-throttle ↔ combat-boost ping-pong.
+    pub fn in_post_throttle_cooldown(&self) -> bool {
+        const POST_THROTTLE_COOLDOWN_MS: u64 = 8000;
+        if let Some(released_at) = self.thermal_throttle_release_at {
+            (released_at.elapsed().as_millis() as u64) < POST_THROTTLE_COOLDOWN_MS
+        } else {
+            false
+        }
     }
 
     /// Activate all enabled GameTurbo features for the given game PID.
@@ -368,7 +385,13 @@ impl GameTurboEngine {
             return;
         }
 
-        const THERMAL_RELEASE_MARGIN: i32 = 3;
+        // Wider release margin (6C instead of 3C) prevents the
+        // thermal-throttle ↔ combat-boost ping-pong where throttle
+        // releases at 55C and combat boost immediately re-heats to 58C.
+        const THERMAL_RELEASE_MARGIN: i32 = 6;
+        // Minimum time after thermal release before combat boost can
+        // re-escalate. Prevents the sawtooth pattern (52→58→52°C).
+        const POST_THROTTLE_COOLDOWN_MS: u64 = 8000;
         let was_throttled = self.thermal_throttled;
         self.thermal_throttled = if was_throttled {
             composite_temp >= (temp_hot - THERMAL_RELEASE_MARGIN)
@@ -395,13 +418,15 @@ impl GameTurboEngine {
                 self.background.deactivate();
             }
         } else if !self.thermal_throttled && was_throttled {
+            self.thermal_throttle_release_at = Some(Instant::now());
             tracing::info!(
                 target: "game_turbo",
-                "Thermal throttle OFF: temp={}C < release_threshold={}C (temp_hot {} - margin {}) — re-applying full boost",
+                "Thermal throttle OFF: temp={}C < release_threshold={}C (temp_hot {} - margin {}) — cooldown {}ms before boost can re-escalate",
                 composite_temp,
                 temp_hot - THERMAL_RELEASE_MARGIN,
                 temp_hot,
-                THERMAL_RELEASE_MARGIN
+                THERMAL_RELEASE_MARGIN,
+                POST_THROTTLE_COOLDOWN_MS
             );
 
             // Re-pin to big cores.

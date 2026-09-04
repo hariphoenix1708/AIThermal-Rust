@@ -19,6 +19,8 @@ use crate::runtime_context::RuntimeContext;
 pub trait RuntimeTask: Send + Sync {
     fn execute(&mut self, ctx: &mut RuntimeContext) -> Result<()>;
     fn cleanup(&mut self) {}
+    /// Called when config files change on disk. Default: no-op.
+    fn on_config_reload(&mut self, _ctx: &RuntimeContext) {}
 }
 
 #[derive(Default)]
@@ -229,6 +231,9 @@ impl Daemon {
                     &self.game_list_path,
                 );
                 self.ctx.config = new_config;
+                for task in self.tasks.iter_mut() {
+                    task.on_config_reload(&self.ctx);
+                }
             }
 
             // Stall-visible check: if the previous tick completed but we never

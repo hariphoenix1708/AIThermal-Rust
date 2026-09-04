@@ -148,3 +148,34 @@ pub fn probe_memory() -> MemoryProfile {
 
     profile
 }
+
+
+/// Re-read PSI pressure values live (not the boot-time snapshot stored in the
+/// hardware profile). Returns (cpu_some_avg10, io_full_avg10, mem_some_avg10)
+/// matching the fields the policy engine consumes. None when the kernel
+/// exposes no PSI (caller falls back to the discovery-time snapshot).
+pub fn read_live_psi() -> (Option<f32>, Option<f32>, Option<f32>) {
+    fn avg10_of(content: &str, want_line: &str) -> Option<f32> {
+        for line in content.lines() {
+            if line.starts_with(want_line) {
+                for part in line.split_whitespace() {
+                    if let Some(v) = part.strip_prefix("avg10=") {
+                        return v.parse().ok();
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    let cpu = std::fs::read_to_string("/proc/pressure/cpu")
+        .ok()
+        .and_then(|c| avg10_of(&c, "some "));
+    let io = std::fs::read_to_string("/proc/pressure/io")
+        .ok()
+        .and_then(|c| avg10_of(&c, "full "));
+    let mem = std::fs::read_to_string("/proc/pressure/memory")
+        .ok()
+        .and_then(|c| avg10_of(&c, "some "));
+    (cpu, io, mem)
+}
