@@ -7,7 +7,19 @@ pub struct AdaptiveGovernorState {
     pub consecutive_good_samples: u32, // for controlled step-down
     pub promotion_streak: u8,
     pub demotion_streak: u8,
+    /// Consecutive decisions with no usable frame signal (None or under
+    /// MIN_JANK_SAMPLES). Holding Max forever on zero signal cooked a full
+    /// 9-min CODM match (51C composite, 47C skin) with no benefit — past the
+    /// grace window we fall back to utilization, floored at High so the
+    /// v3.2.15 starvation (Balanced mid-cap all session) cannot recur.
+    pub no_signal_streak: u32,
 }
+
+// Decisions (~1s cadence while gaming) to tolerate total frame-signal
+// blindness before easing off Max. Covers lobby/loading; a whole match
+// with zero valid samples means the signal path is broken, not the game
+// smooth — holding Fmax beyond this only adds heat.
+const NO_SIGNAL_GRACE: u32 = 90;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FrequencyTier {
@@ -35,6 +47,7 @@ impl AdaptiveGovernorState {
             consecutive_good_samples: 0,
             promotion_streak: 0,
             demotion_streak: 0,
+            no_signal_streak: 0,
         }
     }
 
@@ -72,6 +85,13 @@ impl AdaptiveGovernorState {
         // low, and the frame windows on this device never yielded >=5 samples
         // for jank to fire. When we cannot prove the game is smooth we run at
         // Max; only jank==0 over a real sample count is allowed to step down.
+        let has_signal = matches!(frame_stats,
+            Some(stats) if stats.sample_count >= MIN_JANK_SAMPLES);
+        if has_signal {
+            self.no_signal_streak = 0;
+        } else {
+            self.no_signal_streak = self.no_signal_streak.saturating_add(1);
+        }
         let raw_next_tier = if let Some(stats) = frame_stats
             && stats.sample_count >= MIN_JANK_SAMPLES {
             let jank_ratio = stats.jank_ratio();
@@ -83,6 +103,16 @@ impl AdaptiveGovernorState {
                 FrequencyTier::Eco
             } else {
                 FrequencyTier::Balanced
+            }
+        } else if self.no_signal_streak > NO_SIGNAL_GRACE {
+            // Signal blind for minutes: the frame path is broken for this
+            // title, not the game idle. Ease to utilization-driven tier
+            // floored at High — sheds Max heat while keeping headroom the
+            // old Balanced cap lacked. GPU override below can still lift.
+            if cluster_utilization >= 0.8 {
+                FrequencyTier::Max
+            } else {
+                FrequencyTier::High
             }
         } else {
             FrequencyTier::Max
@@ -246,6 +276,35 @@ mod tests {
             max_consecutive_jank: 0,
             captured_at: None,
         }
+    }
+
+    #[test]
+    fn test_no_signal_grace_then_high_floor() {
+        let mut gov = AdaptiveGovernorState::new(0);
+        gov.current_tier = FrequencyTier::Max;
+
+        // Within grace: missing signal holds Max (v3.2.15 behavior).
+        for _ in 0..10 {
+            let tier = gov.decide_tier(None, 0.3, 0.0);
+            assert_eq!(tier, FrequencyTier::Max);
+            gov.current_tier = tier;
+        }
+        // Past grace with low util: eases to High, never below (no starvation).
+        for _ in 0..100 {
+            let tier = gov.decide_tier(None, 0.3, 0.0);
+            gov.current_tier = tier;
+        }
+        assert_eq!(gov.current_tier, FrequencyTier::High);
+        // High util keeps Max even past grace.
+        let mut gov2 = AdaptiveGovernorState::new(0);
+        gov2.current_tier = FrequencyTier::Max;
+        gov2.no_signal_streak = NO_SIGNAL_GRACE + 1;
+        let tier = gov2.decide_tier(None, 0.9, 0.0);
+        assert_eq!(tier, FrequencyTier::Max);
+        // A real signal resets the streak.
+        let clean = frame_stats(8, 0);
+        gov2.decide_tier(Some(&clean), 0.6, 0.0);
+        assert_eq!(gov2.no_signal_streak, 0);
     }
 
     #[test]

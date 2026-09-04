@@ -130,8 +130,11 @@ impl UiMonitor {
                 0.0
             };
             // Dynamic jank threshold based on display refresh rate.
+            // p90 is a cumulative lifetime value: gate it on fresh frames so
+            // one old slow frame (frozen gfx counters, +0 new frames) can't
+            // re-fire the warning every sample for a whole session.
             let frame_budget_ms = refresh_hz.map(|h| 1000.0 / h).unwrap_or(16.7);
-            if recent_jank_pct > 10.0 || g.p90_ms > frame_budget_ms || d_slow > 0 {
+            if recent_jank_pct > 10.0 || (g.p90_ms > frame_budget_ms && d_frames > 0) || d_slow > 0 {
                 tracing::warn!(
                     target: "ui",
                     "UI jank detected policy={} top={} {} (recent: +{} frames, +{} janky, +{} slowUI)",

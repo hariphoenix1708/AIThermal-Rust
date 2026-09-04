@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.7.13 (versionCode 423)
+### Fixed — CODM heating + frozen jank (log-evidence audit 2026-09-04)
+- **Frozen 80% jank fixed:** `monitor/frame_sampler.rs` removed the tiny-batch bypass — an identical tiny batch carries zero new info, so overwriting only refreshed `captured_at` and defeated the 12s staleness guard (froze `jank=80.00% p90=108.3ms` for ~5 min). Cold-start still works via `!unchanged`.
+- **Sustained-Max heat fixed:** `scheduler/adaptive_governor.rs` adds `no_signal_streak` (90-decision grace ≈2 min) — after minutes of total frame blindness it eases to utilization-driven tier floored at High (never Balanced/Eco without proof, so v3.2.15 starvation can't recur; GPU >90% still forces Max). A 9-min zero-signal CODM match no longer sits at Fmax (was 51C composite / 47C skin).
+- **UI WARN spam fixed:** `monitor/ui_monitor.rs` gates the cumulative-p90 jank warning on fresh frames (`d_frames > 0`) — one ancient slow frame re-fired `WARN` every 5s all match (`recent: +0 frames`).
+
 ## v3.7.12 (versionCode 422)
 ### Added/Fixed — Live-session audit fixes (2026-09-03)
 - **Suspend ↔ Balanced oscillation killed (policy latch):** `policy/mod.rs` now requires 2 consecutive cold-score ticks (entry) and a 15s hold + 2 confirmed warming ticks (exit) before Suspend↔Balanced flips. Screen-off no longer rewrites 3 governors + GPU + cpusets every ~10s (was 8 flips in 2 min). Fine-tuned live: cold threshold `-5 → -3`, entry latch `3 → 2 ticks` — screen-off → Suspend in ~2s with zero oscillation across 8+ ticks.

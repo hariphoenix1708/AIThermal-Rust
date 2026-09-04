@@ -470,12 +470,16 @@ impl BackgroundFrameSampler {
                                         && prev.worst_frame_ns == new.worst_frame_ns
                                         && prev.max_consecutive_jank == new.max_consecutive_jank
                             );
-                            // Bypass unchanged guard when frame count is suspiciously low.
-                            // At 120Hz any game produces 100+ frames per 5s sample.
-                            // A tiny batch (e.g. 5 frames) means we captured a cold-start
-                            // or loading snapshot — always overwrite with fresh data.
-                            let is_tiny_batch = result.as_ref().map_or(false, |r| r.sample_count < 15);
-                            if !unchanged || is_tiny_batch {
+                            // NOTE: no tiny-batch bypass here on purpose. A tiny
+                            // batch that is byte-identical to the slot carries
+                            // zero new information — overwriting would only
+                            // refresh captured_at and defeat the 12s staleness
+                            // guard, freezing e.g. jank=80% on screen for a
+                            // whole match (observed on CODM). Cold-start is
+                            // already covered: slot=None (or differing counts)
+                            // implies !unchanged, so genuinely new tiny
+                            // batches still land in the slot.
+                            if !unchanged {
                                 *slot = result;
                             }
                         }
